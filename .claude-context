@@ -1,0 +1,52 @@
+LIVERMORE PROJECT - CLAUDE CONTEXT
+
+## Current State: Phase 2 - Coinbase Integration (COMPLETE!)
+
+## Session Summary
+Successfully fixed Coinbase WebSocket authentication and connected to real-time market data.
+
+## The Key Fix
+The working Python implementation in HermesWeb had NO `nonce` field in JWT header.
+Removed the nonce from auth.ts and authentication now works!
+
+## What's Working Now
+- Database connection: OK
+- Redis connection: OK (port 6400)
+- Coinbase WebSocket connection: OK
+- Coinbase WebSocket authentication: OK
+- Real-time ticker data: OK (BTC-USD, ETH-USD, SOL-USD)
+- Real-time L2 orderbook data: OK
+- Server listening on 0.0.0.0:3001: OK
+
+## Files Changed This Session
+- packages/database/src/client.ts - fixed require to import
+- packages/cache/src/client.ts - fixed require to import
+- packages/coinbase-client/src/rest/auth.ts - removed nonce from JWT header
+- packages/coinbase-client/src/websocket/client.ts - updated message types for Advanced Trade API format
+- apps/api/src/services/coinbase-websocket.service.ts - updated handlers for new message format
+- scripts/run-api-dev.ps1 - PowerShell script to load env vars and run dev server
+
+## Message Format (Coinbase Advanced Trade WebSocket)
+Messages use `channel` instead of `type`:
+- `channel: "ticker"` with `events: [{ type: "update", tickers: [...] }]`
+- `channel: "l2_data"` with `events: [{ type: "update", product_id, updates: [...] }]`
+- `channel: "subscriptions"` for subscription confirmations
+
+## Environment Variables (all set in Windows User environment)
+- DATABASE_LIVERMORE_USERNAME = Livermore
+- DATABASE_LIVERMORE_PASSWORD = (set)
+- LIVERMORE_DATABASE_NAME = Livermore
+- DISCORD_LIVERMORE_BOT = (set)
+- REDIS_URL = redis://127.0.0.1:6400
+- Coinbase_ApiKeyId = organizations/... (full format)
+- Coinbase_EcPrivateKeyPem = (set, with \n literals)
+
+## To Run Server
+Use the PowerShell script:
+powershell -ExecutionPolicy Bypass -File "C:\Dev\claude\Livermore\scripts\run-api-dev.ps1"
+
+## Next Steps
+1. Implement orderbook cache strategy
+2. Add candle aggregation from trades
+3. Add REST API endpoints for data access
+4. Set up tRPC for frontend communication

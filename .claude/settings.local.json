@@ -1,0 +1,30 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pnpm build:*)",
+      "Bash(pnpm add:*)",
+      "Bash(pnpm --filter @livermore/database generate:*)",
+      "Bash(pnpm --filter @livermore/database migrate:*)",
+      "Bash(pnpm install:*)",
+      "Bash(pnpm --filter @livermore/database build:*)",
+      "Bash(pnpm --filter @livermore/coinbase-client build:*)",
+      "Bash(powershell -Command \"$k = [System.Environment]::GetEnvironmentVariable\\(''Coinbase_ApiKeyId'', ''User''\\); Write-Host ''Length:'' $k.Length; Write-Host ''Starts with organizations:'' $k.StartsWith\\(''organizations''\\)\")",
+      "Bash(powershell -Command:*)",
+      "WebSearch",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(pnpm --filter @livermore/coinbase-client add jsonwebtoken)",
+      "Bash(pnpm --filter @livermore/coinbase-client add:*)",
+      "WebFetch(domain:docs.cdp.coinbase.com)",
+      "Bash(timeout:*)",
+      "Bash(powershell:*)",
+      "Bash(taskkill /F /FI \"IMAGENAME eq node.exe\")",
+      "Bash(taskkill /F /FI \"IMAGENAME eq tsx.exe\")",
+      "Bash(netstat:*)",
+      "Bash(findstr:*)",
+      "Bash(taskkill /F /PID 6720)",
+      "Bash(taskkill:*)",
+      "Bash(taskkill /F /PID 2952)",
+      "Bash(git init:*)"
+    ]
+  }
+}

@@ -1,0 +1,27 @@
+# Load environment variables from Windows User environment
+$env:DATABASE_HOST = [Environment]::GetEnvironmentVariable('DATABASE_HOST', 'User')
+$env:DATABASE_PORT = [Environment]::GetEnvironmentVariable('DATABASE_PORT', 'User')
+$env:DATABASE_LIVERMORE_USERNAME = [Environment]::GetEnvironmentVariable('DATABASE_LIVERMORE_USERNAME', 'User')
+$env:DATABASE_LIVERMORE_PASSWORD = [Environment]::GetEnvironmentVariable('DATABASE_LIVERMORE_PASSWORD', 'User')
+$env:LIVERMORE_DATABASE_NAME = [Environment]::GetEnvironmentVariable('LIVERMORE_DATABASE_NAME', 'User')
+$env:REDIS_URL = [Environment]::GetEnvironmentVariable('REDIS_URL', 'User')
+$env:Coinbase_ApiKeyId = [Environment]::GetEnvironmentVariable('Coinbase_ApiKeyId', 'User')
+$env:Coinbase_EcPrivateKeyPem = [Environment]::GetEnvironmentVariable('Coinbase_EcPrivateKeyPem', 'User')
+$env:DISCORD_LIVERMORE_BOT = [Environment]::GetEnvironmentVariable('DISCORD_LIVERMORE_BOT', 'User')
+
+# Override API port to avoid conflicts
+$env:API_PORT = '3002'
+
+# Debug: show what we loaded
+Write-Host "Loaded DATABASE_HOST: $($env:DATABASE_HOST)"
+Write-Host "Loaded DATABASE_PORT: $($env:DATABASE_PORT)"
+Write-Host "Loaded DATABASE_LIVERMORE_USERNAME: $($env:DATABASE_LIVERMORE_USERNAME)"
+Write-Host "Loaded LIVERMORE_DATABASE_NAME: $($env:LIVERMORE_DATABASE_NAME)"
+Write-Host "Loaded REDIS_URL: $($env:REDIS_URL)"
+Write-Host "Loaded DISCORD_LIVERMORE_BOT: $(if ($env:DISCORD_LIVERMORE_BOT) { 'set' } else { 'NOT SET' })"
+Write-Host "Loaded Coinbase_ApiKeyId: $(if ($env:Coinbase_ApiKeyId) { 'set' } else { 'NOT SET' })"
+Write-Host "Loaded Coinbase_EcPrivateKeyPem: $(if ($env:Coinbase_EcPrivateKeyPem) { 'set' } else { 'NOT SET' })"
+
+# Change to project directory and run dev server
+Set-Location 'C:\Dev\claude\Livermore'
+pnpm --filter @livermore/api dev
