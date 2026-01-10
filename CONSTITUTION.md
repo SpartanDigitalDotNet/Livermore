@@ -4,6 +4,21 @@
 
 Track the user's current account positions on Coinbase.
 
+## Specifications
+
+**All specs MUST be stored in `.specify/specs/`**
+
+Example: `.specify/specs/macdv-system/MACD-V_Spiroglou_Exact_Formulas.md`
+
+## Claude Code Plugins
+
+To add the plugins-plus marketplace (required for Windows):
+```
+git config --global core.protectNTFS false
+git config --global core.longpaths true
+/plugin marketplace add git@github.com:jeremylongshore/claude-code-plugins-plus-skills.git
+```
+
 ## Project Structure
 
 ```
