@@ -1,6 +1,6 @@
 LIVERMORE PROJECT - CLAUDE CONTEXT
 
-## Current State: Phase 3 - Indicators & Alerts (Starting)
+## Current State: Phase 3 - Indicators & Alerts (Complete)
 
 ## Purpose
 Track the user's current account positions on Coinbase.
@@ -11,19 +11,26 @@ Track the user's current account positions on Coinbase.
 - Data cached to Redis
 - Discord webhook tested and working
 
-## Phase 3: Indicators & Alerts (In Progress)
-- [ ] Technical indicators library (EMA, MACD, RSI, etc.)
-- [ ] MACD-V implementation (spec at .specify/specs/macdv-system/)
-- [ ] Indicator calculation service
-- [ ] Alert evaluation system
-- [ ] Discord notification integration
-- [ ] tRPC API routers
+## Phase 3: COMPLETED
+- [x] Technical indicators library (@livermore/indicators)
+  - SMA, EMA, RMA core functions
+  - True Range and ATR (Wilder's smoothing)
+  - MACD-V (Spiroglou spec) with stage classification
+  - 66 unit tests passing
+- [x] MACD-V implementation per spec
+- [x] Indicator calculation service
+- [x] Alert evaluation service
+- [x] Discord notification service
+- [x] tRPC API routers (indicator + alert)
+- [x] Server integration complete
 
 ## Key Files
 - Specs: `.specify/specs/` (ALL specs go here)
 - MACD-V spec: `.specify/specs/macdv-system/MACD-V_Spiroglou_Exact_Formulas.md`
 - Constitution: `CONSTITUTION.md`
-- Discord test: `tests/manual/test-discord-webhook.ts`
+- Indicators package: `packages/indicators/`
+- Services: `apps/api/src/services/`
+- Routers: `apps/api/src/routers/`
 
 ## Claude Code Plugins Installed
 - crypto-signal-generator@claude-code-plugins-plus
@@ -39,6 +46,18 @@ Track the user's current account positions on Coinbase.
 
 ## To Run Server
 powershell -ExecutionPolicy Bypass -File "C:\Dev\claude\Livermore\scripts\run-api-dev.ps1"
+
+## tRPC Endpoints
+- `/trpc/indicator.getCurrent` - Get cached indicator value
+- `/trpc/indicator.getMACDV` - Get MACD-V with stage
+- `/trpc/indicator.calculateMACDV` - Calculate from candles
+- `/trpc/indicator.getMACDVSeries` - Get series for charting
+- `/trpc/alert.list` - List all alerts
+- `/trpc/alert.create` - Create new alert
+- `/trpc/alert.update` - Update alert
+- `/trpc/alert.delete` - Delete alert
+- `/trpc/alert.toggle` - Toggle alert active status
+- `/trpc/alert.history` - Get alert trigger history
 
 ## GitHub
 https://github.com/SpartanDigitalDotNet/Livermore

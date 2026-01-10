@@ -1,8 +1,7 @@
 import { CoinbaseWebSocketClient, type CoinbaseWSMessage } from '@livermore/coinbase-client';
-import { getRedisClient, CandleCacheStrategy, TickerCacheStrategy } from '@livermore/cache';
-import { getDbClient, candles } from '@livermore/database';
+import { getRedisClient, TickerCacheStrategy } from '@livermore/cache';
 import { logger } from '@livermore/utils';
-import type { Candle, Ticker } from '@livermore/schemas';
+import type { Ticker } from '@livermore/schemas';
 
 /**
  * Coinbase WebSocket data ingestion service
@@ -12,9 +11,7 @@ import type { Candle, Ticker } from '@livermore/schemas';
  */
 export class CoinbaseWebSocketService {
   private wsClient: CoinbaseWebSocketClient;
-  private candleCache: CandleCacheStrategy;
   private tickerCache: TickerCacheStrategy;
-  private db = getDbClient();
   private redis = getRedisClient();
 
   // Temporary: hardcode test user and exchange IDs
@@ -24,7 +21,6 @@ export class CoinbaseWebSocketService {
 
   constructor(apiKeyId: string, privateKeyPem: string) {
     this.wsClient = new CoinbaseWebSocketClient(apiKeyId, privateKeyPem);
-    this.candleCache = new CandleCacheStrategy(this.redis);
     this.tickerCache = new TickerCacheStrategy(this.redis);
 
     // Register message handler
