@@ -1,6 +1,13 @@
 import { z } from 'zod';
 import { router, publicProcedure } from '@livermore/trpc-config';
-import { TimeframeSchema } from '@livermore/schemas';
+import {
+  TimeframeSchema,
+  deriveZone,
+  deriveCrossover,
+  deriveScalpingBias,
+  detectDivergence,
+  type MacdVStage,
+} from '@livermore/schemas';
 import { getRedisClient, IndicatorCacheStrategy, CandleCacheStrategy } from '@livermore/cache';
 import {
   macdVWithStage,
@@ -42,6 +49,16 @@ const CalculateFromCandlesInput = z.object({
   symbol: z.string().min(1),
   timeframe: TimeframeSchema,
   limit: z.number().int().positive().max(500).default(100),
+});
+
+/**
+ * Input schema for MACD-V analysis with zone, bias, and histogram series
+ */
+const GetAnalysisInput = z.object({
+  symbol: z.string().min(1),
+  timeframe: TimeframeSchema,
+  /** Number of histogram values to return (default: 5) */
+  histogramCount: z.number().int().positive().max(50).default(5),
 });
 
 /**
@@ -182,6 +199,130 @@ export const indicatorRouter = router({
           slowEMA: result.slowEMA,
           atr: result.atr,
           stage: result.stage,
+          candleCount: candles.length,
+        },
+      };
+    }),
+
+  /**
+   * Get full MACD-V analysis with zone, scalping bias, crossover, and histogram series
+   * This is the primary endpoint for scalping decisions
+   */
+  getAnalysis: publicProcedure
+    .input(GetAnalysisInput)
+    .query(async ({ input }) => {
+      const { symbol, timeframe, histogramCount } = input;
+
+      // Get enough candles for calculation + histogram history
+      const candleLimit = Math.max(100, histogramCount + 50);
+      const candles = await candleCache.getRecentCandles(
+        TEST_USER_ID,
+        TEST_EXCHANGE_ID,
+        symbol,
+        timeframe,
+        candleLimit
+      );
+
+      if (candles.length < 35) {
+        return {
+          success: false,
+          error: `Insufficient candles: ${candles.length} (need at least 35)`,
+          data: null,
+        };
+      }
+
+      // Convert to OHLC format
+      const ohlcBars: OHLC[] = candles.map((c) => ({
+        open: c.open,
+        high: c.high,
+        low: c.low,
+        close: c.close,
+      }));
+
+      // Calculate full series for histogram history
+      const series = macdV(ohlcBars);
+
+      // Get latest values with stage
+      const latest = macdVWithStage(ohlcBars);
+      if (!latest) {
+        return {
+          success: false,
+          error: 'MACD-V calculation failed',
+          data: null,
+        };
+      }
+
+      // Build histogram series (most recent N values)
+      const validHistograms: { timestamp: number; value: number }[] = [];
+      for (let i = candles.length - 1; i >= 0 && validHistograms.length < histogramCount; i--) {
+        if (!Number.isNaN(series.histogram[i])) {
+          validHistograms.unshift({
+            timestamp: candles[i].timestamp,
+            value: series.histogram[i],
+          });
+        }
+      }
+
+      // Build MACD series for divergence detection (traditional MACD = fastEMA - slowEMA)
+      const macdSeriesData: { timestamp: number; macd: number; macdV: number }[] = [];
+      for (let i = candles.length - 1; i >= 0 && macdSeriesData.length < histogramCount; i--) {
+        if (!Number.isNaN(series.macdV[i]) && !Number.isNaN(series.fastEMA[i]) && !Number.isNaN(series.slowEMA[i])) {
+          const traditionalMacd = series.fastEMA[i] - series.slowEMA[i];
+          macdSeriesData.unshift({
+            timestamp: candles[i].timestamp,
+            macd: traditionalMacd,
+            macdV: series.macdV[i],
+          });
+        }
+      }
+
+      // Calculate traditional MACD for current candle
+      const traditionalMacd = latest.fastEMA - latest.slowEMA;
+
+      // Get previous histogram for crossover detection
+      const histogramPrev = validHistograms.length >= 2
+        ? validHistograms[validHistograms.length - 2].value
+        : null;
+
+      // Derive zone, crossover, scalping bias, and divergence
+      const zone = deriveZone(latest.macdV);
+      const crossover = deriveCrossover(latest.histogram, histogramPrev);
+      const scalpingBias = deriveScalpingBias(zone, latest.stage as MacdVStage, latest.histogram);
+      const divergence = detectDivergence(macdSeriesData);
+
+      return {
+        success: true,
+        error: null,
+        data: {
+          // Core values
+          symbol,
+          timeframe,
+          timestamp: candles[candles.length - 1].timestamp,
+          macdV: latest.macdV,
+          signal: latest.signal,
+          histogram: latest.histogram,
+          fastEMA: latest.fastEMA,
+          slowEMA: latest.slowEMA,
+          atr: latest.atr,
+
+          // Traditional MACD (non-normalized)
+          macd: traditionalMacd,
+
+          // Classifications
+          stage: latest.stage,
+          zone,
+          scalpingBias,
+          crossover,
+          divergence,
+
+          // Histogram context
+          histogramPrev,
+          histogramSeries: validHistograms,
+
+          // MACD/MACD-V series for divergence visualization
+          macdSeries: macdSeriesData,
+
+          // Metadata
           candleCount: candles.length,
         },
       };

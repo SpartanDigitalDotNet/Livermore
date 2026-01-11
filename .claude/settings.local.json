@@ -24,7 +24,11 @@
       "Bash(taskkill /F /PID 6720)",
       "Bash(taskkill:*)",
       "Bash(taskkill /F /PID 2952)",
-      "Bash(git init:*)"
+      "Bash(git init:*)",
+      "Bash(pnpm:*)",
+      "Bash(git -C \"C:\\\\Dev\\\\claude\\\\Livermore\" show --stat e4b6e51)",
+      "Bash(curl:*)",
+      "Bash(more:*)"
     ]
   }
 }

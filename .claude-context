@@ -1,6 +1,67 @@
 LIVERMORE PROJECT - CLAUDE CONTEXT
 
-## Current State: Phase 3 - Indicators & Alerts (Complete)
+## Current State: Phase 4 - Position Tracking (Complete)
+
+## Platform Vision
+
+Livermore is a **Platform-as-a-Service** for retail cryptocurrency traders. Built by Mike and Kaia
+as an evolution of the Perseus prototype, it provides:
+
+1. **Personalized Trading Support** - Each user has their own exchange connections, symbol lists,
+   alerts, and preferences tailored to their individual trading style.
+
+2. **Behavioral Trading Guardrails** - The alert system (MACD-V stages, price alerts) helps traders
+   maintain discipline during emotional moments in fast-moving markets.
+
+3. **Multi-User Architecture** - Database-driven configuration (not config files) enables true
+   platform-as-a-service where multiple users can be served from a single deployment.
+
+### Symbol Management Strategy
+
+**Database-driven, not config-driven.** Unlike Perseus (JSON config files per user), Livermore
+stores all symbol preferences in the database for:
+- Multi-user support without per-user config files
+- Real-time updates without server restarts
+- API/UI management of preferences
+
+**Two Symbol Sources Per User:**
+1. **Exchange Holdings** - Auto-discovered from Coinbase via `positions` table (what they own)
+2. **Personal Watchlists** - User-curated lists in `user_symbols` table (what they want to monitor)
+
+**Monitored Symbols** = Union of holdings + watchlists (service layer derives this dynamically)
+
+### Blacklisted Symbols (Two Scopes)
+
+1. **Global Blacklist** - Platform-wide restrictions
+   - Could be **suggestions** (shown to users, but they can override)
+   - Could be **hard forbidden** (total blackout, no user can trade/monitor)
+   - Use cases: delisted tokens, known scam coins, regulatory concerns
+
+2. **User Blacklist** - Per-user exclusions
+   - Inherits from global suggestions (user can accept/reject)
+   - Plus user's own personal exclusions
+   - Use case: "I don't want to see DOGE even though I hold some"
+
+### Sparse Symbols (Low Volume)
+
+Some symbols have low trading activity, resulting in:
+- Fewer candles returned from Coinbase API
+- May not meet minimum bar count for indicators (MACD-V needs ~35 candles)
+- Need graceful handling when indicator calculation isn't possible
+
+**Implication:** Service layer must check candle count before indicator calculation
+and handle sparse symbols differently (skip, warn, or use longer timeframes).
+
+### Current Gap: Static Symbol Monitoring
+
+The hardcoded `SUPPORTED_SYMBOLS = ['BTC-USD', 'ETH-USD', 'SOL-USD']` in `server.ts` is used by:
+- WebSocket subscriptions (ticker, L2 data)
+- Indicator calculation configs
+
+**Needed:**
+- `user_symbols` or `watchlists` table for personal symbol lists
+- Service to derive "monitored symbols" from holdings + watchlists
+- Dynamic WebSocket subscription management
 
 ## Purpose
 Track the user's current account positions on Coinbase.
@@ -24,6 +85,14 @@ Track the user's current account positions on Coinbase.
 - [x] tRPC API routers (indicator + alert)
 - [x] Server integration complete
 
+## Phase 4: COMPLETED
+- [x] Database seeding (testuser, Coinbase exchange)
+- [x] Position schema and database table
+- [x] Coinbase account endpoints (getAccounts, getAccountsWithBalance)
+- [x] PositionSyncService (on-demand sync with P&L)
+- [x] Position tRPC router (list, portfolio, sync, bySymbol, updateCostBasis)
+- [x] Crypto icon URL utility (spothq/cryptocurrency-icons)
+
 ## Key Files
 - Specs: `.specify/specs/` (ALL specs go here)
 - MACD-V spec: `.specify/specs/macdv-system/MACD-V_Spiroglou_Exact_Formulas.md`
@@ -31,6 +100,19 @@ Track the user's current account positions on Coinbase.
 - Indicators package: `packages/indicators/`
 - Services: `apps/api/src/services/`
 - Routers: `apps/api/src/routers/`
+
+## Exchange Specifications
+All exchange specs: `.specify/specs/exchanges/`
+
+| Exchange | Region | Shorting | Spec File | User |
+|----------|--------|----------|-----------|------|
+| Coinbase | USA | No | `coinbase-advanced.md` | Mike |
+| Kraken | USA | Yes (margin) | `kraken.md` | - |
+| Binance.com | Non-USA | Yes (futures) | `binance.md` | Kaia |
+| Kucoin | Non-USA | Yes (futures) | `kucoin.md` | Kaia |
+| MEXC | Non-USA | Yes (futures) | `mexc.md` | Kaia |
+
+See `exchange-fees-overview.md` for architecture and normalization patterns.
 
 ## Claude Code Plugins Installed
 - crypto-signal-generator@claude-code-plugins-plus
@@ -58,9 +140,181 @@ powershell -ExecutionPolicy Bypass -File "C:\Dev\claude\Livermore\scripts\run-ap
 - `/trpc/alert.delete` - Delete alert
 - `/trpc/alert.toggle` - Toggle alert active status
 - `/trpc/alert.history` - Get alert trigger history
+- `/trpc/position.list` - List all positions
+- `/trpc/position.portfolio` - Get portfolio summary with P&L
+- `/trpc/position.sync` - Sync from Coinbase (mutation)
+- `/trpc/position.bySymbol` - Get position for specific symbol
+- `/trpc/position.updateCostBasis` - Update cost basis (mutation)
 
 ## GitHub
 https://github.com/SpartanDigitalDotNet/Livermore
+
+## Future Work: Delisted Token Pricing (ON HOLD)
+
+### Finding
+Some tokens in user's Coinbase wallet (MOBILE, SYN) were delisted and show $0 price because
+no USD/USDC trading pair exists on Coinbase. These tokens may still have value on other exchanges.
+
+### Affected Tokens (Current)
+- MOBILE (helium-mobile): Delisted from Coinbase
+- SYN (synapse-2): Delisted from Coinbase
+
+### Verified: CoinGecko Free API Works (Future Fallback Option)
+```bash
+# Get prices by CoinGecko ID
+curl "https://api.coingecko.com/api/v3/simple/price?ids=helium-mobile,synapse-2&vs_currencies=usd"
+# Returns: {"helium-mobile":{"usd":0.0001892},"synapse-2":{"usd":0.064823}}
+
+# Search for CoinGecko ID by symbol
+curl "https://api.coingecko.com/api/v3/search?query=MOBILE"
+# Returns coins with id, symbol mapping
+```
+
+### Approved Approach: Two-Column Solution
+
+**Schema Changes:**
+```sql
+ALTER TABLE positions ADD COLUMN is_delisted BOOLEAN DEFAULT false;
+ALTER TABLE positions ADD COLUMN price_status VARCHAR(20) DEFAULT 'available';
+-- price_status enum: 'available', 'unavailable', 'stale'
+```
+
+**Column Responsibilities:**
+| Column | Purpose | Controlled By |
+|--------|---------|---------------|
+| `is_delisted` | Should we try to price this symbol? | User/Admin via UI |
+| `price_status` | Current state of pricing | System (position-sync) |
+
+**Position-Sync Flow:**
+```
+Position Sync runs
+    ↓
+is_delisted = true? → Skip pricing attempt, keep price_status as-is
+    ↓
+Try Coinbase USD/USDC pair
+    ↓
+Success? → price_status = 'available', update currentPrice
+    ↓
+Fail? → price_status = 'unavailable' (always, never 'stale')
+```
+
+**UI Re-enable Flow (Future):**
+```
+User clicks "Re-enable" on delisted token
+    ↓
+Set is_delisted = false
+    ↓
+Trigger sync for that symbol
+    ↓
+price_status updates based on sync result
+```
+
+**UI Display:**
+- `price_status = 'unavailable'`: Show warning badge, price displays as $0 or N/A
+- `price_status = 'stale'`: Show staleness indicator (for future use cases)
+- `is_delisted = true`: Show "Delisted" label with "Re-enable" button
+- Portfolio totals: Can exclude 'unavailable' positions or show in separate section
+
+## Whale Scalping Strategy (Discussion Pending)
+
+### Core Concept
+1. **Whale volume** is the initial trigger
+2. **Confluence signals** for entry:
+   - Orderbook imbalance
+   - MACD-V reversals (to be discussed)
+   - Price above EMA(9)
+3. **Pre-entry calculations**: TP, SL, Trailing Stop, entry/exit fees
+
+### Open Questions
+
+**Whale Volume (Trigger):**
+1. How do you define "whale"? Fixed USD threshold (e.g., >$100k), or relative to recent average volume?
+2. Detected from L2 orderbook (large resting order appears) or trade tape (large market order executes)?
+3. Single order, or cumulative volume within a time window?
+
+**Orderbook Imbalance (Confluence):**
+4. How is imbalance measured? Bid/ask volume ratio at best levels, or aggregate across N levels?
+5. What ratio signals imbalance? (e.g., 2:1 bids vs asks = bullish)
+
+**EMA(9) (Confluence):**
+6. Which timeframe? (1m for scalping?)
+7. Price must be above EMA(9), or must have recently crossed above?
+
+**TP/SL/Trailing Stop:**
+8. Fixed percentage targets, or ATR-based (volatility-adjusted)?
+9. Trailing stop: percentage from peak, or fixed tick distance?
+10. Are Coinbase maker/taker fees the basis for fee calculation? (~0.4%/0.6% for advanced trade)
+
+**Position Management:**
+11. Long-only, or will you short via futures/perps?
+12. Position sizing: fixed amount, or percentage of portfolio?
+13. Max concurrent positions?
+14. Cool-down period between trades on same symbol?
+
+**Timeframe:**
+15. What's the target hold duration? Seconds, minutes, or up to an hour?
+
+**MACD-V Reversals:**
+- To be discussed separately
+
+## MACD-V Analysis for Scalping
+
+### Histogram Series Required
+
+Single-point MACD-V data is insufficient for scalping decisions. We need **histogram history** to detect:
+- **Fresh crossovers** (histogram just flipped sign) vs **established trends**
+- **Momentum building** (histogram growing) vs **momentum fading** (histogram shrinking)
+- **Reversal confirmation** (consecutive histograms in new direction)
+
+### The Timeframe Paradox
+
+**Problem:** The number of candles needed to confirm a reversal with confidence varies by timeframe, but violent price swings can happen in sub-minute windows.
+
+| Timeframe | Candle Duration | Confirmation Need | The Catch |
+|-----------|-----------------|-------------------|-----------|
+| 1m | 60 seconds | More candles (noisy) | Whale moves happen in <60s, already late |
+| 5m | 5 minutes | Moderate | Miss first 5+ minutes of move |
+| 1h | 60 minutes | Fewer (reliable) | Way too slow for scalping |
+
+**The Paradox:**
+- **Wait for confirmation** → Higher accuracy, worse entry (price already moved)
+- **Act on first signal** → Better entry, more false signals
+
+### "Rebounding" Stage Ambiguity
+
+Spiroglou's "rebounding" stage only indicates MACD-V is rising from a lower point. It does NOT tell us:
+1. **Where it's rebounding FROM** (oversold? neutral? minor dip in uptrend?)
+2. **Where it's heading TO** (back to zero? toward overbought?)
+
+**Solution:** Combine stage with **MACD-V zone** for directional context:
+
+| Zone | MACD-V Range | Rebounding Interpretation | Scalping Bias |
+|------|--------------|---------------------------|---------------|
+| Deep Negative | < -100 | Recovering from oversold | Strong Long |
+| Negative | -100 to -30 | Heading toward neutral | Long |
+| Neutral | -30 to +30 | Direction unclear | Weak/Wait |
+| Positive | +30 to +80 | Dip in uptrend, continuation | Long |
+| Elevated | +80 to +120 | Getting extended | Long ⚠️ (caution) |
+| Overbought | > +120 | Exhaustion likely | Avoid new longs |
+
+(Mirror logic for bearish: retracing/reversing + positive zones → short bias)
+
+### Implication for Whale Scalping
+
+For sub-minute whale-triggered moves:
+1. **Whale volume** = Primary trigger (real-time, not candle-based)
+2. **MACD-V** = Confluence/bias filter, NOT entry signal
+3. **Histogram history** = Environment context (trending vs ranging)
+4. **Tick-level or order flow** = Potential need for entry timing precision
+
+MACD-V tells us the **environment** (bullish/bearish bias), not the **exact moment** to enter.
+
+### Data Requirements
+
+Current API returns single-point MACD-V. For proper scalping support, need:
+- `histogramPrev` (previous candle's histogram) for crossover detection
+- Or full histogram series (last N values) for momentum analysis
+- Zone classification derived from MACD-V value
 
 ## Important Notes
 - DO NOT modify code without explicit authorization

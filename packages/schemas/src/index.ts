@@ -15,6 +15,7 @@ export * from './market/trade.schema';
 export * from './indicators/base.schema';
 export * from './indicators/ema.schema';
 export * from './indicators/macd.schema';
+export * from './indicators/macdv.schema';
 export * from './indicators/alert.schema';
 
 // Position schemas

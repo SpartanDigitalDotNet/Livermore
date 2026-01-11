@@ -36,6 +36,81 @@ export interface CoinbaseAccount {
 }
 
 /**
+ * Coinbase order from the Advanced Trade API
+ */
+export interface CoinbaseOrder {
+  order_id: string;
+  client_order_id?: string;
+  product_id: string;
+  side: 'BUY' | 'SELL';
+  status: 'PENDING' | 'OPEN' | 'FILLED' | 'CANCELLED' | 'EXPIRED' | 'FAILED' | 'UNKNOWN_ORDER_STATUS';
+  time_in_force: 'GTC' | 'GTD' | 'IOC' | 'FOK';
+  created_time: string;
+  completion_percentage: string;
+  filled_size: string;
+  average_filled_price: string;
+  fee: string;
+  number_of_fills: string;
+  filled_value: string;
+  pending_cancel: boolean;
+  size_in_quote: boolean;
+  total_fees: string;
+  total_value_after_fees: string;
+  order_type: 'MARKET' | 'LIMIT' | 'STOP' | 'STOP_LIMIT';
+  reject_reason: string;
+  settled: boolean;
+  product_type: 'SPOT' | 'FUTURE';
+  outstanding_hold_amount: string;
+  order_configuration: {
+    market_market_ioc?: {
+      quote_size?: string;
+      base_size?: string;
+    };
+    limit_limit_gtc?: {
+      base_size: string;
+      limit_price: string;
+      post_only: boolean;
+    };
+    limit_limit_gtd?: {
+      base_size: string;
+      limit_price: string;
+      end_time: string;
+      post_only: boolean;
+    };
+    stop_limit_stop_limit_gtc?: {
+      base_size: string;
+      limit_price: string;
+      stop_price: string;
+      stop_direction: 'STOP_DIRECTION_STOP_UP' | 'STOP_DIRECTION_STOP_DOWN';
+    };
+    stop_limit_stop_limit_gtd?: {
+      base_size: string;
+      limit_price: string;
+      stop_price: string;
+      end_time: string;
+      stop_direction: 'STOP_DIRECTION_STOP_UP' | 'STOP_DIRECTION_STOP_DOWN';
+    };
+  };
+}
+
+/**
+ * Transaction summary with fee tier information from Coinbase
+ */
+export interface CoinbaseTransactionSummary {
+  total_volume: number;
+  total_fees: number;
+  fee_tier: {
+    pricing_tier: string;
+    usd_from: string;
+    usd_to: string;
+    taker_fee_rate: string;
+    maker_fee_rate: string;
+  };
+  advanced_trade_only_volume: number;
+  advanced_trade_only_fees: number;
+}
+
+/**
  * Coinbase Advanced Trade API REST client
  *
  * Provides methods for fetching historical market data and account info
@@ -389,6 +464,90 @@ export class CoinbaseRestClient {
     logger.debug({ productCount: productMap.size }, 'Cached valid product IDs');
 
     return productMap;
+  }
+
+  /**
+   * Get transaction summary including fee tier
+   * Returns the user's current maker/taker rates based on 30-day volume
+   *
+   * Reference: https://docs.cdp.coinbase.com/api-reference/advanced-trade-api/rest-api/fees/get-transaction-summary
+   */
+  async getTransactionSummary(): Promise<CoinbaseTransactionSummary> {
+    const path = '/api/v3/brokerage/transaction_summary';
+
+    try {
+      const response = await this.request('GET', path);
+      return response;
+    } catch (error) {
+      logger.error({ error }, 'Failed to fetch transaction summary from Coinbase');
+      throw error;
+    }
+  }
+
+  /**
+   * Get open orders (PENDING and OPEN status)
+   * Returns all orders that are currently on the order book or awaiting execution
+   *
+   * Reference: https://docs.cdp.coinbase.com/api-reference/advanced-trade-api/rest-api/orders/list-orders
+   *
+   * @param productId - Optional: filter by trading pair (e.g., "BTC-USD")
+   * @returns Array of open orders
+   */
+  async getOpenOrders(productId?: string): Promise<CoinbaseOrder[]> {
+    const allOrders: CoinbaseOrder[] = [];
+    let cursor: string | undefined;
+
+    do {
+      const params = new URLSearchParams();
+      // Note: Coinbase API does not allow multiple statuses with OPEN
+      // PENDING orders quickly transition to OPEN, so we just query OPEN
+      params.append('order_status', 'OPEN');
+      params.append('limit', '100');
+
+      if (productId) {
+        params.append('product_id', productId);
+      }
+
+      if (cursor) {
+        params.append('cursor', cursor);
+      }
+
+      const path = `/api/v3/brokerage/orders/historical/batch?${params.toString()}`;
+
+      try {
+        const response = await this.request('GET', path);
+        const orders = response.orders || [];
+        allOrders.push(...orders);
+
+        // Check for more pages
+        cursor = response.has_next && response.cursor ? response.cursor : undefined;
+
+      } catch (error) {
+        logger.error({ error, productId }, 'Failed to fetch open orders from Coinbase');
+        throw error;
+      }
+    } while (cursor);
+
+    logger.debug({ count: allOrders.length, productId }, 'Fetched open orders from Coinbase');
+    return allOrders;
+  }
+
+  /**
+   * Get a single order by ID
+   *
+   * @param orderId - The order ID to retrieve
+   * @returns The order details
+   */
+  async getOrder(orderId: string): Promise<CoinbaseOrder> {
+    const path = `/api/v3/brokerage/orders/historical/${orderId}`;
+
+    try {
+      const response = await this.request('GET', path);
+      return response.order;
+    } catch (error) {
+      logger.error({ error, orderId }, 'Failed to fetch order from Coinbase');
+      throw error;
+    }
   }
 
   /**
