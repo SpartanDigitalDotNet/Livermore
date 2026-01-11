@@ -58,12 +58,16 @@ export class CoinbaseRestClient {
     start?: number,
     end?: number
   ): Promise<Candle[]> {
-    // Map our timeframe format to Coinbase granularity (in seconds)
+    // Map our timeframe format to Coinbase granularity string
     const granularity = this.timeframeToGranularity(timeframe);
+
+    if (!granularity) {
+      throw new Error(`Timeframe '${timeframe}' is not supported by Coinbase`);
+    }
 
     // Build query parameters
     const params = new URLSearchParams({
-      granularity: granularity.toString(),
+      granularity,
     });
 
     if (start) {
@@ -428,18 +432,45 @@ export class CoinbaseRestClient {
   }
 
   /**
-   * Convert our timeframe format to Coinbase granularity (seconds)
+   * Coinbase Advanced Trade API granularity values
+   * Reference: https://docs.cdp.coinbase.com/api-reference/advanced-trade-api/rest-api/products/get-product-candles
    */
-  private timeframeToGranularity(timeframe: Timeframe): number {
-    const map: Record<Timeframe, number> = {
-      '1m': 60,
-      '5m': 300,
-      '15m': 900,
-      '1h': 3600,
-      '4h': 14400,
-      '1d': 86400,
-    };
+  private static readonly COINBASE_GRANULARITY = {
+    '1m': 'ONE_MINUTE',
+    '5m': 'FIVE_MINUTE',
+    '15m': 'FIFTEEN_MINUTE',
+    '30m': 'THIRTY_MINUTE',
+    '1h': 'ONE_HOUR',
+    '2h': 'TWO_HOUR',
+    '4h': 'FOUR_HOUR',
+    '6h': 'SIX_HOUR',
+    '1d': 'ONE_DAY',
+  } as const;
 
-    return map[timeframe];
+  /**
+   * Timeframes supported by Coinbase Advanced Trade API
+   */
+  static readonly SUPPORTED_TIMEFRAMES: Timeframe[] = [
+    '1m', '5m', '15m', '30m', '1h', '2h', '4h', '6h', '1d'
+  ];
+
+  /**
+   * Check if a timeframe is supported by Coinbase
+   */
+  static isTimeframeSupported(timeframe: Timeframe): boolean {
+    return timeframe in CoinbaseRestClient.COINBASE_GRANULARITY;
+  }
+
+  /**
+   * Convert canonical timeframe to Coinbase granularity string
+   * Returns null if timeframe is not supported
+   */
+  private timeframeToGranularity(timeframe: Timeframe): string | null {
+    const granularity = CoinbaseRestClient.COINBASE_GRANULARITY[timeframe];
+    if (!granularity) {
+      logger.warn({ timeframe }, 'Timeframe not supported by Coinbase');
+      return null;
+    }
+    return granularity;
   }
 }

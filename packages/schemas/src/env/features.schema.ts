@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { TimeframeSchema } from '../market/candle.schema';
 
 /**
  * Feature flags schema for environment.json
@@ -31,7 +32,7 @@ export const FeaturesConfigSchema = z.object({
   symbols: z.array(z.string().min(1)).default(['BTC-USD', 'ETH-USD', 'SOL-USD']),
 
   /** Default timeframe for charts */
-  defaultTimeframe: z.enum(['1m', '5m', '15m', '1h', '4h', '1d']).default('1h'),
+  defaultTimeframe: TimeframeSchema.default('1h'),
 
   /** Default UI theme */
   defaultTheme: z.enum(['dark', 'light']).default('dark'),
