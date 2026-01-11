@@ -17,6 +17,12 @@ export * from './indicators/ema.schema';
 export * from './indicators/macd.schema';
 export * from './indicators/alert.schema';
 
+// Position schemas
+export * from './position/position.schema';
+
+// Asset utilities
+export * from './assets/crypto-icons';
+
 // Environment and configuration schemas
 export * from './env/config.schema';
 export * from './env/features.schema';
