@@ -6,6 +6,7 @@ import { logger, validateEnv } from '@livermore/utils';
 import { getDbClient } from '@livermore/database';
 import { getRedisClient } from '@livermore/cache';
 import { createContext } from '@livermore/trpc-config';
+import { CoinbaseRestClient } from '@livermore/coinbase-client';
 import { CoinbaseWebSocketService } from './services/coinbase-websocket.service';
 import { IndicatorCalculationService } from './services/indicator-calculation.service';
 import { AlertEvaluationService } from './services/alert-evaluation.service';
@@ -13,9 +14,121 @@ import { getDiscordService } from './services/discord-notification.service';
 import { appRouter } from './routers';
 import type { Timeframe } from '@livermore/schemas';
 
-// Supported symbols and timeframes
-const SUPPORTED_SYMBOLS = ['BTC-USD', 'ETH-USD', 'SOL-USD'];
+// Blacklisted symbols (delisted, stablecoins, or no valid USD trading pair)
+const BLACKLISTED_SYMBOLS = [
+  // Delisted from Coinbase
+  'MOBILE', 'SYN',
+  // Stablecoins (no X-USD trading pair exists)
+  'USD', 'USDC', 'USDT', 'DAI', 'GUSD', 'BUSD', 'PYUSD', 'USDP', 'TUSD', 'FRAX', 'LUSD', 'SUSD', 'EURC',
+];
+
+// Minimum position value to include in monitoring (USD)
+const MIN_POSITION_VALUE_USD = 2;
+
+// Supported timeframes for indicator calculation
 const SUPPORTED_TIMEFRAMES: Timeframe[] = ['1m', '5m', '15m', '1h', '4h', '1d'];
+
+interface AccountSymbolsResult {
+  /** Symbols meeting minimum value threshold */
+  monitored: string[];
+  /** Symbols excluded due to low value (for cleanup) */
+  excluded: string[];
+}
+
+/**
+ * Fetch trading symbols from Coinbase account holdings
+ * Returns symbols with position value >= MIN_POSITION_VALUE_USD, excluding blacklisted and fiat
+ */
+async function getAccountSymbols(apiKeyId: string, privateKeyPem: string): Promise<AccountSymbolsResult> {
+  const client = new CoinbaseRestClient(apiKeyId, privateKeyPem);
+  const accounts = await client.getAccounts();
+
+  // First pass: collect all non-zero crypto balances
+  const holdings: { currency: string; balance: number }[] = [];
+
+  for (const account of accounts) {
+    // Skip fiat accounts
+    if (account.type === 'ACCOUNT_TYPE_FIAT') continue;
+
+    // Skip zero balances
+    const balance = parseFloat(account.available_balance.value);
+    if (balance <= 0) continue;
+
+    // Skip blacklisted symbols
+    const currency = account.currency;
+    if (BLACKLISTED_SYMBOLS.includes(currency)) continue;
+
+    holdings.push({ currency, balance });
+  }
+
+  // Get spot prices for all currencies
+  const currencies = holdings.map((h) => h.currency);
+  const prices = await client.getSpotPrices(currencies);
+
+  // Filter by position value
+  const monitored: string[] = [];
+  const excluded: string[] = [];
+
+  for (const { currency, balance } of holdings) {
+    const price = prices.get(currency);
+    const symbol = `${currency}-USD`;
+
+    if (price === null || price === undefined) {
+      // No price available - exclude from monitoring
+      logger.debug({ currency }, 'No price available, excluding from monitoring');
+      excluded.push(symbol);
+      continue;
+    }
+
+    const positionValue = balance * price;
+
+    if (positionValue >= MIN_POSITION_VALUE_USD) {
+      monitored.push(symbol);
+      logger.debug({ symbol, balance, price, positionValue: positionValue.toFixed(2) }, 'Including in monitoring');
+    } else {
+      excluded.push(symbol);
+      logger.debug({ symbol, balance, price, positionValue: positionValue.toFixed(2) }, 'Excluding (below minimum)');
+    }
+  }
+
+  return { monitored, excluded };
+}
+
+/**
+ * Clean up Redis cache for excluded symbols
+ * Removes candles, indicators, and tickers for symbols no longer being monitored
+ */
+async function cleanupExcludedSymbols(
+  redis: ReturnType<typeof getRedisClient>,
+  excludedSymbols: string[],
+  timeframes: Timeframe[]
+): Promise<void> {
+  if (excludedSymbols.length === 0) return;
+
+  const userId = 1; // Hardcoded for now
+  const exchangeId = 1;
+
+  const keysToDelete: string[] = [];
+
+  for (const symbol of excludedSymbols) {
+    // Ticker key
+    keysToDelete.push(`ticker:${userId}:${exchangeId}:${symbol}`);
+
+    // Candle and indicator keys for all timeframes
+    for (const timeframe of timeframes) {
+      keysToDelete.push(`candles:${userId}:${exchangeId}:${symbol}:${timeframe}`);
+      keysToDelete.push(`indicator:${userId}:${exchangeId}:${symbol}:${timeframe}:macd-v`);
+    }
+  }
+
+  if (keysToDelete.length > 0) {
+    const deleted = await redis.del(...keysToDelete);
+    logger.info(
+      { excludedCount: excludedSymbols.length, keysDeleted: deleted, symbols: excludedSymbols },
+      'Cleaned up Redis cache for excluded symbols'
+    );
+  }
+}
 
 /**
  * Livermore API Server
@@ -58,6 +171,20 @@ async function start() {
     logger.warn('Discord notifications disabled (DISCORD_LIVERMORE_BOT not set)');
   }
 
+  // Fetch symbols from Coinbase account holdings (filtered by position value)
+  logger.info('Fetching symbols from Coinbase account...');
+  const { monitored: monitoredSymbols, excluded: excludedSymbols } = await getAccountSymbols(
+    config.Coinbase_ApiKeyId,
+    config.Coinbase_EcPrivateKeyPem
+  );
+  logger.info(
+    { monitored: monitoredSymbols, excluded: excludedSymbols, monitoredCount: monitoredSymbols.length, excludedCount: excludedSymbols.length },
+    'Loaded symbols from account'
+  );
+
+  // Clean up Redis cache for excluded symbols (positions < $2)
+  await cleanupExcludedSymbols(redis, excludedSymbols, SUPPORTED_TIMEFRAMES);
+
   // Register tRPC router
   await fastify.register(fastifyTRPCPlugin, {
     prefix: '/trpc',
@@ -90,7 +217,7 @@ async function start() {
     config.Coinbase_EcPrivateKeyPem
   );
 
-  await coinbaseWsService.start(SUPPORTED_SYMBOLS);
+  await coinbaseWsService.start(monitoredSymbols);
   logger.info('Coinbase WebSocket service started');
 
   // Start Indicator Calculation Service
@@ -100,7 +227,7 @@ async function start() {
   );
 
   // Build indicator configs for all symbol/timeframe combinations
-  const indicatorConfigs = SUPPORTED_SYMBOLS.flatMap((symbol) =>
+  const indicatorConfigs = monitoredSymbols.flatMap((symbol) =>
     SUPPORTED_TIMEFRAMES.map((timeframe) => ({ symbol, timeframe }))
   );
 
@@ -109,14 +236,14 @@ async function start() {
 
   // Start Alert Evaluation Service
   const alertService = new AlertEvaluationService();
-  await alertService.start(SUPPORTED_SYMBOLS, SUPPORTED_TIMEFRAMES);
+  await alertService.start(monitoredSymbols, SUPPORTED_TIMEFRAMES);
   logger.info('Alert Evaluation Service started');
 
   // Send startup notification to Discord
   if (discordService.isEnabled()) {
     await discordService.sendSystemNotification(
       'Livermore Server Started',
-      `Server is now online and monitoring ${SUPPORTED_SYMBOLS.join(', ')}`
+      `Server is now online and monitoring ${monitoredSymbols.length} symbols: ${monitoredSymbols.join(', ')}`
     );
   }
 

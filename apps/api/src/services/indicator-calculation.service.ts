@@ -47,10 +47,61 @@ export class IndicatorCalculationService {
   private readonly CALCULATION_INTERVAL_MS = 60000; // Recalculate every minute
   private readonly MIN_CANDLES_FOR_MACDV = macdVMinBars(); // ~35 candles
 
+  // Rate limiting settings to avoid Coinbase API throttling
+  private readonly BATCH_SIZE = 5; // Requests per batch (reduced to avoid rate limits)
+  private readonly BATCH_DELAY_MS = 1000; // Delay between batches
+
+  // Priority symbols - loaded first for faster startup
+  private readonly PRIORITY_SYMBOLS = [
+    'BTC-USD', 'ETH-USD', 'SOL-USD', 'XRP-USD', 'DOGE-USD',
+    'ADA-USD', 'AVAX-USD', 'LINK-USD', 'DOT-USD', 'MATIC-USD',
+  ];
+
   constructor(apiKeyId: string, privateKeyPem: string) {
     this.restClient = new CoinbaseRestClient(apiKeyId, privateKeyPem);
     this.candleCache = new CandleCacheStrategy(this.redis);
     this.indicatorCache = new IndicatorCacheStrategy(this.redis);
+  }
+
+  /**
+   * Sleep helper for rate limiting
+   */
+  private sleep(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  /**
+   * Process configs in batches with delays to avoid rate limiting
+   */
+  private async processBatched<T>(
+    items: T[],
+    processor: (item: T) => Promise<void>,
+    label: string
+  ): Promise<void> {
+    const total = items.length;
+    let processed = 0;
+
+    for (let i = 0; i < items.length; i += this.BATCH_SIZE) {
+      const batch = items.slice(i, i + this.BATCH_SIZE);
+
+      // Process batch in parallel
+      await Promise.all(
+        batch.map((item) =>
+          processor(item).catch((err) => {
+            const message = err instanceof Error ? err.message : String(err);
+            logger.error({ err: message, item }, `Failed to process ${label}`);
+          })
+        )
+      );
+
+      processed += batch.length;
+      logger.info({ processed, total, label }, 'Batch complete');
+
+      // Delay before next batch (skip delay after last batch)
+      if (i + this.BATCH_SIZE < items.length) {
+        await this.sleep(this.BATCH_DELAY_MS);
+      }
+    }
   }
 
   /**
@@ -87,15 +138,42 @@ export class IndicatorCalculationService {
 
   /**
    * Initialize all configured symbol/timeframe pairs
+   * Prioritizes major symbols first, then batches remaining to avoid rate limits
    */
   private async initializeAllConfigs(): Promise<void> {
-    const promises = this.configs.map((config) =>
-      this.initializeConfig(config).catch((error) => {
-        logger.error({ error, config }, 'Failed to initialize indicator config');
-      })
+    // Separate priority configs from the rest
+    const priorityConfigs = this.configs.filter((c) =>
+      this.PRIORITY_SYMBOLS.includes(c.symbol)
+    );
+    const remainingConfigs = this.configs.filter(
+      (c) => !this.PRIORITY_SYMBOLS.includes(c.symbol)
     );
 
-    await Promise.all(promises);
+    logger.info(
+      { priority: priorityConfigs.length, remaining: remainingConfigs.length },
+      'Initializing indicators with prioritization'
+    );
+
+    // Load priority symbols first (still batched to avoid rate limits)
+    if (priorityConfigs.length > 0) {
+      logger.info('Loading priority symbols...');
+      await this.processBatched(
+        priorityConfigs,
+        (config) => this.initializeConfig(config),
+        'priority initialization'
+      );
+      logger.info('Priority symbols loaded');
+    }
+
+    // Load remaining symbols in batches
+    if (remainingConfigs.length > 0) {
+      logger.info('Loading remaining symbols...');
+      await this.processBatched(
+        remainingConfigs,
+        (config) => this.initializeConfig(config),
+        'remaining initialization'
+      );
+    }
   }
 
   /**
@@ -111,10 +189,7 @@ export class IndicatorCalculationService {
     const candles = await this.fetchHistoricalCandles(symbol, timeframe);
 
     if (candles.length < this.MIN_CANDLES_FOR_MACDV) {
-      logger.warn(
-        { symbol, timeframe, candleCount: candles.length, required: this.MIN_CANDLES_FOR_MACDV },
-        'Insufficient candles for MACD-V calculation'
-      );
+      // Silently skip sparse symbols (design decision: no warning for low-volume tokens)
       return;
     }
 
@@ -131,7 +206,7 @@ export class IndicatorCalculationService {
   }
 
   /**
-   * Fetch historical candles from Coinbase REST API
+   * Fetch historical candles from Coinbase REST API (for initial load)
    */
   private async fetchHistoricalCandles(
     symbol: string,
@@ -162,55 +237,92 @@ export class IndicatorCalculationService {
       );
 
       return candles;
-    } catch (error) {
-      logger.error({ error, symbol, timeframe }, 'Failed to fetch historical candles');
-      throw error;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      logger.error({ err: message, symbol, timeframe }, 'Failed to fetch historical candles');
+      throw err;
+    }
+  }
+
+  /**
+   * Fetch only recent candles from Coinbase REST API (for incremental updates)
+   * Only fetches the last few candles to append to cache
+   */
+  private async fetchRecentCandles(
+    symbol: string,
+    timeframe: Timeframe,
+    count: number = 3
+  ): Promise<Candle[]> {
+    try {
+      const now = Date.now();
+      const timeframeMs = this.timeframeToMs(timeframe);
+      // Fetch a few extra to ensure we get the most recent closed candle
+      const start = now - (count + 1) * timeframeMs;
+
+      const candles = await this.restClient.getCandles(symbol, timeframe, start, now);
+
+      // Sort by timestamp ascending (oldest first)
+      candles.sort((a, b) => a.timestamp - b.timestamp);
+
+      return candles;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      logger.error({ err: message, symbol, timeframe }, 'Failed to fetch recent candles');
+      throw err;
     }
   }
 
   /**
    * Recalculate indicators for all configs
+   * Uses batched processing to avoid rate limits
    */
   private async recalculateAll(): Promise<void> {
     logger.debug('Recalculating all indicators');
 
-    const promises = this.configs.map((config) =>
-      this.recalculateForConfig(config).catch((error) => {
-        logger.error({ error, config }, 'Failed to recalculate indicators');
-      })
+    await this.processBatched(
+      this.configs,
+      (config) => this.recalculateForConfig(config),
+      'recalculation'
     );
-
-    await Promise.all(promises);
   }
 
   /**
    * Recalculate indicators for a single config
-   * Always fetches fresh candles from Coinbase to ensure data is current
+   * Incrementally fetches only recent candles and appends to cache
    */
   private async recalculateForConfig(config: IndicatorConfig): Promise<void> {
     const { symbol, timeframe } = config;
 
     try {
-      // Always fetch fresh candles from Coinbase for accurate indicator calculation
-      const freshCandles = await this.fetchHistoricalCandles(symbol, timeframe);
+      // Only fetch the last few candles (not full history)
+      const recentCandles = await this.fetchRecentCandles(symbol, timeframe, 3);
 
-      if (freshCandles.length < this.MIN_CANDLES_FOR_MACDV) {
-        logger.warn(
-          { symbol, timeframe, candleCount: freshCandles.length },
-          'Insufficient fresh candles for recalculation'
-        );
+      if (recentCandles.length > 0) {
+        // Append new candles to cache (deduplicates by timestamp)
+        await this.candleCache.addCandles(this.TEST_USER_ID, this.TEST_EXCHANGE_ID, recentCandles);
+      }
+
+      // Get full history from cache for indicator calculation
+      const cachedCandles = await this.candleCache.getRecentCandles(
+        this.TEST_USER_ID,
+        this.TEST_EXCHANGE_ID,
+        symbol,
+        timeframe,
+        200 // Enough for indicator calculation
+      );
+
+      if (cachedCandles.length < this.MIN_CANDLES_FOR_MACDV) {
+        // Not enough cached data - skip silently
         return;
       }
 
-      // Update cache with fresh candles (deduplicates by timestamp)
-      await this.candleCache.addCandles(this.TEST_USER_ID, this.TEST_EXCHANGE_ID, freshCandles);
+      // Calculate indicators from cached data
+      await this.calculateIndicators(symbol, timeframe, cachedCandles);
 
-      // Calculate indicators with fresh data
-      await this.calculateIndicators(symbol, timeframe, freshCandles);
-
-    } catch (error) {
-      // If Coinbase fetch fails, fall back to cached candles
-      logger.warn({ error, symbol, timeframe }, 'Fresh candle fetch failed, using cached data');
+    } catch (err) {
+      // If fetch fails, try calculating from existing cache
+      const message = err instanceof Error ? err.message : String(err);
+      logger.warn({ err: message, symbol, timeframe }, 'Recent candle fetch failed, using cached data');
 
       const cachedCandles = await this.candleCache.getRecentCandles(
         this.TEST_USER_ID,

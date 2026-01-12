@@ -173,9 +173,10 @@ export class CoinbaseRestClient {
       // Validate with Zod
       return candles.map(c => CandleSchema.parse(c));
 
-    } catch (error) {
-      logger.error({ error, symbol, timeframe }, 'Failed to fetch candles from Coinbase');
-      throw error;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      logger.error({ err: message, symbol, timeframe }, 'Failed to fetch candles from Coinbase');
+      throw err;
     }
   }
 
