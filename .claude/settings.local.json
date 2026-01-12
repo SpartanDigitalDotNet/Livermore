@@ -29,7 +29,8 @@
       "Bash(git -C \"C:\\\\Dev\\\\claude\\\\Livermore\" show --stat e4b6e51)",
       "Bash(curl:*)",
       "Bash(more:*)",
-      "Bash(npm run build:*)"
+      "Bash(npm run build:*)",
+      "WebFetch(domain:forums.coinbasecloud.dev)"
     ]
   }
 }

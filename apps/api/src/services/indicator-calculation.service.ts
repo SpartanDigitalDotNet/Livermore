@@ -5,7 +5,7 @@ import {
   IndicatorCacheStrategy,
   type CachedIndicatorValue,
 } from '@livermore/cache';
-import { logger } from '@livermore/utils';
+import { logger, getCandleTimestamp, timeframeToMs } from '@livermore/utils';
 import type { Candle, Timeframe } from '@livermore/schemas';
 import {
   macdVWithStage,
@@ -36,7 +36,11 @@ export class IndicatorCalculationService {
 
   // Active calculation configs
   private configs: IndicatorConfig[] = [];
-  private calculationInterval: NodeJS.Timeout | null = null;
+
+  // Boundary-aware scheduling
+  private tickTimer: NodeJS.Timeout | null = null;
+  private lastProcessedBoundary: Map<Timeframe, number> = new Map();
+  private configsByTimeframe: Map<Timeframe, IndicatorConfig[]> = new Map();
 
   // Temporary: hardcode test user and exchange IDs
   // TODO: Replace with actual user/exchange from database
@@ -44,8 +48,19 @@ export class IndicatorCalculationService {
   private readonly TEST_EXCHANGE_ID = 1;
 
   // Calculation settings
-  private readonly CALCULATION_INTERVAL_MS = 60000; // Recalculate every minute
   private readonly MIN_CANDLES_FOR_MACDV = macdVMinBars(); // ~35 candles
+  private readonly TICK_INTERVAL_MS = 10000; // 10 seconds
+  private readonly BOUNDARY_OFFSETS: Record<Timeframe, number> = {
+    '1m': 1000,    // 1 second after close
+    '5m': 3000,
+    '15m': 5000,
+    '30m': 5000,
+    '1h': 10000,
+    '2h': 10000,
+    '4h': 15000,
+    '6h': 15000,
+    '1d': 30000,   // 30 seconds for daily
+  };
 
   // Rate limiting settings to avoid Coinbase API throttling
   private readonly BATCH_SIZE = 5; // Requests per batch (reduced to avoid rate limits)
@@ -105,23 +120,106 @@ export class IndicatorCalculationService {
   }
 
   /**
+   * Build index of configs grouped by timeframe
+   */
+  private buildConfigIndex(): void {
+    this.configsByTimeframe.clear();
+    for (const config of this.configs) {
+      const existing = this.configsByTimeframe.get(config.timeframe) || [];
+      existing.push(config);
+      this.configsByTimeframe.set(config.timeframe, existing);
+    }
+  }
+
+  /**
+   * Initialize boundary tracking to prevent immediate triggers on startup
+   */
+  private initializeBoundaryTracking(): void {
+    const now = Date.now();
+    for (const timeframe of this.configsByTimeframe.keys()) {
+      const boundary = getCandleTimestamp(now, timeframe);
+      this.lastProcessedBoundary.set(timeframe, boundary);
+    }
+  }
+
+  /**
+   * Main tick handler - checks for candle boundary crossings
+   * Only triggers recalculation when a timeframe's candle closes
+   */
+  private async onTick(): Promise<void> {
+    const now = Date.now();
+    const timeframesToUpdate: Timeframe[] = [];
+
+    for (const [timeframe, lastBoundary] of this.lastProcessedBoundary.entries()) {
+      const currentBoundary = getCandleTimestamp(now, timeframe);
+
+      // Check if we've crossed into a new candle period
+      if (currentBoundary > lastBoundary) {
+        const offset = this.BOUNDARY_OFFSETS[timeframe] || 1000;
+        // Wait for offset after boundary before triggering (data propagation delay)
+        if ((now - currentBoundary) >= offset) {
+          timeframesToUpdate.push(timeframe);
+          this.lastProcessedBoundary.set(timeframe, currentBoundary);
+          logger.info(
+            { timeframe, boundary: new Date(currentBoundary).toISOString() },
+            'Candle boundary crossed'
+          );
+        }
+      }
+    }
+
+    // Process all timeframes that crossed boundaries in parallel
+    await Promise.all(
+      timeframesToUpdate.map((tf) => this.recalculateTimeframe(tf))
+    );
+  }
+
+  /**
+   * Recalculate indicators for all symbols in a single timeframe
+   */
+  private async recalculateTimeframe(timeframe: Timeframe): Promise<void> {
+    const configs = this.configsByTimeframe.get(timeframe);
+    if (!configs || configs.length === 0) return;
+
+    logger.info(
+      { timeframe, symbolCount: configs.length },
+      'Starting timeframe recalculation'
+    );
+
+    await this.processBatched(
+      configs,
+      (config) => this.recalculateForConfig(config),
+      `${timeframe} recalculation`
+    );
+  }
+
+  /**
    * Start the indicator calculation service
    */
   async start(configs: IndicatorConfig[]): Promise<void> {
-    logger.info({ configs }, 'Starting Indicator Calculation Service');
+    logger.info({ configCount: configs.length }, 'Starting Indicator Calculation Service');
 
     this.configs = configs;
+
+    // Build index of configs by timeframe
+    this.buildConfigIndex();
+
+    // Initialize boundary tracking (prevents immediate trigger on startup)
+    this.initializeBoundaryTracking();
 
     // Initial data fetch and calculation for all configs
     await this.initializeAllConfigs();
 
-    // Start periodic recalculation
-    this.calculationInterval = setInterval(
-      () => this.recalculateAll(),
-      this.CALCULATION_INTERVAL_MS
+    // Start tick-based boundary detection
+    this.tickTimer = setInterval(
+      () => this.onTick(),
+      this.TICK_INTERVAL_MS
     );
 
-    logger.info('Indicator Calculation Service started');
+    logger.info(
+      { timeframes: Array.from(this.configsByTimeframe.keys()) },
+      'Indicator Calculation Service started with boundary-aware scheduling'
+    );
   }
 
   /**
@@ -130,10 +228,13 @@ export class IndicatorCalculationService {
   stop(): void {
     logger.info('Stopping Indicator Calculation Service');
 
-    if (this.calculationInterval) {
-      clearInterval(this.calculationInterval);
-      this.calculationInterval = null;
+    if (this.tickTimer) {
+      clearInterval(this.tickTimer);
+      this.tickTimer = null;
     }
+
+    this.lastProcessedBoundary.clear();
+    this.configsByTimeframe.clear();
   }
 
   /**
@@ -218,7 +319,7 @@ export class IndicatorCalculationService {
       const candlesNeeded = this.MIN_CANDLES_FOR_MACDV + 50; // Extra buffer
 
       // Calculate start time based on timeframe
-      const timeframeMs = this.timeframeToMs(timeframe);
+      const timeframeMs = timeframeToMs(timeframe);
       const start = now - candlesNeeded * timeframeMs;
 
       logger.debug(
@@ -255,7 +356,7 @@ export class IndicatorCalculationService {
   ): Promise<Candle[]> {
     try {
       const now = Date.now();
-      const timeframeMs = this.timeframeToMs(timeframe);
+      const timeframeMs = timeframeToMs(timeframe);
       // Fetch a few extra to ensure we get the most recent closed candle
       const start = now - (count + 1) * timeframeMs;
 
@@ -270,20 +371,6 @@ export class IndicatorCalculationService {
       logger.error({ err: message, symbol, timeframe }, 'Failed to fetch recent candles');
       throw err;
     }
-  }
-
-  /**
-   * Recalculate indicators for all configs
-   * Uses batched processing to avoid rate limits
-   */
-  private async recalculateAll(): Promise<void> {
-    logger.debug('Recalculating all indicators');
-
-    await this.processBatched(
-      this.configs,
-      (config) => this.recalculateForConfig(config),
-      'recalculation'
-    );
   }
 
   /**
@@ -445,24 +532,5 @@ export class IndicatorCalculationService {
     }
 
     await this.initializeConfig({ symbol, timeframe });
-  }
-
-  /**
-   * Convert timeframe to milliseconds
-   */
-  private timeframeToMs(timeframe: Timeframe): number {
-    const map: Record<Timeframe, number> = {
-      '1m': 60 * 1000,
-      '5m': 5 * 60 * 1000,
-      '15m': 15 * 60 * 1000,
-      '30m': 30 * 60 * 1000,
-      '1h': 60 * 60 * 1000,
-      '2h': 2 * 60 * 60 * 1000,
-      '4h': 4 * 60 * 60 * 1000,
-      '6h': 6 * 60 * 60 * 1000,
-      '1d': 24 * 60 * 60 * 1000,
-    };
-
-    return map[timeframe];
   }
 }
