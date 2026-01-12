@@ -91,7 +91,11 @@ async function getAccountSymbols(apiKeyId: string, privateKeyPem: string): Promi
     }
   }
 
-  return { monitored, excluded };
+  // Deduplicate (Coinbase may return multiple accounts for same currency, e.g., vault + regular)
+  const uniqueMonitored = [...new Set(monitored)];
+  const uniqueExcluded = [...new Set(excluded)];
+
+  return { monitored: uniqueMonitored, excluded: uniqueExcluded };
 }
 
 /**
