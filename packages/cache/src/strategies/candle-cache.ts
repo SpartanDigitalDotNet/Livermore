@@ -14,12 +14,16 @@ export class CandleCacheStrategy {
 
   /**
    * Add a single candle to the cache
+   * Removes any existing candle with the same timestamp to prevent duplicates
    */
   async addCandle(userId: number, exchangeId: number, candle: Candle): Promise<void> {
     // Validate with Zod
     const validated = CandleSchema.parse(candle);
 
     const key = candleKey(userId, exchangeId, validated.symbol, validated.timeframe);
+
+    // Remove any existing candle with same timestamp (prevents duplicates from updating candles)
+    await this.redis.zremrangebyscore(key, validated.timestamp, validated.timestamp);
 
     // Store in sorted set by timestamp
     await this.redis.zadd(key, validated.timestamp, JSON.stringify(validated));
@@ -34,6 +38,7 @@ export class CandleCacheStrategy {
 
   /**
    * Add multiple candles to the cache (bulk operation)
+   * Removes existing candles with same timestamps to prevent duplicates
    */
   async addCandles(userId: number, exchangeId: number, candles: Candle[]): Promise<void> {
     if (candles.length === 0) return;
@@ -55,6 +60,11 @@ export class CandleCacheStrategy {
     const pipeline = this.redis.pipeline();
 
     for (const [key, candleGroup] of grouped) {
+      // Remove existing candles with same timestamps first (prevents duplicates)
+      for (const candle of candleGroup) {
+        pipeline.zremrangebyscore(key, candle.timestamp, candle.timestamp);
+      }
+
       // Add all candles to sorted set
       for (const candle of candleGroup) {
         pipeline.zadd(key, candle.timestamp, JSON.stringify(candle));

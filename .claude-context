@@ -52,16 +52,24 @@ Some symbols have low trading activity, resulting in:
 **Implication:** Service layer must check candle count before indicator calculation
 and handle sparse symbols differently (skip, warn, or use longer timeframes).
 
-### Current Gap: Static Symbol Monitoring
+### Dynamic Symbol Loading (Implemented)
 
-The hardcoded `SUPPORTED_SYMBOLS = ['BTC-USD', 'ETH-USD', 'SOL-USD']` in `server.ts` is used by:
-- WebSocket subscriptions (ticker, L2 data)
-- Indicator calculation configs
+On server startup, symbols are loaded dynamically from Coinbase account holdings:
+1. Fetch accounts via `CoinbaseRestClient.getAccounts()`
+2. Filter to non-zero balance + CRYPTO type (exclude fiat)
+3. Exclude blacklisted symbols (hardcoded in server.ts): `['MOBILE', 'SYN']`
+4. Convert to trading pairs: BTC → BTC-USD
 
-**Needed:**
+**Design Decisions:**
+- **Sparse symbols:** Silently skipped if insufficient candles for indicators (no warning logged)
+- **Refresh strategy:** Only on startup for now; will add hourly refresh in future
+- **Blacklist location:** Hardcoded in server.ts for simplicity; can move to database later
+
+**Future Enhancements:**
 - `user_symbols` or `watchlists` table for personal symbol lists
 - Service to derive "monitored symbols" from holdings + watchlists
-- Dynamic WebSocket subscription management
+- Dynamic WebSocket subscription management (add/remove symbols at runtime)
+- Hourly refresh of account holdings
 
 ## Purpose
 Track the user's current account positions on Coinbase.

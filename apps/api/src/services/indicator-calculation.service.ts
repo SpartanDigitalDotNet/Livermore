@@ -185,31 +185,45 @@ export class IndicatorCalculationService {
 
   /**
    * Recalculate indicators for a single config
+   * Always fetches fresh candles from Coinbase to ensure data is current
    */
   private async recalculateForConfig(config: IndicatorConfig): Promise<void> {
     const { symbol, timeframe } = config;
 
-    // Get cached candles
-    const candles = await this.candleCache.getRecentCandles(
-      this.TEST_USER_ID,
-      this.TEST_EXCHANGE_ID,
-      symbol,
-      timeframe,
-      200 // Get recent candles
-    );
-
-    if (candles.length < this.MIN_CANDLES_FOR_MACDV) {
-      // Try to fetch more candles from Coinbase
+    try {
+      // Always fetch fresh candles from Coinbase for accurate indicator calculation
       const freshCandles = await this.fetchHistoricalCandles(symbol, timeframe);
+
+      if (freshCandles.length < this.MIN_CANDLES_FOR_MACDV) {
+        logger.warn(
+          { symbol, timeframe, candleCount: freshCandles.length },
+          'Insufficient fresh candles for recalculation'
+        );
+        return;
+      }
+
+      // Update cache with fresh candles (deduplicates by timestamp)
       await this.candleCache.addCandles(this.TEST_USER_ID, this.TEST_EXCHANGE_ID, freshCandles);
 
-      if (freshCandles.length >= this.MIN_CANDLES_FOR_MACDV) {
-        await this.calculateIndicators(symbol, timeframe, freshCandles);
-      }
-      return;
-    }
+      // Calculate indicators with fresh data
+      await this.calculateIndicators(symbol, timeframe, freshCandles);
 
-    await this.calculateIndicators(symbol, timeframe, candles);
+    } catch (error) {
+      // If Coinbase fetch fails, fall back to cached candles
+      logger.warn({ error, symbol, timeframe }, 'Fresh candle fetch failed, using cached data');
+
+      const cachedCandles = await this.candleCache.getRecentCandles(
+        this.TEST_USER_ID,
+        this.TEST_EXCHANGE_ID,
+        symbol,
+        timeframe,
+        200
+      );
+
+      if (cachedCandles.length >= this.MIN_CANDLES_FOR_MACDV) {
+        await this.calculateIndicators(symbol, timeframe, cachedCandles);
+      }
+    }
   }
 
   /**
