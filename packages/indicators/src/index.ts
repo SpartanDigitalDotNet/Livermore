@@ -11,6 +11,13 @@ export { ema, emaLatest, emaIncremental, emaAlpha, type EMAState } from './core/
 export { rma, rmaLatest, rmaIncremental, type RMAState } from './core/rma.js';
 export { trueRange, trueRangeSeries, type OHLC } from './core/true-range.js';
 export { atr, atrLatest, atrIncremental, type ATRResult } from './core/atr.js';
+export {
+  informativeATR,
+  informativeATRLatest,
+  type OHLCWithSynthetic,
+  type InformativeATRConfig,
+  type InformativeATRResult,
+} from './core/informative-atr.js';
 
 // Indicators
 export {
@@ -33,4 +40,5 @@ export {
   type MACDVValue,
   type MACDVSeries,
   type MACDVStage,
+  type MACDVWithStageResult,
 } from './indicators/macd-v.js';

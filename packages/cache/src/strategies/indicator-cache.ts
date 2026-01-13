@@ -21,7 +21,7 @@ export interface CachedIndicatorValue {
  * and supports pub/sub for real-time updates.
  */
 export class IndicatorCacheStrategy {
-  private defaultTtlSeconds = 3600; // 1 hour default TTL
+  private defaultTtlSeconds = 90000; // 25 hours - must exceed longest timeframe (1d)
 
   constructor(private redis: Redis) {}
 

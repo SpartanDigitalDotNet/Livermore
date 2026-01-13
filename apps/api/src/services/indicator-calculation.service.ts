@@ -11,7 +11,7 @@ import {
   macdVWithStage,
   macdVMinBars,
   MACD_V_DEFAULTS,
-  type OHLC,
+  type OHLCWithSynthetic,
 } from '@livermore/indicators';
 import type { CandleData } from './coinbase-websocket.service';
 
@@ -454,20 +454,30 @@ export class IndicatorCalculationService {
       );
     }
 
-    // Convert to OHLC format for indicators library
-    const ohlcBars: OHLC[] = filledCandles.map((c) => ({
+    // Convert to OHLC format with isSynthetic flag for indicators library
+    // This allows informativeATR to skip synthetic candles in ATR calculation
+    const ohlcBars: OHLCWithSynthetic[] = filledCandles.map((c) => ({
       open: c.open,
       high: c.high,
       low: c.low,
       close: c.close,
+      isSynthetic: c.isSynthetic,
     }));
 
-    // Calculate MACD-V
+    // Calculate MACD-V using informativeATR (skips synthetic candles)
     const macdVResult = macdVWithStage(ohlcBars);
 
     if (!macdVResult) {
       logger.warn({ symbol, timeframe }, 'MACD-V calculation returned null');
       return;
+    }
+
+    // If ATR not seeded (insufficient observed TR samples), log and still cache with reason
+    if (!macdVResult.seeded) {
+      logger.debug(
+        { symbol, timeframe, nEff: macdVResult.nEff, reason: macdVResult.reason },
+        'MACD-V not seeded - insufficient trading activity'
+      );
     }
 
     const latestCandle = filledCandles[filledCandles.length - 1];
@@ -496,6 +506,11 @@ export class IndicatorCalculationService {
         liquidity,
         gapRatio: stats.gapRatio,
         zeroRangeRatio,
+        // Validity metadata (from informativeATR)
+        seeded: macdVResult.seeded,
+        nEff: macdVResult.nEff,
+        spanBars: macdVResult.spanBars,
+        reason: macdVResult.reason,
       },
     };
 
@@ -517,10 +532,12 @@ export class IndicatorCalculationService {
       {
         symbol,
         timeframe,
-        macdV: macdVResult.macdV.toFixed(2),
-        signal: macdVResult.signal.toFixed(2),
-        histogram: macdVResult.histogram.toFixed(2),
+        macdV: Number.isNaN(macdVResult.macdV) ? 'N/A' : macdVResult.macdV.toFixed(2),
+        signal: Number.isNaN(macdVResult.signal) ? 'N/A' : macdVResult.signal.toFixed(2),
+        histogram: Number.isNaN(macdVResult.histogram) ? 'N/A' : macdVResult.histogram.toFixed(2),
         stage: macdVResult.stage,
+        seeded: macdVResult.seeded,
+        nEff: macdVResult.nEff,
       },
       'MACD-V calculated'
     );

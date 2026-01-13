@@ -150,3 +150,18 @@ If you also label the 7 "range rules" stages, use the StockCharts definitions:
 - Ranging (Neutral Zone): `-50 < MACD_V < +50` for **20–30+ bars**
 
 If you don't need classification, skip it. The core deliverable is the math above.
+
+---
+
+## 10) Low-Liquidity Handling
+
+For symbols with sparse trading activity (e.g., SKL-USD on 1-minute timeframe), standard ATR calculation fails because exchanges omit candles for periods with no trades. When gap-filled, these synthetic candles have TR=0, causing ATR to collapse toward zero and MACD-V to explode.
+
+**Solution:** Use **Informative ATR** which treats synthetic candles as missing observations (not zero-volatility events).
+
+See **`Low-Liquidity-Handling.md`** for:
+- Root cause analysis
+- Informative ATR algorithm
+- `isSynthetic` candle tagging
+- Validity metadata (`seeded`, `nEff`, `spanBars`, `reason`)
+- API response format

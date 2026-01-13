@@ -48,6 +48,8 @@ export const CandleSchema = z.object({
   symbol: z.string().min(1),
   /** Candle timeframe */
   timeframe: TimeframeSchema,
+  /** True if this candle was forward-filled due to missing trades (in-memory only, not persisted) */
+  isSynthetic: z.boolean().optional(),
 });
 
 /**

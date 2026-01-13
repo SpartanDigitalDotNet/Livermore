@@ -12,14 +12,19 @@
  * - Histogram = MACD_V - Signal
  *
  * Low-liquidity handling:
- * For symbols with sparse trading (e.g., SKL-USD), ATR can be near-zero
- * due to zero-range candles (O=H=L=C). To prevent extreme MACD-V values,
- * we apply an ATR floor of 0.1% of price (configurable via minATRPercent).
+ * For symbols with sparse trading, synthetic (gap-filled) candles are treated
+ * as MISSING data for ATR calculation, not zero-volatility observations.
+ * This prevents ATR from collapsing toward zero and MACD-V from exploding.
+ *
+ * When ATR cannot be seeded (insufficient observed TR samples), MACD-V
+ * returns null with reason: 'Low trading activity'.
  */
 
 import { ema } from '../core/ema.js';
-import { atr as calculateATR } from '../core/atr.js';
-import type { OHLC } from '../core/true-range.js';
+import {
+  informativeATR,
+  type OHLCWithSynthetic,
+} from '../core/informative-atr.js';
 
 /** Default MACD-V parameters per Spiroglou */
 export const MACD_V_DEFAULTS = {
@@ -28,8 +33,6 @@ export const MACD_V_DEFAULTS = {
   atrPeriod: 26,
   signalPeriod: 9,
   scale: 100,
-  /** ATR floor as percentage of price (0.002 = 0.2%) to prevent extreme values */
-  minATRPercent: 0.002,
 } as const;
 
 export interface MACDVConfig {
@@ -38,8 +41,6 @@ export interface MACDVConfig {
   atrPeriod?: number;
   signalPeriod?: number;
   scale?: number;
-  /** ATR floor as percentage of price (0.001 = 0.1%) to prevent extreme values in low-liquidity symbols */
-  minATRPercent?: number;
 }
 
 export interface MACDVValue {
@@ -58,33 +59,47 @@ export interface MACDVSeries {
   fastEMA: number[];
   slowEMA: number[];
   atr: number[];
+  /** True when ATR has been seeded with sufficient observed TR samples */
+  seeded: boolean;
+  /** Number of observed (non-synthetic) TR samples used for ATR */
+  nEff: number;
+  /** Span in bars from first to last observed TR */
+  spanBars: number;
+  /** Reason if MACD-V could not be calculated */
+  reason?: 'Low trading activity';
 }
 
 /** Range rule stages per StockCharts definitions */
 export type MACDVStage =
-  | 'oversold'      // MACD_V < -150
-  | 'rebounding'    // -150 < MACD_V < +50 and MACD_V > Signal
-  | 'rallying'      // +50 < MACD_V < +150 and MACD_V > Signal
-  | 'overbought'    // MACD_V > +150 and MACD_V > Signal
-  | 'retracing'     // MACD_V > -50 and MACD_V < Signal
-  | 'reversing'     // -150 < MACD_V < -50 and MACD_V < Signal
-  | 'ranging'       // -50 < MACD_V < +50 (neutral zone)
+  | 'oversold' // MACD_V < -150
+  | 'rebounding' // -150 < MACD_V < +50 and MACD_V > Signal
+  | 'rallying' // +50 < MACD_V < +150 and MACD_V > Signal
+  | 'overbought' // MACD_V > +150 and MACD_V > Signal
+  | 'retracing' // MACD_V > -50 and MACD_V < Signal
+  | 'reversing' // -150 < MACD_V < -50 and MACD_V < Signal
+  | 'ranging' // -50 < MACD_V < +50 (neutral zone)
   | 'unknown';
 
 /**
  * Calculate MACD-V for an array of OHLC bars
- * @param bars - Array of OHLC bars (oldest first)
+ *
+ * Uses informativeATR which skips synthetic candles, treating them as
+ * missing data rather than zero-volatility observations.
+ *
+ * @param bars - Array of OHLC bars with optional isSynthetic flag (oldest first)
  * @param config - MACD-V configuration (uses Spiroglou defaults if not provided)
- * @returns MACD-V series data
+ * @returns MACD-V series data with validity metadata
  */
-export function macdV(bars: OHLC[], config: MACDVConfig = {}): MACDVSeries {
+export function macdV(
+  bars: OHLCWithSynthetic[],
+  config: MACDVConfig = {}
+): MACDVSeries {
   const {
     fastPeriod = MACD_V_DEFAULTS.fastPeriod,
     slowPeriod = MACD_V_DEFAULTS.slowPeriod,
     atrPeriod = MACD_V_DEFAULTS.atrPeriod,
     signalPeriod = MACD_V_DEFAULTS.signalPeriod,
     scale = MACD_V_DEFAULTS.scale,
-    minATRPercent = MACD_V_DEFAULTS.minATRPercent,
   } = config;
 
   if (bars.length === 0) {
@@ -95,18 +110,38 @@ export function macdV(bars: OHLC[], config: MACDVConfig = {}): MACDVSeries {
       fastEMA: [],
       slowEMA: [],
       atr: [],
+      seeded: false,
+      nEff: 0,
+      spanBars: 0,
+      reason: 'Low trading activity',
     };
   }
 
   // Extract close prices
   const closes = bars.map((bar) => bar.close);
 
-  // Calculate EMAs of close
+  // Calculate EMAs of close (works fine with forward-filled closes)
   const fastEMAValues = ema(closes, fastPeriod);
   const slowEMAValues = ema(closes, slowPeriod);
 
-  // Calculate ATR
-  const { atr: atrValues } = calculateATR(bars, atrPeriod);
+  // Calculate ATR using only observed (non-synthetic) TR samples
+  const atrResult = informativeATR(bars, { period: atrPeriod });
+
+  // If ATR is not seeded, we cannot calculate meaningful MACD-V
+  if (!atrResult.seeded) {
+    return {
+      macdV: new Array(bars.length).fill(NaN),
+      signal: new Array(bars.length).fill(NaN),
+      histogram: new Array(bars.length).fill(NaN),
+      fastEMA: fastEMAValues,
+      slowEMA: slowEMAValues,
+      atr: atrResult.atr,
+      seeded: false,
+      nEff: atrResult.nEff,
+      spanBars: atrResult.spanBars,
+      reason: 'Low trading activity',
+    };
+  }
 
   // Calculate MACD spread and normalize by ATR
   const macdVValues: number[] = new Array(bars.length).fill(NaN);
@@ -114,25 +149,23 @@ export function macdV(bars: OHLC[], config: MACDVConfig = {}): MACDVSeries {
   for (let i = 0; i < bars.length; i++) {
     const fast = fastEMAValues[i];
     const slow = slowEMAValues[i];
-    const atrVal = atrValues[i];
+    const atrVal = atrResult.atr[i];
 
     if (Number.isNaN(fast) || Number.isNaN(slow) || Number.isNaN(atrVal)) {
       continue;
     }
 
-    // Apply ATR floor to prevent extreme values in low-liquidity symbols
-    // When ATR is tiny (due to sparse trading with zero-range candles),
-    // dividing by near-zero inflates MACD-V to extreme values (e.g., 400+)
-    const price = bars[i].close;
-    const minATR = price * minATRPercent;
-    const effectiveATR = Math.max(atrVal, minATR);
+    // ATR should never be zero after informativeATR (it carries forward)
+    // But guard against it just in case
+    if (atrVal === 0) {
+      continue;
+    }
 
     const spread = fast - slow;
-    macdVValues[i] = (spread / effectiveATR) * scale;
+    macdVValues[i] = (spread / atrVal) * scale;
   }
 
   // Calculate Signal line (EMA of MACD-V)
-  // Only calculate on valid (non-NaN) MACD-V values
   const signalValues: number[] = new Array(bars.length).fill(NaN);
 
   // Find first valid MACD-V index
@@ -176,23 +209,31 @@ export function macdV(bars: OHLC[], config: MACDVConfig = {}): MACDVSeries {
     histogram: histogramValues,
     fastEMA: fastEMAValues,
     slowEMA: slowEMAValues,
-    atr: atrValues,
+    atr: atrResult.atr,
+    seeded: true,
+    nEff: atrResult.nEff,
+    spanBars: atrResult.spanBars,
   };
 }
 
 /**
  * Get the latest MACD-V values from an array of OHLC bars
- * @param bars - Array of OHLC bars (oldest first)
+ * @param bars - Array of OHLC bars with optional isSynthetic flag (oldest first)
  * @param config - MACD-V configuration
  * @returns Latest MACD-V values or null if insufficient data
  */
 export function macdVLatest(
-  bars: OHLC[],
+  bars: OHLCWithSynthetic[],
   config: MACDVConfig = {}
-): MACDVValue | null {
+): (MACDVValue & { seeded: boolean; nEff: number; spanBars: number; reason?: 'Low trading activity' }) | null {
   const series = macdV(bars, config);
 
   if (series.macdV.length === 0) {
+    return null;
+  }
+
+  // If not seeded, return null with reason
+  if (!series.seeded) {
     return null;
   }
 
@@ -212,6 +253,9 @@ export function macdVLatest(
     fastEMA: series.fastEMA[lastIndex],
     slowEMA: series.slowEMA[lastIndex],
     atr: series.atr[lastIndex],
+    seeded: series.seeded,
+    nEff: series.nEff,
+    spanBars: series.spanBars,
   };
 }
 
@@ -263,7 +307,6 @@ export function classifyMACDVStage(
   }
 
   // Ranging (neutral zone): -50 < MACD_V < +50
-  // Note: Full "ranging" requires 20-30+ bars in this zone, but we return it as potential
   if (macdVValue > -50 && macdVValue < 50) {
     return 'ranging';
   }
@@ -272,26 +315,66 @@ export function classifyMACDVStage(
 }
 
 /**
+ * Extended MACD-V value with stage and validity metadata
+ */
+export interface MACDVWithStageResult extends MACDVValue {
+  stage: MACDVStage;
+  seeded: boolean;
+  nEff: number;
+  spanBars: number;
+  reason?: 'Low trading activity';
+}
+
+/**
  * Get MACD-V with stage classification
- * @param bars - Array of OHLC bars
+ * @param bars - Array of OHLC bars with optional isSynthetic flag
  * @param config - MACD-V configuration
- * @returns MACD-V value with stage, or null if insufficient data
+ * @returns MACD-V value with stage and validity metadata, or null if insufficient data
  */
 export function macdVWithStage(
-  bars: OHLC[],
+  bars: OHLCWithSynthetic[],
   config: MACDVConfig = {}
-): (MACDVValue & { stage: MACDVStage }) | null {
-  const latest = macdVLatest(bars, config);
+): MACDVWithStageResult | null {
+  const series = macdV(bars, config);
 
-  if (!latest) {
+  // If not seeded, return with reason
+  if (!series.seeded) {
+    return {
+      macdV: NaN,
+      signal: NaN,
+      histogram: NaN,
+      fastEMA: NaN,
+      slowEMA: NaN,
+      atr: NaN,
+      stage: 'unknown',
+      seeded: false,
+      nEff: series.nEff,
+      spanBars: series.spanBars,
+      reason: 'Low trading activity',
+    };
+  }
+
+  const lastIndex = series.macdV.length - 1;
+  const macdVVal = series.macdV[lastIndex];
+  const signalVal = series.signal[lastIndex];
+
+  if (Number.isNaN(macdVVal)) {
     return null;
   }
 
-  const stage = classifyMACDVStage(latest.macdV, latest.signal);
+  const stage = classifyMACDVStage(macdVVal, signalVal);
 
   return {
-    ...latest,
+    macdV: macdVVal,
+    signal: Number.isNaN(signalVal) ? 0 : signalVal,
+    histogram: Number.isNaN(series.histogram[lastIndex]) ? 0 : series.histogram[lastIndex],
+    fastEMA: series.fastEMA[lastIndex],
+    slowEMA: series.slowEMA[lastIndex],
+    atr: series.atr[lastIndex],
     stage,
+    seeded: true,
+    nEff: series.nEff,
+    spanBars: series.spanBars,
   };
 }
 
@@ -311,3 +394,6 @@ export function macdVMinBars(config: MACDVConfig = {}): number {
   // slowPeriod for slow EMA, atrPeriod for ATR, signalPeriod for signal line
   return Math.max(slowPeriod, atrPeriod) + signalPeriod;
 }
+
+// Re-export types for convenience
+export type { OHLCWithSynthetic } from '../core/informative-atr.js';

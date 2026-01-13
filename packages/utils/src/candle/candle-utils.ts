@@ -38,6 +38,9 @@ export interface FillGapsResult {
  * Synthetic candles have:
  * - open = high = low = close = previous candle's close
  * - volume = 0
+ * - isSynthetic = true
+ *
+ * Original candles are marked with isSynthetic = false.
  *
  * @param candles - Array of candles sorted by timestamp ascending
  * @param timeframe - Timeframe for gap detection
@@ -72,8 +75,8 @@ export function fillCandleGaps(candles: Candle[], timeframe: Timeframe): FillGap
   let syntheticCount = 0;
 
   for (let i = 0; i < candles.length; i++) {
-    // Always include the original candle
-    filled.push(candles[i]);
+    // Always include the original candle, marked as NOT synthetic
+    filled.push({ ...candles[i], isSynthetic: false });
 
     // Check for gap to next candle
     if (i < candles.length - 1) {
@@ -95,6 +98,7 @@ export function fillCandleGaps(candles: Candle[], timeframe: Timeframe): FillGap
             volume: 0,
             symbol: candles[i].symbol,
             timeframe: candles[i].timeframe,
+            isSynthetic: true, // Mark as synthetic (missing trade data)
           });
           syntheticCount++;
         }

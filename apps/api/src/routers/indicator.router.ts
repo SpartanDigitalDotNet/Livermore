@@ -152,6 +152,11 @@ export const indicatorRouter = router({
           liquidity: indicator.params?.['liquidity'] || 'unknown',
           gapRatio: indicator.params?.['gapRatio'] ?? null,
           zeroRangeRatio: indicator.params?.['zeroRangeRatio'] ?? null,
+          // Validity metadata (from informativeATR)
+          seeded: indicator.params?.['seeded'] ?? true,
+          nEff: indicator.params?.['nEff'] ?? null,
+          spanBars: indicator.params?.['spanBars'] ?? null,
+          reason: indicator.params?.['reason'] ?? null,
         },
       };
     }),
