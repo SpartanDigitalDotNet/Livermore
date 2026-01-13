@@ -238,6 +238,14 @@ async function start() {
   await indicatorService.start(indicatorConfigs);
   logger.info('Indicator Calculation Service started');
 
+  // Wire up WebSocket candle close events to indicator service (true event-driven)
+  coinbaseWsService.onCandleClose((symbol, timeframe, candle) => {
+    indicatorService.onCandleClose(symbol, timeframe, candle).catch((err) => {
+      logger.error({ err, symbol, timeframe }, 'Error processing candle close event');
+    });
+  });
+  logger.info('Candle close events wired to indicator service');
+
   // Start Alert Evaluation Service
   const alertService = new AlertEvaluationService();
   await alertService.start(monitoredSymbols, SUPPORTED_TIMEFRAMES);

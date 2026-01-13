@@ -27,19 +27,21 @@ export class IndicatorCacheStrategy {
 
   /**
    * Store an indicator value in cache
+   * Note: params are stored in the value but NOT included in the key
+   * This ensures consistent key lookup regardless of indicator parameters
    */
   async setIndicator(
     userId: number,
     exchangeId: number,
     indicator: CachedIndicatorValue
   ): Promise<void> {
+    // Key excludes params for consistent lookup
     const key = indicatorKey(
       userId,
       exchangeId,
       indicator.symbol,
       indicator.timeframe,
-      indicator.type,
-      indicator.params
+      indicator.type
     );
 
     await this.redis.set(key, JSON.stringify(indicator), 'EX', this.defaultTtlSeconds);
@@ -47,6 +49,7 @@ export class IndicatorCacheStrategy {
 
   /**
    * Store multiple indicator values (for historical data)
+   * Note: params are stored in the value but NOT included in the key
    */
   async setIndicators(
     userId: number,
@@ -58,13 +61,13 @@ export class IndicatorCacheStrategy {
     const pipeline = this.redis.pipeline();
 
     for (const indicator of indicators) {
+      // Key excludes params for consistent lookup
       const key = indicatorKey(
         userId,
         exchangeId,
         indicator.symbol,
         indicator.timeframe,
-        indicator.type,
-        indicator.params
+        indicator.type
       );
 
       pipeline.set(key, JSON.stringify(indicator), 'EX', this.defaultTtlSeconds);
@@ -140,5 +143,36 @@ export class IndicatorCacheStrategy {
     const key = indicatorKey(userId, exchangeId, symbol, timeframe, type, params);
     const exists = await this.redis.exists(key);
     return exists === 1;
+  }
+
+  /**
+   * Get multiple indicators at once (bulk fetch)
+   * Returns a map of "symbol:timeframe" -> indicator value
+   */
+  async getIndicatorsBulk(
+    userId: number,
+    exchangeId: number,
+    requests: { symbol: string; timeframe: Timeframe; type?: string }[]
+  ): Promise<Map<string, CachedIndicatorValue>> {
+    if (requests.length === 0) return new Map();
+
+    // Build keys
+    const keys = requests.map((r) =>
+      indicatorKey(userId, exchangeId, r.symbol, r.timeframe, r.type || 'macd-v')
+    );
+
+    // Use MGET for efficient bulk fetch
+    const results = await this.redis.mget(...keys);
+
+    const map = new Map<string, CachedIndicatorValue>();
+    for (let i = 0; i < requests.length; i++) {
+      const result = results[i];
+      if (result) {
+        const key = `${requests[i].symbol}:${requests[i].timeframe}`;
+        map.set(key, JSON.parse(result) as CachedIndicatorValue);
+      }
+    }
+
+    return map;
   }
 }

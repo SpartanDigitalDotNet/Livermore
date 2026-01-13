@@ -34,7 +34,7 @@ function Get-TimeframeBoundary {
         "15m" { return $dt.AddMinutes(-($dt.Minute % 15)).AddSeconds(-$dt.Second).AddMilliseconds(-$dt.Millisecond) }
         "1h"  { return $dt.AddMinutes(-$dt.Minute).AddSeconds(-$dt.Second).AddMilliseconds(-$dt.Millisecond) }
         "4h"  { return $dt.AddHours(-($dt.Hour % 4)).AddMinutes(-$dt.Minute).AddSeconds(-$dt.Second).AddMilliseconds(-$dt.Millisecond) }
-        "1d"  { return $dt.Date }
+        "1d"  { return $dt.AddHours(-$dt.Hour).AddMinutes(-$dt.Minute).AddSeconds(-$dt.Second).AddMilliseconds(-$dt.Millisecond) }
         default { return $dt }
     }
 }
@@ -56,13 +56,12 @@ function Get-TimeframeMs {
 Add-Type -AssemblyName System.Web
 
 Write-Host "=== Indicator Data Audit ===" -ForegroundColor Cyan
-Write-Host "Current Time: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss UTC')Z" -ForegroundColor Gray
+$now = [DateTimeOffset]::UtcNow
+Write-Host "Current Time: $($now.ToString('yyyy-MM-dd HH:mm:ss'))Z" -ForegroundColor Gray
 Write-Host ""
 
 $symbols = @("BTC-USD", "ETH-USD", "XRP-USD", "LINK-USD", "BONK-USD")
 $timeframes = @("1m", "5m", "15m", "1h", "4h", "1d")
-
-$now = [DateTimeOffset]::UtcNow
 
 Write-Host "=== Timestamp Alignment Check ===" -ForegroundColor Yellow
 Write-Host ""
@@ -81,16 +80,19 @@ foreach ($tf in $timeframes) {
 
         if ($data) {
             $candleTs = [DateTimeOffset]::FromUnixTimeMilliseconds($data.timestamp)
+            $candleTsMs = $data.timestamp
             $ageMs = ($now.ToUnixTimeMilliseconds() - $data.timestamp)
             $ageMinutes = [math]::Round($ageMs / 60000, 1)
 
-            # Check if timestamp is on boundary
+            # Check if timestamp is on boundary (compare Unix ms to avoid DateTimeOffset precision issues)
             $boundary = Get-TimeframeBoundary -timeframe $tf -dt $candleTs
-            $isAligned = ($candleTs -eq $boundary)
+            $boundaryMs = $boundary.ToUnixTimeMilliseconds()
+            $isAligned = ($candleTsMs -eq $boundaryMs)
 
             # Check if it's the expected candle (current or previous)
-            $expectedPrevBoundary = $expectedBoundary.AddMilliseconds(-$tfMs)
-            $isCurrentOrPrev = ($candleTs -eq $expectedBoundary -or $candleTs -eq $expectedPrevBoundary)
+            $expectedBoundaryMs = $expectedBoundary.ToUnixTimeMilliseconds()
+            $expectedPrevBoundaryMs = $expectedBoundaryMs - $tfMs
+            $isCurrentOrPrev = ($candleTsMs -eq $expectedBoundaryMs -or $candleTsMs -eq $expectedPrevBoundaryMs)
 
             $status = ""
             if (-not $isAligned) {

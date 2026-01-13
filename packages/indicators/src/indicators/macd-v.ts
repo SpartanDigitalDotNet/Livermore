@@ -11,7 +11,10 @@
  * - Signal = EMA(MACD_V, 9)
  * - Histogram = MACD_V - Signal
  *
- * Edge case: If ATR == 0, MACD-V is undefined (returns null/NaN)
+ * Low-liquidity handling:
+ * For symbols with sparse trading (e.g., SKL-USD), ATR can be near-zero
+ * due to zero-range candles (O=H=L=C). To prevent extreme MACD-V values,
+ * we apply an ATR floor of 0.1% of price (configurable via minATRPercent).
  */
 
 import { ema } from '../core/ema.js';
@@ -25,6 +28,8 @@ export const MACD_V_DEFAULTS = {
   atrPeriod: 26,
   signalPeriod: 9,
   scale: 100,
+  /** ATR floor as percentage of price (0.002 = 0.2%) to prevent extreme values */
+  minATRPercent: 0.002,
 } as const;
 
 export interface MACDVConfig {
@@ -33,6 +38,8 @@ export interface MACDVConfig {
   atrPeriod?: number;
   signalPeriod?: number;
   scale?: number;
+  /** ATR floor as percentage of price (0.001 = 0.1%) to prevent extreme values in low-liquidity symbols */
+  minATRPercent?: number;
 }
 
 export interface MACDVValue {
@@ -77,6 +84,7 @@ export function macdV(bars: OHLC[], config: MACDVConfig = {}): MACDVSeries {
     atrPeriod = MACD_V_DEFAULTS.atrPeriod,
     signalPeriod = MACD_V_DEFAULTS.signalPeriod,
     scale = MACD_V_DEFAULTS.scale,
+    minATRPercent = MACD_V_DEFAULTS.minATRPercent,
   } = config;
 
   if (bars.length === 0) {
@@ -112,14 +120,15 @@ export function macdV(bars: OHLC[], config: MACDVConfig = {}): MACDVSeries {
       continue;
     }
 
-    // Edge case: ATR == 0 means MACD-V is undefined
-    if (atrVal === 0) {
-      macdVValues[i] = NaN;
-      continue;
-    }
+    // Apply ATR floor to prevent extreme values in low-liquidity symbols
+    // When ATR is tiny (due to sparse trading with zero-range candles),
+    // dividing by near-zero inflates MACD-V to extreme values (e.g., 400+)
+    const price = bars[i].close;
+    const minATR = price * minATRPercent;
+    const effectiveATR = Math.max(atrVal, minATR);
 
     const spread = fast - slow;
-    macdVValues[i] = (spread / atrVal) * scale;
+    macdVValues[i] = (spread / effectiveATR) * scale;
   }
 
   // Calculate Signal line (EMA of MACD-V)

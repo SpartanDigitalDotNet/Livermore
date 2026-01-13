@@ -10,6 +10,7 @@ export * from './market/candle.schema';
 export * from './market/ticker.schema';
 export * from './market/orderbook.schema';
 export * from './market/trade.schema';
+export * from './market/liquidity.schema';
 
 // Indicator schemas
 export * from './indicators/base.schema';

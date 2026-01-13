@@ -5,14 +5,15 @@ import {
   IndicatorCacheStrategy,
   type CachedIndicatorValue,
 } from '@livermore/cache';
-import { logger, getCandleTimestamp, timeframeToMs } from '@livermore/utils';
-import type { Candle, Timeframe } from '@livermore/schemas';
+import { logger, getCandleTimestamp, timeframeToMs, fillCandleGaps, calculateZeroRangeRatio } from '@livermore/utils';
+import { classifyLiquidity, type Candle, type Timeframe, type LiquidityTier } from '@livermore/schemas';
 import {
   macdVWithStage,
   macdVMinBars,
   MACD_V_DEFAULTS,
   type OHLC,
 } from '@livermore/indicators';
+import type { CandleData } from './coinbase-websocket.service';
 
 /**
  * Configuration for a symbol/timeframe pair to calculate indicators for
@@ -37,10 +38,12 @@ export class IndicatorCalculationService {
   // Active calculation configs
   private configs: IndicatorConfig[] = [];
 
-  // Boundary-aware scheduling
-  private tickTimer: NodeJS.Timeout | null = null;
-  private lastProcessedBoundary: Map<Timeframe, number> = new Map();
+  // Symbol tracking by timeframe (for knowing which symbols are monitored)
   private configsByTimeframe: Map<Timeframe, IndicatorConfig[]> = new Map();
+  private monitoredSymbols: Set<string> = new Set();
+
+  // Track last processed boundary for each symbol/timeframe to detect higher timeframe closes
+  private lastProcessedBoundary: Map<string, number> = new Map(); // key: "symbol:timeframe"
 
   // Temporary: hardcode test user and exchange IDs
   // TODO: Replace with actual user/exchange from database
@@ -49,18 +52,9 @@ export class IndicatorCalculationService {
 
   // Calculation settings
   private readonly MIN_CANDLES_FOR_MACDV = macdVMinBars(); // ~35 candles
-  private readonly TICK_INTERVAL_MS = 10000; // 10 seconds
-  private readonly BOUNDARY_OFFSETS: Record<Timeframe, number> = {
-    '1m': 1000,    // 1 second after close
-    '5m': 3000,
-    '15m': 5000,
-    '30m': 5000,
-    '1h': 10000,
-    '2h': 10000,
-    '4h': 15000,
-    '6h': 15000,
-    '1d': 30000,   // 30 seconds for daily
-  };
+
+  // Higher timeframes to check when 1m candle closes
+  private readonly HIGHER_TIMEFRAMES: Timeframe[] = ['5m', '15m', '1h', '4h', '1d'];
 
   // Rate limiting settings to avoid Coinbase API throttling
   private readonly BATCH_SIZE = 5; // Requests per batch (reduced to avoid rate limits)
@@ -120,105 +114,112 @@ export class IndicatorCalculationService {
   }
 
   /**
-   * Build index of configs grouped by timeframe
+   * Build index of configs grouped by timeframe and tracked symbols
    */
   private buildConfigIndex(): void {
     this.configsByTimeframe.clear();
+    this.monitoredSymbols.clear();
+
     for (const config of this.configs) {
+      // Track by timeframe
       const existing = this.configsByTimeframe.get(config.timeframe) || [];
       existing.push(config);
       this.configsByTimeframe.set(config.timeframe, existing);
+
+      // Track unique symbols
+      this.monitoredSymbols.add(config.symbol);
     }
   }
 
   /**
-   * Initialize boundary tracking to prevent immediate triggers on startup
+   * Initialize boundary tracking for higher timeframes
+   * Prevents immediate recalculation on first candle close after warmup
    */
   private initializeBoundaryTracking(): void {
     const now = Date.now();
-    for (const timeframe of this.configsByTimeframe.keys()) {
-      const boundary = getCandleTimestamp(now, timeframe);
-      this.lastProcessedBoundary.set(timeframe, boundary);
+    for (const symbol of this.monitoredSymbols) {
+      for (const timeframe of this.HIGHER_TIMEFRAMES) {
+        const key = `${symbol}:${timeframe}`;
+        const boundary = getCandleTimestamp(now, timeframe);
+        this.lastProcessedBoundary.set(key, boundary);
+      }
     }
   }
 
   /**
-   * Main tick handler - checks for candle boundary crossings
-   * Only triggers recalculation when a timeframe's candle closes
+   * Handle candle close event from WebSocket service
+   * Called when a 1m candle closes for a symbol
+   *
+   * NOTE: We use the WebSocket event as a TRIGGER only, then fetch actual
+   * candle data from REST API for accuracy. The locally-aggregated ticker
+   * data may miss trades or have incorrect high/low values.
    */
-  private async onTick(): Promise<void> {
-    const now = Date.now();
-    const timeframesToUpdate: Timeframe[] = [];
+  async onCandleClose(symbol: string, _timeframe: Timeframe, candle: CandleData): Promise<void> {
+    // Only process symbols we're monitoring
+    if (!this.monitoredSymbols.has(symbol)) {
+      return;
+    }
 
-    for (const [timeframe, lastBoundary] of this.lastProcessedBoundary.entries()) {
-      const currentBoundary = getCandleTimestamp(now, timeframe);
+    logger.debug({ symbol, timestamp: new Date(candle.timestamp).toISOString() }, 'Processing candle close event');
+
+    // Fetch actual 1m candle from REST API (not the locally-aggregated ticker data)
+    // This ensures accurate OHLC values from Coinbase
+    await this.recalculateForConfig({ symbol, timeframe: '1m' });
+
+    // Check if higher timeframes also closed
+    await this.checkHigherTimeframes(symbol, candle.timestamp);
+  }
+
+  /**
+   * Check if any higher timeframes closed and trigger recalculation
+   * Uses REST API to fetch the actual candle data for higher timeframes
+   */
+  private async checkHigherTimeframes(symbol: string, timestamp: number): Promise<void> {
+    for (const timeframe of this.HIGHER_TIMEFRAMES) {
+      const key = `${symbol}:${timeframe}`;
+      const lastBoundary = this.lastProcessedBoundary.get(key) || 0;
+      const currentBoundary = getCandleTimestamp(timestamp, timeframe);
 
       // Check if we've crossed into a new candle period
       if (currentBoundary > lastBoundary) {
-        const offset = this.BOUNDARY_OFFSETS[timeframe] || 1000;
-        // Wait for offset after boundary before triggering (data propagation delay)
-        if ((now - currentBoundary) >= offset) {
-          timeframesToUpdate.push(timeframe);
-          this.lastProcessedBoundary.set(timeframe, currentBoundary);
-          logger.info(
-            { timeframe, boundary: new Date(currentBoundary).toISOString() },
-            'Candle boundary crossed'
-          );
-        }
+        this.lastProcessedBoundary.set(key, currentBoundary);
+
+        logger.info(
+          { symbol, timeframe, boundary: new Date(currentBoundary).toISOString() },
+          'Higher timeframe boundary crossed'
+        );
+
+        // Fetch the actual candle from REST API and recalculate
+        await this.recalculateForConfig({ symbol, timeframe });
       }
     }
-
-    // Process all timeframes that crossed boundaries in parallel
-    await Promise.all(
-      timeframesToUpdate.map((tf) => this.recalculateTimeframe(tf))
-    );
-  }
-
-  /**
-   * Recalculate indicators for all symbols in a single timeframe
-   */
-  private async recalculateTimeframe(timeframe: Timeframe): Promise<void> {
-    const configs = this.configsByTimeframe.get(timeframe);
-    if (!configs || configs.length === 0) return;
-
-    logger.info(
-      { timeframe, symbolCount: configs.length },
-      'Starting timeframe recalculation'
-    );
-
-    await this.processBatched(
-      configs,
-      (config) => this.recalculateForConfig(config),
-      `${timeframe} recalculation`
-    );
   }
 
   /**
    * Start the indicator calculation service
+   * Performs warmup by fetching historical candles via REST API
+   * After warmup, relies on WebSocket candle close events for updates
    */
   async start(configs: IndicatorConfig[]): Promise<void> {
     logger.info({ configCount: configs.length }, 'Starting Indicator Calculation Service');
 
     this.configs = configs;
 
-    // Build index of configs by timeframe
+    // Build index of configs by timeframe and tracked symbols
     this.buildConfigIndex();
 
-    // Initialize boundary tracking (prevents immediate trigger on startup)
+    // Initialize boundary tracking for higher timeframes
     this.initializeBoundaryTracking();
 
-    // Initial data fetch and calculation for all configs
+    // Initial data fetch and calculation for all configs (warmup via REST API)
     await this.initializeAllConfigs();
 
-    // Start tick-based boundary detection
-    this.tickTimer = setInterval(
-      () => this.onTick(),
-      this.TICK_INTERVAL_MS
-    );
-
     logger.info(
-      { timeframes: Array.from(this.configsByTimeframe.keys()) },
-      'Indicator Calculation Service started with boundary-aware scheduling'
+      {
+        symbols: this.monitoredSymbols.size,
+        timeframes: Array.from(this.configsByTimeframe.keys()),
+      },
+      'Indicator Calculation Service started (event-driven mode)'
     );
   }
 
@@ -228,13 +229,9 @@ export class IndicatorCalculationService {
   stop(): void {
     logger.info('Stopping Indicator Calculation Service');
 
-    if (this.tickTimer) {
-      clearInterval(this.tickTimer);
-      this.tickTimer = null;
-    }
-
     this.lastProcessedBoundary.clear();
     this.configsByTimeframe.clear();
+    this.monitoredSymbols.clear();
   }
 
   /**
@@ -433,8 +430,32 @@ export class IndicatorCalculationService {
     timeframe: Timeframe,
     candles: Candle[]
   ): Promise<void> {
+    // Fill gaps in sparse candle data (e.g., low-liquidity symbols)
+    // This matches TradingView behavior and prevents ATR from being near-zero
+    const { candles: filledCandles, stats } = fillCandleGaps(candles, timeframe);
+
+    // Calculate liquidity classification based on gap ratio
+    const liquidity: LiquidityTier = classifyLiquidity(stats.gapRatio);
+    const zeroRangeRatio = calculateZeroRangeRatio(filledCandles);
+
+    // Log liquidity info for debugging
+    if (stats.syntheticCount > 0) {
+      logger.debug(
+        {
+          symbol,
+          timeframe,
+          originalCandles: stats.originalCount,
+          filledCandles: stats.filledCount,
+          syntheticCount: stats.syntheticCount,
+          gapRatio: (stats.gapRatio * 100).toFixed(1) + '%',
+          liquidity,
+        },
+        'Filled candle gaps'
+      );
+    }
+
     // Convert to OHLC format for indicators library
-    const ohlcBars: OHLC[] = candles.map((c) => ({
+    const ohlcBars: OHLC[] = filledCandles.map((c) => ({
       open: c.open,
       high: c.high,
       low: c.low,
@@ -449,9 +470,9 @@ export class IndicatorCalculationService {
       return;
     }
 
-    const latestCandle = candles[candles.length - 1];
+    const latestCandle = filledCandles[filledCandles.length - 1];
 
-    // Create cached indicator value
+    // Create cached indicator value with liquidity metadata
     const indicatorValue: CachedIndicatorValue = {
       timestamp: latestCandle.timestamp,
       type: 'macd-v',
@@ -471,6 +492,10 @@ export class IndicatorCalculationService {
         atrPeriod: MACD_V_DEFAULTS.atrPeriod,
         signalPeriod: MACD_V_DEFAULTS.signalPeriod,
         stage: macdVResult.stage,
+        // Liquidity metadata
+        liquidity,
+        gapRatio: stats.gapRatio,
+        zeroRangeRatio,
       },
     };
 

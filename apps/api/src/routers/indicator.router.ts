@@ -62,6 +62,18 @@ const GetAnalysisInput = z.object({
 });
 
 /**
+ * Input schema for portfolio-wide MACD-V analysis
+ */
+const GetPortfolioAnalysisInput = z.object({
+  symbols: z.array(z.string().min(1)).min(1).max(100),
+});
+
+/**
+ * Supported timeframes for portfolio analysis
+ */
+const ANALYSIS_TIMEFRAMES: Array<'1m' | '5m' | '15m' | '1h' | '4h' | '1d'> = ['1m', '5m', '15m', '1h', '4h', '1d'];
+
+/**
  * Indicator Router
  *
  * Provides endpoints for querying technical indicator values.
@@ -136,6 +148,10 @@ export const indicatorRouter = router({
           slowEMA: indicator.value['slowEMA'],
           atr: indicator.value['atr'],
           stage: indicator.params?.['stage'] || 'unknown',
+          // Liquidity metadata
+          liquidity: indicator.params?.['liquidity'] || 'unknown',
+          gapRatio: indicator.params?.['gapRatio'] ?? null,
+          zeroRangeRatio: indicator.params?.['zeroRangeRatio'] ?? null,
         },
       };
     }),
@@ -405,6 +421,129 @@ export const indicatorRouter = router({
       },
     };
   }),
+
+  /**
+   * Get portfolio-wide MACD-V analysis (single fast call)
+   * Returns all symbols with their MACD-V values across all timeframes
+   * Identifies opportunities and risks
+   */
+  getPortfolioAnalysis: publicProcedure
+    .input(GetPortfolioAnalysisInput)
+    .query(async ({ input }) => {
+      const { symbols } = input;
+
+      // Build requests for all symbol/timeframe combinations
+      const requests: { symbol: string; timeframe: '1m' | '5m' | '15m' | '1h' | '4h' | '1d' }[] = [];
+      for (const symbol of symbols) {
+        for (const timeframe of ANALYSIS_TIMEFRAMES) {
+          requests.push({ symbol, timeframe });
+        }
+      }
+
+      // Fetch all indicators in one Redis MGET call
+      const indicatorMap = await indicatorCache.getIndicatorsBulk(
+        TEST_USER_ID,
+        TEST_EXCHANGE_ID,
+        requests
+      );
+
+      // Build symbol analysis
+      type SymbolAnalysis = {
+        symbol: string;
+        values: Record<string, number | null>;
+        signal: string;
+        h1: number | null;
+        h4: number | null;
+        d1: number | null;
+        liquidity: string;
+      };
+
+      const symbolAnalyses: SymbolAnalysis[] = [];
+
+      // Helper to get worst liquidity tier (low < medium < high)
+      const liquidityRank = (liq: string): number => {
+        if (liq === 'low') return 0;
+        if (liq === 'medium') return 1;
+        if (liq === 'high') return 2;
+        return -1; // unknown
+      };
+      const rankToLiquidity = (rank: number): string => {
+        if (rank === 0) return 'low';
+        if (rank === 1) return 'medium';
+        if (rank === 2) return 'high';
+        return 'unknown';
+      };
+
+      for (const symbol of symbols) {
+        const values: Record<string, number | null> = {};
+        let worstLiquidityRank = 3; // Start higher than any valid rank
+
+        for (const tf of ANALYSIS_TIMEFRAMES) {
+          const key = `${symbol}:${tf}`;
+          const indicator = indicatorMap.get(key);
+          values[tf] = indicator ? Math.round(indicator.value['macdV'] * 10) / 10 : null;
+          // Track worst (lowest) liquidity across all timeframes
+          if (indicator?.params?.['liquidity']) {
+            const rank = liquidityRank(indicator.params['liquidity'] as string);
+            if (rank >= 0 && rank < worstLiquidityRank) {
+              worstLiquidityRank = rank;
+            }
+          }
+        }
+        const symbolLiquidity = worstLiquidityRank <= 2 ? rankToLiquidity(worstLiquidityRank) : 'unknown';
+
+        const h1 = values['1h'];
+        const h4 = values['4h'];
+        const d1 = values['1d'];
+
+        // Determine signal
+        let signal = 'No Data';
+        if (h1 !== null && h4 !== null && d1 !== null) {
+          if (h1 > 50 && h4 > 50 && d1 > 0) signal = 'STRONG BUY';
+          else if (h1 < -50 && h4 < -50 && d1 < 0) signal = 'STRONG SELL';
+          else if (h1 > 0 && h4 > 0 && d1 > 0) signal = 'Bullish';
+          else if (h1 < 0 && h4 < 0 && d1 < 0) signal = 'Bearish';
+          else if (h1 > 50 && h4 < 0) signal = 'Reversal Up?';
+          else if (h1 < -50 && h4 > 0) signal = 'Reversal Down?';
+          else signal = 'Mixed';
+        }
+
+        symbolAnalyses.push({ symbol, values, signal, h1, h4, d1, liquidity: symbolLiquidity });
+      }
+
+      // Identify opportunities and risks
+      const bullish = symbolAnalyses
+        .filter((s) => s.h1 !== null && s.h4 !== null && s.h1 > 50 && s.h4 > 0)
+        .sort((a, b) => (b.h1 ?? 0) - (a.h1 ?? 0))
+        .slice(0, 5);
+
+      const bearish = symbolAnalyses
+        .filter((s) => s.h1 !== null && s.h4 !== null && s.h1 < -50 && s.h4 < 0)
+        .sort((a, b) => (a.h1 ?? 0) - (b.h1 ?? 0))
+        .slice(0, 5);
+
+      const reversalUp = symbolAnalyses
+        .filter((s) => s.h1 !== null && s.h4 !== null && s.d1 !== null && s.h1 > 30 && s.h4 < -20 && s.d1 < 0)
+        .slice(0, 3);
+
+      const reversalDown = symbolAnalyses
+        .filter((s) => s.h1 !== null && s.h4 !== null && s.d1 !== null && s.h1 < -30 && s.h4 > 20 && s.d1 > 0)
+        .slice(0, 3);
+
+      return {
+        success: true,
+        timestamp: Date.now(),
+        symbols: symbolAnalyses,
+        opportunities: {
+          bullish: bullish.map((s) => ({ symbol: s.symbol, h1: s.h1, h4: s.h4, d1: s.d1, liquidity: s.liquidity })),
+          reversalUp: reversalUp.map((s) => ({ symbol: s.symbol, h1: s.h1, h4: s.h4, d1: s.d1, liquidity: s.liquidity })),
+        },
+        risks: {
+          bearish: bearish.map((s) => ({ symbol: s.symbol, h1: s.h1, h4: s.h4, d1: s.d1, liquidity: s.liquidity })),
+          reversalDown: reversalDown.map((s) => ({ symbol: s.symbol, h1: s.h1, h4: s.h4, d1: s.d1, liquidity: s.liquidity })),
+        },
+      };
+    }),
 });
 
 export type IndicatorRouter = typeof indicatorRouter;

@@ -1,7 +1,32 @@
 import { CoinbaseWebSocketClient, type CoinbaseWSMessage } from '@livermore/coinbase-client';
 import { getRedisClient, TickerCacheStrategy } from '@livermore/cache';
-import { logger } from '@livermore/utils';
-import type { Ticker } from '@livermore/schemas';
+import { logger, getCandleTimestamp } from '@livermore/utils';
+import type { Ticker, Timeframe } from '@livermore/schemas';
+
+/**
+ * Candle state for local aggregation from ticker events
+ */
+interface CandleState {
+  timestamp: number;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+  isClosed: boolean;
+}
+
+/**
+ * Candle data emitted on candle close
+ */
+export interface CandleData {
+  timestamp: number;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+}
 
 /**
  * Coinbase WebSocket data ingestion service
@@ -18,6 +43,10 @@ export class CoinbaseWebSocketService {
   // TODO: Replace with actual user/exchange from database seed
   private readonly TEST_USER_ID = 1;
   private readonly TEST_EXCHANGE_ID = 1;
+
+  // Candle aggregation from ticker events (true event-driven)
+  private candles: Map<string, CandleState> = new Map(); // key: "symbol"
+  private candleCloseCallbacks: ((symbol: string, timeframe: Timeframe, candle: CandleData) => void)[] = [];
 
   constructor(apiKeyId: string, privateKeyPem: string) {
     this.wsClient = new CoinbaseWebSocketClient(apiKeyId, privateKeyPem);
@@ -50,6 +79,76 @@ export class CoinbaseWebSocketService {
   }
 
   /**
+   * Register callback for candle close events
+   * Called when a 1m candle closes (minute boundary crossed)
+   */
+  onCandleClose(callback: (symbol: string, timeframe: Timeframe, candle: CandleData) => void): void {
+    this.candleCloseCallbacks.push(callback);
+  }
+
+  /**
+   * Aggregate ticker event into local 1m candle
+   * Emits candle close event when minute boundary is crossed
+   */
+  private aggregateTickerToCandle(symbol: string, price: number, timestamp: number): void {
+    const timeframe: Timeframe = '1m';
+    const candleTime = getCandleTimestamp(timestamp, timeframe);
+
+    const existing = this.candles.get(symbol);
+
+    if (!existing || candleTime > existing.timestamp) {
+      // Close previous candle if exists and not already closed
+      if (existing && !existing.isClosed) {
+        existing.isClosed = true;
+        this.emitCandleClose(symbol, timeframe, existing);
+      }
+
+      // Start new candle
+      this.candles.set(symbol, {
+        timestamp: candleTime,
+        open: price,
+        high: price,
+        low: price,
+        close: price,
+        volume: 0, // Volume tracked separately via 24h volume deltas
+        isClosed: false,
+      });
+    } else {
+      // Update existing candle
+      existing.high = Math.max(existing.high, price);
+      existing.low = Math.min(existing.low, price);
+      existing.close = price;
+    }
+  }
+
+  /**
+   * Emit candle close event to all registered callbacks
+   */
+  private emitCandleClose(symbol: string, timeframe: Timeframe, candle: CandleState): void {
+    logger.info(
+      { symbol, timeframe, timestamp: new Date(candle.timestamp).toISOString(), ohlc: `${candle.open}/${candle.high}/${candle.low}/${candle.close}` },
+      'Candle closed'
+    );
+
+    const candleData: CandleData = {
+      timestamp: candle.timestamp,
+      open: candle.open,
+      high: candle.high,
+      low: candle.low,
+      close: candle.close,
+      volume: candle.volume,
+    };
+
+    for (const callback of this.candleCloseCallbacks) {
+      try {
+        callback(symbol, timeframe, candleData);
+      } catch (error) {
+        logger.error({ error, symbol, timeframe }, 'Error in candle close callback');
+      }
+    }
+  }
+
+  /**
    * Handle incoming WebSocket messages
    */
   private async handleMessage(message: CoinbaseWSMessage): Promise<void> {
@@ -74,9 +173,13 @@ export class CoinbaseWebSocketService {
 
       for (const tickerData of event.tickers) {
         const price = parseFloat(tickerData.price);
+        const timestamp = new Date(message.timestamp).getTime();
         const changePercent24h = parseFloat(tickerData.price_percent_chg_24_h);
         // Calculate absolute change from percentage: change = price - (price / (1 + pct/100))
         const change24h = price - (price / (1 + changePercent24h / 100));
+
+        // Aggregate ticker into 1m candle (event-driven candle building)
+        this.aggregateTickerToCandle(tickerData.product_id, price, timestamp);
 
         const ticker: Ticker = {
           symbol: tickerData.product_id,
@@ -86,7 +189,7 @@ export class CoinbaseWebSocketService {
           volume24h: parseFloat(tickerData.volume_24_h),
           low24h: parseFloat(tickerData.low_24_h),
           high24h: parseFloat(tickerData.high_24_h),
-          timestamp: new Date(message.timestamp).getTime(),
+          timestamp,
         };
 
         // Cache ticker in Redis

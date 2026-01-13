@@ -15,3 +15,6 @@ export * from './math/calculations';
 
 // Validation utilities
 export * from './validation/env-validator';
+
+// Candle utilities
+export * from './candle/candle-utils';
