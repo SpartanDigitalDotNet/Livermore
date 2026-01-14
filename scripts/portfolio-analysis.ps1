@@ -28,13 +28,14 @@ try {
     Write-Host ""
 
     # Table header
-    Write-Host ("{0,-12} | {1,6} | {2,6} | {3,6} | {4,6} | {5,6} | {6,6} | {7,-14} | {8}" -f "Symbol", "1m", "5m", "15m", "1h", "4h", "1d", "Signal", "Liquidity") -ForegroundColor Yellow
-    Write-Host ("-" * 105)
+    Write-Host ("{0,-12} | {1,6} | {2,6} | {3,6} | {4,6} | {5,6} | {6,6} | {7,-10} | {8,-14} | {9}" -f "Symbol", "1m", "5m", "15m", "1h", "4h", "1d", "Stage", "Signal", "Liquidity") -ForegroundColor Yellow
+    Write-Host ("-" * 120)
 
     foreach ($sym in $data.symbols) {
         $v = $sym.values
         $liq = if ($sym.liquidity) { $sym.liquidity } else { "?" }
-        $line = "{0,-12} | {1,6} | {2,6} | {3,6} | {4,6} | {5,6} | {6,6} | {7,-14} | {8}" -f `
+        $stage = if ($sym.stage) { $sym.stage } else { "?" }
+        $line = "{0,-12} | {1,6} | {2,6} | {3,6} | {4,6} | {5,6} | {6,6} | {7,-10} | {8,-14} | {9}" -f `
             $sym.symbol, `
             $(if ($null -eq $v.'1m') { "N/A" } else { $v.'1m' }), `
             $(if ($null -eq $v.'5m') { "N/A" } else { $v.'5m' }), `
@@ -42,6 +43,7 @@ try {
             $(if ($null -eq $v.'1h') { "N/A" } else { $v.'1h' }), `
             $(if ($null -eq $v.'4h') { "N/A" } else { $v.'4h' }), `
             $(if ($null -eq $v.'1d') { "N/A" } else { $v.'1d' }), `
+            $stage, `
             $sym.signal, `
             $liq
 

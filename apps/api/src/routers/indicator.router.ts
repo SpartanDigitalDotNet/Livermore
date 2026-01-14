@@ -457,6 +457,7 @@ export const indicatorRouter = router({
         symbol: string;
         values: Record<string, number | null>;
         signal: string;
+        stage: string;
         h1: number | null;
         h4: number | null;
         d1: number | null;
@@ -482,6 +483,7 @@ export const indicatorRouter = router({
       for (const symbol of symbols) {
         const values: Record<string, number | null> = {};
         let worstLiquidityRank = 3; // Start higher than any valid rank
+        let symbolStage = 'unknown';
 
         for (const tf of ANALYSIS_TIMEFRAMES) {
           const key = `${symbol}:${tf}`;
@@ -493,6 +495,10 @@ export const indicatorRouter = router({
             if (rank >= 0 && rank < worstLiquidityRank) {
               worstLiquidityRank = rank;
             }
+          }
+          // Get stage from 1h timeframe
+          if (tf === '1h' && indicator?.params?.['stage']) {
+            symbolStage = indicator.params['stage'] as string;
           }
         }
         const symbolLiquidity = worstLiquidityRank <= 2 ? rankToLiquidity(worstLiquidityRank) : 'unknown';
@@ -513,7 +519,7 @@ export const indicatorRouter = router({
           else signal = 'Mixed';
         }
 
-        symbolAnalyses.push({ symbol, values, signal, h1, h4, d1, liquidity: symbolLiquidity });
+        symbolAnalyses.push({ symbol, values, signal, stage: symbolStage, h1, h4, d1, liquidity: symbolLiquidity });
       }
 
       // Identify opportunities and risks
