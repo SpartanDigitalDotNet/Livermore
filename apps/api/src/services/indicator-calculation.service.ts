@@ -176,8 +176,11 @@ export class IndicatorCalculationService {
   /**
    * Check if any higher timeframes closed and trigger recalculation
    * Uses REST API to fetch the actual candle data for higher timeframes
+   * Batches requests to avoid Coinbase rate limiting
    */
   private async checkHigherTimeframes(symbol: string, timestamp: number): Promise<void> {
+    const configsToRecalculate: IndicatorConfig[] = [];
+
     for (const timeframe of this.HIGHER_TIMEFRAMES) {
       const key = `${symbol}:${timeframe}`;
       const lastBoundary = this.lastProcessedBoundary.get(key) || 0;
@@ -195,12 +198,20 @@ export class IndicatorCalculationService {
           previousBoundary: lastBoundary ? new Date(lastBoundary).toISOString() : 'none',
           newBoundary: new Date(currentBoundary).toISOString(),
           triggerTimestamp: new Date(timestamp).toISOString(),
-          action: 'recalculate',
+          action: 'queue_recalculate',
         }, `Boundary crossed: ${symbol} ${timeframe}`);
 
-        // Fetch the actual candle from REST API and recalculate
-        await this.recalculateForConfig({ symbol, timeframe });
+        configsToRecalculate.push({ symbol, timeframe });
       }
+    }
+
+    // Process boundary crossings in batches to avoid rate limiting
+    if (configsToRecalculate.length > 0) {
+      await this.processBatched(
+        configsToRecalculate,
+        (config) => this.recalculateForConfig(config),
+        'boundary recalculation'
+      );
     }
   }
 
