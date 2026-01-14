@@ -12,6 +12,9 @@ $env:DISCORD_LIVERMORE_BOT = [Environment]::GetEnvironmentVariable('DISCORD_LIVE
 # Override API port to avoid conflicts
 $env:API_PORT = '3002'
 
+# Set NODE_ENV (Zod schema expects 'development', not 'dev')
+$env:NODE_ENV = 'development'
+
 # Debug: show what we loaded
 Write-Host "Loaded DATABASE_HOST: $($env:DATABASE_HOST)"
 Write-Host "Loaded DATABASE_PORT: $($env:DATABASE_PORT)"
