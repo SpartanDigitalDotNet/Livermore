@@ -6,6 +6,9 @@
 
 // Logger
 export * from './logger/logger';
+export * from './logger/log-config';
+export * from './logger/file-transport';
+export * from './logger/performance';
 
 // Time utilities
 export * from './time/timeframe';

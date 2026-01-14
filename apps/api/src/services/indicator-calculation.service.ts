@@ -5,7 +5,10 @@ import {
   IndicatorCacheStrategy,
   type CachedIndicatorValue,
 } from '@livermore/cache';
-import { logger, getCandleTimestamp, timeframeToMs, fillCandleGaps, calculateZeroRangeRatio } from '@livermore/utils';
+import { createLogger, getCandleTimestamp, timeframeToMs, fillCandleGaps, calculateZeroRangeRatio } from '@livermore/utils';
+
+// Create service-specific logger for file output
+const logger = createLogger({ name: 'indicators:scheduler', service: 'indicators' });
 import { classifyLiquidity, type Candle, type Timeframe, type LiquidityTier } from '@livermore/schemas';
 import {
   macdVWithStage,
@@ -184,10 +187,16 @@ export class IndicatorCalculationService {
       if (currentBoundary > lastBoundary) {
         this.lastProcessedBoundary.set(key, currentBoundary);
 
-        logger.info(
-          { symbol, timeframe, boundary: new Date(currentBoundary).toISOString() },
-          'Higher timeframe boundary crossed'
-        );
+        // Detailed boundary crossing log for debugging
+        logger.info({
+          event: 'boundary_crossing_detected',
+          symbol,
+          timeframe,
+          previousBoundary: lastBoundary ? new Date(lastBoundary).toISOString() : 'none',
+          newBoundary: new Date(currentBoundary).toISOString(),
+          triggerTimestamp: new Date(timestamp).toISOString(),
+          action: 'recalculate',
+        }, `Boundary crossed: ${symbol} ${timeframe}`);
 
         // Fetch the actual candle from REST API and recalculate
         await this.recalculateForConfig({ symbol, timeframe });
@@ -377,9 +386,23 @@ export class IndicatorCalculationService {
   private async recalculateForConfig(config: IndicatorConfig): Promise<void> {
     const { symbol, timeframe } = config;
 
+    logger.debug({
+      event: 'recalculate_start',
+      symbol,
+      timeframe,
+    }, `Starting recalculation: ${symbol} ${timeframe}`);
+
     try {
       // Only fetch the last few candles (not full history)
       const recentCandles = await this.fetchRecentCandles(symbol, timeframe, 3);
+
+      logger.debug({
+        event: 'recent_candles_fetched',
+        symbol,
+        timeframe,
+        count: recentCandles.length,
+        timestamps: recentCandles.map(c => new Date(c.timestamp).toISOString()),
+      }, `Fetched ${recentCandles.length} recent candles`);
 
       if (recentCandles.length > 0) {
         // Append new candles to cache (deduplicates by timestamp)
@@ -395,8 +418,23 @@ export class IndicatorCalculationService {
         200 // Enough for indicator calculation
       );
 
+      logger.debug({
+        event: 'candles_from_cache',
+        symbol,
+        timeframe,
+        count: cachedCandles.length,
+        oldestTimestamp: cachedCandles.length > 0 ? new Date(cachedCandles[0].timestamp).toISOString() : null,
+        newestTimestamp: cachedCandles.length > 0 ? new Date(cachedCandles[cachedCandles.length - 1].timestamp).toISOString() : null,
+      }, `Retrieved ${cachedCandles.length} candles from cache`);
+
       if (cachedCandles.length < this.MIN_CANDLES_FOR_MACDV) {
-        // Not enough cached data - skip silently
+        logger.warn({
+          event: 'insufficient_candles',
+          symbol,
+          timeframe,
+          count: cachedCandles.length,
+          required: this.MIN_CANDLES_FOR_MACDV,
+        }, `Insufficient candles for ${symbol} ${timeframe}: ${cachedCandles.length} < ${this.MIN_CANDLES_FOR_MACDV}`);
         return;
       }
 
@@ -406,7 +444,12 @@ export class IndicatorCalculationService {
     } catch (err) {
       // If fetch fails, try calculating from existing cache
       const message = err instanceof Error ? err.message : String(err);
-      logger.warn({ err: message, symbol, timeframe }, 'Recent candle fetch failed, using cached data');
+      logger.warn({
+        event: 'recent_fetch_failed',
+        symbol,
+        timeframe,
+        error: message,
+      }, `Recent candle fetch failed for ${symbol} ${timeframe}, using cached data`);
 
       const cachedCandles = await this.candleCache.getRecentCandles(
         this.TEST_USER_ID,
@@ -438,21 +481,19 @@ export class IndicatorCalculationService {
     const liquidity: LiquidityTier = classifyLiquidity(stats.gapRatio);
     const zeroRangeRatio = calculateZeroRangeRatio(filledCandles);
 
-    // Log liquidity info for debugging
-    if (stats.syntheticCount > 0) {
-      logger.debug(
-        {
-          symbol,
-          timeframe,
-          originalCandles: stats.originalCount,
-          filledCandles: stats.filledCount,
-          syntheticCount: stats.syntheticCount,
-          gapRatio: (stats.gapRatio * 100).toFixed(1) + '%',
-          liquidity,
-        },
-        'Filled candle gaps'
-      );
-    }
+    // Log gap-fill operation for debugging (always log for higher timeframes)
+    logger.debug({
+      event: 'candles_gap_filled',
+      symbol,
+      timeframe,
+      originalCount: stats.originalCount,
+      filledCount: stats.filledCount,
+      syntheticCount: stats.syntheticCount,
+      gapRatio: stats.gapRatio,
+      gapRatioPercent: (stats.gapRatio * 100).toFixed(1) + '%',
+      liquidity,
+      zeroRangeRatio,
+    }, `Gap-fill: ${symbol} ${timeframe} - ${stats.syntheticCount} synthetic of ${stats.filledCount} total`);
 
     // Convert to OHLC format with isSynthetic flag for indicators library
     // This allows informativeATR to skip synthetic candles in ATR calculation
@@ -472,12 +513,27 @@ export class IndicatorCalculationService {
       return;
     }
 
-    // If ATR not seeded (insufficient observed TR samples), log and still cache with reason
+    // Log ATR seeding status for debugging
+    logger.debug({
+      event: 'atr_status',
+      symbol,
+      timeframe,
+      seeded: macdVResult.seeded,
+      nEff: macdVResult.nEff,
+      spanBars: macdVResult.spanBars,
+      reason: macdVResult.reason || null,
+    }, `ATR status: ${symbol} ${timeframe} - seeded=${macdVResult.seeded}, nEff=${macdVResult.nEff}`);
+
+    // Warning if not seeded
     if (!macdVResult.seeded) {
-      logger.debug(
-        { symbol, timeframe, nEff: macdVResult.nEff, reason: macdVResult.reason },
-        'MACD-V not seeded - insufficient trading activity'
-      );
+      logger.warn({
+        event: 'atr_not_seeded',
+        symbol,
+        timeframe,
+        nEff: macdVResult.nEff,
+        spanBars: macdVResult.spanBars,
+        reason: macdVResult.reason,
+      }, `MACD-V not seeded: ${symbol} ${timeframe} - ${macdVResult.reason}`);
     }
 
     const latestCandle = filledCandles[filledCandles.length - 1];
@@ -521,25 +577,26 @@ export class IndicatorCalculationService {
       indicatorValue
     );
 
+    // Log cache write
+    logger.info({
+      event: 'indicator_cached',
+      symbol,
+      timeframe,
+      timestamp: new Date(latestCandle.timestamp).toISOString(),
+      macdV: Number.isNaN(macdVResult.macdV) ? null : macdVResult.macdV,
+      signal: Number.isNaN(macdVResult.signal) ? null : macdVResult.signal,
+      histogram: Number.isNaN(macdVResult.histogram) ? null : macdVResult.histogram,
+      stage: macdVResult.stage,
+      seeded: macdVResult.seeded,
+      nEff: macdVResult.nEff,
+      liquidity,
+    }, `Cached: ${symbol} ${timeframe} MACD-V=${Number.isNaN(macdVResult.macdV) ? 'N/A' : macdVResult.macdV.toFixed(2)} stage=${macdVResult.stage}`);
+
     // Publish update
     await this.indicatorCache.publishUpdate(
       this.TEST_USER_ID,
       this.TEST_EXCHANGE_ID,
       indicatorValue
-    );
-
-    logger.debug(
-      {
-        symbol,
-        timeframe,
-        macdV: Number.isNaN(macdVResult.macdV) ? 'N/A' : macdVResult.macdV.toFixed(2),
-        signal: Number.isNaN(macdVResult.signal) ? 'N/A' : macdVResult.signal.toFixed(2),
-        histogram: Number.isNaN(macdVResult.histogram) ? 'N/A' : macdVResult.histogram.toFixed(2),
-        stage: macdVResult.stage,
-        seeded: macdVResult.seeded,
-        nEff: macdVResult.nEff,
-      },
-      'MACD-V calculated'
     );
   }
 

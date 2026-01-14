@@ -16,10 +16,10 @@ export function validateEnv(): EnvConfig {
     logger.info('✅ Environment variables validated successfully');
     return config;
   } catch (error) {
-    logger.error('❌ Invalid environment variables:');
-    logger.error(error);
+    logger.error('Invalid environment variables:');
+    logger.error({ err: error instanceof Error ? error.message : String(error) });
     logger.error(
-      '\nPlease ensure all required environment variables are set. See documentation for details.'
+      'Please ensure all required environment variables are set. See documentation for details.'
     );
     process.exit(1);
   }

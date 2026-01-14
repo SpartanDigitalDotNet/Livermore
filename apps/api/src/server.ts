@@ -249,7 +249,6 @@ async function start() {
   // Start Alert Evaluation Service
   const alertService = new AlertEvaluationService();
   await alertService.start(monitoredSymbols, SUPPORTED_TIMEFRAMES);
-  logger.info('Alert Evaluation Service started');
 
   // Send startup notification to Discord
   if (discordService.isEnabled()) {
