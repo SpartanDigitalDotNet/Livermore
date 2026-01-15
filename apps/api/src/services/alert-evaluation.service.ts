@@ -4,7 +4,7 @@ import { getDbClient, alerts, alertHistory } from '@livermore/database';
 import { logger } from '@livermore/utils';
 import type { Ticker, Timeframe, AlertCondition } from '@livermore/schemas';
 import { eq, and } from 'drizzle-orm';
-import { getDiscordService } from './discord-notification.service';
+import { getDiscordService, type MACDVTimeframeData } from './discord-notification.service';
 
 /**
  * In-memory alert state for tracking previous values (for cross detection)
@@ -397,6 +397,71 @@ export class AlertEvaluationService {
   }
 
   /**
+   * Gather MACD-V data for all timeframes for a symbol
+   */
+  private gatherMACDVTimeframes(symbol: string): MACDVTimeframeData[] {
+    const result: MACDVTimeframeData[] = [];
+
+    for (const timeframe of this.timeframes) {
+      const key = `${symbol}:${timeframe}:macd-v`;
+      const indicator = this.currentIndicators.get(key);
+
+      if (indicator) {
+        result.push({
+          timeframe,
+          macdV: indicator.value['macdV'] ?? null,
+          stage: (indicator.params?.stage as string) || 'unknown',
+        });
+      } else {
+        result.push({
+          timeframe,
+          macdV: null,
+          stage: 'unknown',
+        });
+      }
+    }
+
+    return result;
+  }
+
+  /**
+   * Calculate overall bias from timeframe data
+   */
+  private calculateBias(timeframes: MACDVTimeframeData[]): string {
+    const bullishStages = ['oversold', 'rebounding', 'rallying'];
+    const bearishStages = ['overbought', 'retracing', 'reversing'];
+
+    const weights: Record<string, number> = {
+      '1m': 1, '5m': 2, '15m': 3, '1h': 4, '4h': 5, '1d': 6,
+    };
+
+    let bullishScore = 0;
+    let bearishScore = 0;
+
+    for (const tf of timeframes) {
+      const weight = weights[tf.timeframe] || 1;
+      if (bullishStages.includes(tf.stage)) {
+        bullishScore += weight;
+      } else if (bearishStages.includes(tf.stage)) {
+        bearishScore += weight;
+      }
+    }
+
+    if (bullishScore > bearishScore * 1.5) return 'Bullish';
+    if (bearishScore > bullishScore * 1.5) return 'Bearish';
+    return 'Neutral';
+  }
+
+  /**
+   * Check if alert conditions are MACD-V related
+   */
+  private isMACDVAlert(conditions: AlertCondition[]): boolean {
+    return conditions.some((c) =>
+      ['macd-v', 'macd-v-signal', 'macd-v-histogram'].includes(c.indicator)
+    );
+  }
+
+  /**
    * Check if alert is in cooldown period
    */
   private checkCooldown(state: AlertState, cooldownMs: number): boolean {
@@ -419,31 +484,51 @@ export class AlertEvaluationService {
       'Alert triggered'
     );
 
-    // Build alert message
-    const conditionDescriptions = conditionsMet.map((c) => {
-      const target = typeof c.target === 'number' ? c.target : 'N/A';
-      return `${c.indicator} ${c.operator.replace('_', ' ')} ${target}`;
-    });
-
-    const message = `${alert.name}: ${conditionDescriptions.join(' AND ')}`;
-
     // Send Discord notification
     let notificationSent = false;
     let notificationError: string | null = null;
 
     try {
-      await this.discordService.sendAlert({
-        title: `Alert: ${alert.name}`,
-        description: message,
-        type: 'price_alert',
-        symbol: alert.symbol,
-        price,
-        fields: conditionsMet.map((c) => ({
-          name: c.indicator,
-          value: `${c.operator.replace('_', ' ')} ${typeof c.target === 'number' ? c.target : 'N/A'}`,
-          inline: true,
-        })),
-      });
+      // Use specialized MACD-V alert format for indicator alerts
+      if (this.isMACDVAlert(conditionsMet)) {
+        const timeframes = this.gatherMACDVTimeframes(alert.symbol);
+        const bias = this.calculateBias(timeframes);
+
+        // Get trigger stage from cached indicator
+        const triggerKey = `${alert.symbol}:${alert.timeframe}:macd-v`;
+        const triggerIndicator = this.currentIndicators.get(triggerKey);
+        const triggerStage = (triggerIndicator?.params?.stage as string) || 'unknown';
+
+        await this.discordService.sendMACDVAlert(
+          alert.symbol,
+          alert.timeframe,
+          triggerStage,
+          timeframes,
+          bias,
+          price
+        );
+      } else {
+        // Use generic alert format for price alerts
+        const conditionDescriptions = conditionsMet.map((c) => {
+          const target = typeof c.target === 'number' ? c.target : 'N/A';
+          return `${c.indicator} ${c.operator.replace('_', ' ')} ${target}`;
+        });
+
+        const message = `${alert.name}: ${conditionDescriptions.join(' AND ')}`;
+
+        await this.discordService.sendAlert({
+          title: `Alert: ${alert.name}`,
+          description: message,
+          type: 'price_alert',
+          symbol: alert.symbol,
+          price,
+          fields: conditionsMet.map((c) => ({
+            name: c.indicator,
+            value: `${c.operator.replace('_', ' ')} ${typeof c.target === 'number' ? c.target : 'N/A'}`,
+            inline: true,
+          })),
+        });
+      }
       notificationSent = true;
     } catch (error) {
       notificationError = (error as Error).message;

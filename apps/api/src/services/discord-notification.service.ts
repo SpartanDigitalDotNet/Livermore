@@ -33,6 +33,15 @@ export interface AlertNotification {
 }
 
 /**
+ * MACD-V timeframe data for multi-timeframe alerts
+ */
+export interface MACDVTimeframeData {
+  timeframe: string;
+  macdV: number | null;
+  stage: string;
+}
+
+/**
  * Color mapping for alert types
  */
 const ALERT_COLORS: Record<AlertType, number> = {
@@ -122,70 +131,62 @@ export class DiscordNotificationService {
   }
 
   /**
-   * Send a MACD-V stage change alert
+   * Send a MACD-V alert with all timeframes
    */
   async sendMACDVAlert(
     symbol: string,
-    stage: string,
-    macdV: number,
-    signal: number,
+    triggerTimeframe: string,
+    triggerStage: string,
+    timeframes: MACDVTimeframeData[],
+    bias: string,
     price: number
   ): Promise<void> {
-    const stageDescriptions: Record<string, { title: string; description: string; bullish: boolean }> = {
-      oversold: {
-        title: 'Risk: Oversold',
-        description: 'MACD-V has dropped below -150. High risk zone.',
-        bullish: false,
-      },
-      rebounding: {
-        title: 'Rebounding',
-        description: 'MACD-V is recovering from oversold conditions.',
-        bullish: true,
-      },
-      rallying: {
-        title: 'Rallying',
-        description: 'Strong upward momentum. MACD-V between +50 and +150.',
-        bullish: true,
-      },
-      overbought: {
-        title: 'Risk: Overbought',
-        description: 'MACD-V has risen above +150. High risk zone.',
-        bullish: false,
-      },
-      retracing: {
-        title: 'Retracing',
-        description: 'Momentum is weakening. MACD-V below signal line.',
-        bullish: false,
-      },
-      reversing: {
-        title: 'Reversing',
-        description: 'Downward momentum increasing. Watch for further decline.',
-        bullish: false,
-      },
-      ranging: {
-        title: 'Ranging',
-        description: 'Neutral zone. MACD-V between -50 and +50.',
-        bullish: true, // neutral, use green
-      },
+    // Stage abbreviations for compact display
+    const stageAbbrev: Record<string, string> = {
+      oversold: 'OS',
+      rebounding: 'rebound',
+      rallying: 'rally',
+      overbought: 'OB',
+      retracing: 'retrace',
+      reversing: 'reverse',
+      ranging: 'range',
+      unknown: '?',
     };
 
-    const stageInfo = stageDescriptions[stage] || {
-      title: `Stage: ${stage}`,
-      description: 'Unknown stage',
-      bullish: true,
+    // Format timeframe values compactly: "+142 (rally)"
+    const formatTf = (tf: MACDVTimeframeData): string => {
+      const val = tf.macdV !== null ? (tf.macdV >= 0 ? `+${tf.macdV.toFixed(0)}` : tf.macdV.toFixed(0)) : 'N/A';
+      const stage = stageAbbrev[tf.stage] || tf.stage;
+      return `${val} (${stage})`;
     };
+
+    // Build compact timeframe display (2 per line)
+    const tf1m = timeframes.find(t => t.timeframe === '1m');
+    const tf5m = timeframes.find(t => t.timeframe === '5m');
+    const tf15m = timeframes.find(t => t.timeframe === '15m');
+    const tf1h = timeframes.find(t => t.timeframe === '1h');
+    const tf4h = timeframes.find(t => t.timeframe === '4h');
+    const tf1d = timeframes.find(t => t.timeframe === '1d');
+
+    const line1 = `1m: ${tf1m ? formatTf(tf1m) : 'N/A'} │ 5m: ${tf5m ? formatTf(tf5m) : 'N/A'}`;
+    const line2 = `15m: ${tf15m ? formatTf(tf15m) : 'N/A'} │ 1h: ${tf1h ? formatTf(tf1h) : 'N/A'}`;
+    const line3 = `4h: ${tf4h ? formatTf(tf4h) : 'N/A'} │ 1d: ${tf1d ? formatTf(tf1d) : 'N/A'}`;
+
+    const description = [
+      '```',
+      line1,
+      line2,
+      line3,
+      '```',
+      `**Bias: ${bias}**`,
+    ].join('\n');
 
     await this.sendAlert({
-      title: `${symbol} - ${stageInfo.title}`,
-      description: stageInfo.description,
+      title: `${symbol} - ${triggerStage.charAt(0).toUpperCase() + triggerStage.slice(1)} (${triggerTimeframe})`,
+      description,
       type: 'indicator_alert',
       symbol,
       price,
-      fields: [
-        { name: 'MACD-V', value: macdV.toFixed(2), inline: true },
-        { name: 'Signal', value: signal.toFixed(2), inline: true },
-        { name: 'Histogram', value: (macdV - signal).toFixed(2), inline: true },
-      ],
     });
   }
 

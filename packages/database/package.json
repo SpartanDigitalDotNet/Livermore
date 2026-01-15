@@ -18,10 +18,12 @@
     "lint": "eslint src",
     "type-check": "tsc --noEmit",
     "clean": "rm -rf dist",
-    "generate": "drizzle-kit generate",
-    "migrate": "tsx src/migrate.ts",
     "seed": "tsx src/seed.ts",
-    "studio": "drizzle-kit studio"
+    "studio": "drizzle-kit studio",
+    "schema:inspect": "atlas schema inspect --env local --format '{{ sql . }}'",
+    "schema:diff": "atlas schema diff --env local",
+    "schema:apply": "atlas schema apply --env local",
+    "schema:apply:dry": "atlas schema apply --env local --dry-run"
   },
   "dependencies": {
     "@livermore/schemas": "workspace:*",
