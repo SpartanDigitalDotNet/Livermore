@@ -8,7 +8,7 @@ import {
   detectDivergence,
   type MacdVStage,
 } from '@livermore/schemas';
-import { getRedisClient, IndicatorCacheStrategy, CandleCacheStrategy } from '@livermore/cache';
+import { getRedisClient, IndicatorCacheStrategy, CandleCacheStrategy, TickerCacheStrategy } from '@livermore/cache';
 import {
   macdVWithStage,
   macdV,
@@ -20,6 +20,7 @@ import {
 const redis = getRedisClient();
 const indicatorCache = new IndicatorCacheStrategy(redis);
 const candleCache = new CandleCacheStrategy(redis);
+const tickerCache = new TickerCacheStrategy(redis);
 
 // Hardcoded for now - will be replaced with auth
 const TEST_USER_ID = 1;
@@ -452,9 +453,38 @@ export const indicatorRouter = router({
         requests
       );
 
+      // Fetch all ticker prices in one Redis MGET call
+      const tickerMap = await tickerCache.getTickers(
+        TEST_USER_ID,
+        TEST_EXCHANGE_ID,
+        symbols
+      );
+
+      // For symbols without ticker data, get price from most recent 1m candle
+      const priceMap = new Map<string, number>();
+      for (const symbol of symbols) {
+        const ticker = tickerMap.get(symbol);
+        if (ticker?.price) {
+          priceMap.set(symbol, ticker.price);
+        } else {
+          // Fallback to 1m candle close price
+          const candles = await candleCache.getRecentCandles(
+            TEST_USER_ID,
+            TEST_EXCHANGE_ID,
+            symbol,
+            '1m',
+            1
+          );
+          if (candles.length > 0) {
+            priceMap.set(symbol, candles[0].close);
+          }
+        }
+      }
+
       // Build symbol analysis
       type SymbolAnalysis = {
         symbol: string;
+        price: number | null;
         values: Record<string, number | null>;
         signal: string;
         stage: string;
@@ -484,6 +514,9 @@ export const indicatorRouter = router({
         const values: Record<string, number | null> = {};
         let worstLiquidityRank = 3; // Start higher than any valid rank
         let symbolStage = 'unknown';
+
+        // Get price from priceMap (ticker with candle fallback)
+        const price = priceMap.get(symbol) ?? null;
 
         for (const tf of ANALYSIS_TIMEFRAMES) {
           const key = `${symbol}:${tf}`;
@@ -519,7 +552,7 @@ export const indicatorRouter = router({
           else signal = 'Mixed';
         }
 
-        symbolAnalyses.push({ symbol, values, signal, stage: symbolStage, h1, h4, d1, liquidity: symbolLiquidity });
+        symbolAnalyses.push({ symbol, price, values, signal, stage: symbolStage, h1, h4, d1, liquidity: symbolLiquidity });
       }
 
       // Identify opportunities and risks

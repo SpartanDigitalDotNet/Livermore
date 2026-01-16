@@ -128,3 +128,33 @@ CREATE INDEX "positions_symbol_idx" ON "positions" ("user_id", "exchange_id", "s
 
 -- Create index "positions_user_exchange_idx" to table: "positions"
 CREATE INDEX "positions_user_exchange_idx" ON "positions" ("user_id", "exchange_id");
+
+-- Create "alert_history" table
+-- Records all triggered alerts (exchange-level, not user-level)
+CREATE TABLE "alert_history" (
+  "id" serial NOT NULL,
+  "exchange_id" serial NOT NULL,
+  "symbol" character varying(20) NOT NULL,
+  "timeframe" character varying(5) NULL,
+  "alert_type" character varying(50) NOT NULL,
+  "triggered_at_epoch" bigint NOT NULL,
+  "triggered_at" timestamp with time zone NOT NULL,
+  "price" numeric(20,8) NOT NULL,
+  "trigger_value" numeric(20,8) NULL,
+  "trigger_label" character varying(100) NOT NULL,
+  "previous_label" character varying(100) NULL,
+  "details" jsonb NULL,
+  "notification_sent" boolean NOT NULL DEFAULT false,
+  "notification_error" character varying(500) NULL,
+  PRIMARY KEY ("id"),
+  CONSTRAINT "alert_history_exchange_id_user_exchanges_id_fk" FOREIGN KEY ("exchange_id") REFERENCES "user_exchanges" ("id") ON UPDATE NO ACTION ON DELETE CASCADE
+);
+
+-- Create index "alert_history_exchange_symbol_idx" to table: "alert_history"
+CREATE INDEX "alert_history_exchange_symbol_idx" ON "alert_history" ("exchange_id", "symbol");
+
+-- Create index "alert_history_triggered_at_idx" to table: "alert_history"
+CREATE INDEX "alert_history_triggered_at_idx" ON "alert_history" ("triggered_at" DESC);
+
+-- Create index "alert_history_alert_type_idx" to table: "alert_history"
+CREATE INDEX "alert_history_alert_type_idx" ON "alert_history" ("alert_type");

@@ -27,16 +27,29 @@ try {
     Write-Host "Response time: $([math]::Round($elapsed))ms" -ForegroundColor Gray
     Write-Host ""
 
+    # Helper function to format price with appropriate decimals
+    function Format-Price {
+        param($price)
+        if ($null -eq $price) { return "N/A" }
+        if ($price -ge 1000) { return '$' + $price.ToString("N0") }
+        if ($price -ge 1) { return '$' + $price.ToString("N2") }
+        if ($price -ge 0.01) { return '$' + $price.ToString("N4") }
+        if ($price -ge 0.0001) { return '$' + $price.ToString("N6") }
+        return '$' + $price.ToString("N8")
+    }
+
     # Table header
-    Write-Host ("{0,-12} | {1,6} | {2,6} | {3,6} | {4,6} | {5,6} | {6,6} | {7,-10} | {8,-14} | {9}" -f "Symbol", "1m", "5m", "15m", "1h", "4h", "1d", "Stage", "Signal", "Liquidity") -ForegroundColor Yellow
-    Write-Host ("-" * 120)
+    Write-Host ("{0,-12} | {1,12} | {2,6} | {3,6} | {4,6} | {5,6} | {6,6} | {7,6} | {8,-10} | {9,-14} | {10}" -f "Symbol", "Price", "1m", "5m", "15m", "1h", "4h", "1d", "Stage", "Signal", "Liquidity") -ForegroundColor Yellow
+    Write-Host ("-" * 135)
 
     foreach ($sym in $data.symbols) {
         $v = $sym.values
         $liq = if ($sym.liquidity) { $sym.liquidity } else { "?" }
         $stage = if ($sym.stage) { $sym.stage } else { "?" }
-        $line = "{0,-12} | {1,6} | {2,6} | {3,6} | {4,6} | {5,6} | {6,6} | {7,-10} | {8,-14} | {9}" -f `
+        $priceStr = Format-Price $sym.price
+        $line = "{0,-12} | {1,12} | {2,6} | {3,6} | {4,6} | {5,6} | {6,6} | {7,6} | {8,-10} | {9,-14} | {10}" -f `
             $sym.symbol, `
+            $priceStr, `
             $(if ($null -eq $v.'1m') { "N/A" } else { $v.'1m' }), `
             $(if ($null -eq $v.'5m') { "N/A" } else { $v.'5m' }), `
             $(if ($null -eq $v.'15m') { "N/A" } else { $v.'15m' }), `

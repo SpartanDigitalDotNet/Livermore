@@ -53,6 +53,25 @@ const ALERT_COLORS: Record<AlertType, number> = {
 };
 
 /**
+ * Format price with appropriate decimal places based on magnitude
+ * - Prices >= $1: 2 decimals ($2.07)
+ * - Prices >= $0.01: 4 decimals ($0.0234)
+ * - Prices >= $0.0001: 6 decimals ($0.000123)
+ * - Prices < $0.0001: 8 decimals ($0.00001073)
+ */
+function formatPrice(price: number): string {
+  if (price >= 1) {
+    return `$${price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  } else if (price >= 0.01) {
+    return `$${price.toFixed(4)}`;
+  } else if (price >= 0.0001) {
+    return `$${price.toFixed(6)}`;
+  } else {
+    return `$${price.toFixed(8)}`;
+  }
+}
+
+/**
  * Discord Notification Service
  *
  * Sends formatted messages to Discord via webhook.
@@ -102,7 +121,7 @@ export class DiscordNotificationService {
     if (alert.price !== undefined) {
       fields.push({
         name: 'Price',
-        value: `$${alert.price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+        value: formatPrice(alert.price),
         inline: true,
       });
     }
@@ -136,7 +155,8 @@ export class DiscordNotificationService {
   async sendMACDVAlert(
     symbol: string,
     triggerTimeframe: string,
-    triggerStage: string,
+    previousStage: string,
+    currentStage: string,
     timeframes: MACDVTimeframeData[],
     bias: string,
     price: number
@@ -152,6 +172,9 @@ export class DiscordNotificationService {
       ranging: 'range',
       unknown: '?',
     };
+
+    // Capitalize stage name
+    const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
     // Format timeframe values compactly: "+142 (rally)"
     const formatTf = (tf: MACDVTimeframeData): string => {
@@ -181,12 +204,15 @@ export class DiscordNotificationService {
       `**Bias: ${bias}**`,
     ].join('\n');
 
+    // Title shows symbol and transition: "XRP-USD: Overbought → Retracing (1m)"
+    const title = `${symbol}: ${capitalize(previousStage)} → ${capitalize(currentStage)} (${triggerTimeframe})`;
+
     await this.sendAlert({
-      title: `${symbol} - ${triggerStage.charAt(0).toUpperCase() + triggerStage.slice(1)} (${triggerTimeframe})`,
+      title,
       description,
       type: 'indicator_alert',
-      symbol,
       price,
+      // Don't pass symbol - it's already in the title
     });
   }
 

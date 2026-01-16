@@ -1,47 +1,48 @@
 import Redis from 'ioredis';
-import { getRedisClient, tickerChannel, indicatorChannel, type CachedIndicatorValue } from '@livermore/cache';
-import { getDbClient, alerts, alertHistory } from '@livermore/database';
+import { getRedisClient, tickerChannel, indicatorChannel, IndicatorCacheStrategy, type CachedIndicatorValue } from '@livermore/cache';
+import { getDbClient, alertHistory } from '@livermore/database';
 import { logger } from '@livermore/utils';
-import type { Ticker, Timeframe, AlertCondition } from '@livermore/schemas';
-import { eq, and } from 'drizzle-orm';
+import type { Ticker, Timeframe } from '@livermore/schemas';
+import type { MACDVStage } from '@livermore/indicators';
 import { getDiscordService, type MACDVTimeframeData } from './discord-notification.service';
-
-/**
- * In-memory alert state for tracking previous values (for cross detection)
- */
-interface AlertState {
-  alertId: number;
-  previousValues: Map<string, number>;
-  lastTriggeredAt: number | null;
-}
 
 /**
  * Alert Evaluation Service
  *
- * Subscribes to market data and indicator updates,
- * evaluates alert conditions, and triggers notifications.
+ * Monitors MACD-V stage transitions and triggers alerts when stages change.
+ * Uses hardcoded stage classification rules from @livermore/indicators.
+ * No database configuration - rules are built into the indicator library.
  */
 export class AlertEvaluationService {
   private db = getDbClient();
+  private redis = getRedisClient();
   private subscriber: Redis | null = null;
   private discordService = getDiscordService();
+  private indicatorCache: IndicatorCacheStrategy;
 
-  // Active alerts by symbol
-  private alertsBySymbol: Map<string, AlertState[]> = new Map();
+  // Track previous stages for transition detection (key: "symbol:timeframe")
+  private previousStages: Map<string, MACDVStage> = new Map();
 
-  // Current market data
+  // Cooldown tracking to prevent alert spam (key: "symbol:timeframe:stage")
+  private stageTransitionCooldown: Map<string, number> = new Map();
+
+  // Current prices from ticker updates
   private currentPrices: Map<string, number> = new Map();
-  private currentIndicators: Map<string, CachedIndicatorValue> = new Map();
 
-  // Temporary: hardcode test user and exchange IDs
+  // Temporary: hardcode test user/exchange ID
   private readonly TEST_USER_ID = 1;
   private readonly TEST_EXCHANGE_ID = 1;
+
+  // Cooldown period in milliseconds (5 minutes)
+  private readonly COOLDOWN_MS = 300000;
 
   // Supported symbols and timeframes
   private symbols: string[] = [];
   private timeframes: Timeframe[] = [];
 
-  constructor() {}
+  constructor() {
+    this.indicatorCache = new IndicatorCacheStrategy(this.redis);
+  }
 
   /**
    * Start the alert evaluation service
@@ -51,9 +52,6 @@ export class AlertEvaluationService {
 
     this.symbols = symbols;
     this.timeframes = timeframes;
-
-    // Load active alerts from database
-    await this.loadAlerts();
 
     // Create subscriber connection
     this.subscriber = getRedisClient().duplicate();
@@ -82,52 +80,11 @@ export class AlertEvaluationService {
       this.subscriber.disconnect();
       this.subscriber = null;
     }
-  }
 
-  /**
-   * Load active alerts from database
-   */
-  private async loadAlerts(): Promise<void> {
-    logger.debug('Loading alerts from database');
-
-    const activeAlerts = await this.db
-      .select()
-      .from(alerts)
-      .where(
-        and(
-          eq(alerts.userId, this.TEST_USER_ID),
-          eq(alerts.exchangeId, this.TEST_EXCHANGE_ID),
-          eq(alerts.isActive, true)
-        )
-      );
-
-    // Group alerts by symbol
-    this.alertsBySymbol.clear();
-
-    for (const alert of activeAlerts) {
-      const state: AlertState = {
-        alertId: alert.id,
-        previousValues: new Map(),
-        lastTriggeredAt: alert.lastTriggeredAt?.getTime() || null,
-      };
-
-      if (!this.alertsBySymbol.has(alert.symbol)) {
-        this.alertsBySymbol.set(alert.symbol, []);
-      }
-      this.alertsBySymbol.get(alert.symbol)!.push(state);
-    }
-
-    logger.info(
-      { alertCount: activeAlerts.length, symbols: [...this.alertsBySymbol.keys()] },
-      'Loaded alerts from database'
-    );
-  }
-
-  /**
-   * Reload alerts (call this when alerts are added/modified)
-   */
-  async reloadAlerts(): Promise<void> {
-    await this.loadAlerts();
+    // Clear tracking maps
+    this.previousStages.clear();
+    this.stageTransitionCooldown.clear();
+    this.currentPrices.clear();
   }
 
   /**
@@ -138,9 +95,10 @@ export class AlertEvaluationService {
 
     const channels: string[] = [];
 
-    // Subscribe to ticker channels for all symbols
+    // Subscribe to ticker channels for all symbols (for price tracking)
+    // Note: Using exchange_id=1 for now; tickers are user-scoped in current cache design
     for (const symbol of this.symbols) {
-      channels.push(tickerChannel(this.TEST_USER_ID, this.TEST_EXCHANGE_ID, symbol));
+      channels.push(tickerChannel(1, this.TEST_EXCHANGE_ID, symbol));
     }
 
     // Subscribe to indicator channels for all symbol/timeframe combos
@@ -148,7 +106,7 @@ export class AlertEvaluationService {
       for (const timeframe of this.timeframes) {
         channels.push(
           indicatorChannel(
-            this.TEST_USER_ID,
+            1, // user_id (hardcoded for now)
             this.TEST_EXCHANGE_ID,
             symbol,
             timeframe,
@@ -182,229 +140,97 @@ export class AlertEvaluationService {
   }
 
   /**
-   * Handle ticker update
+   * Handle ticker update - just track the price
    */
   private async handleTickerUpdate(ticker: Ticker): Promise<void> {
     const { symbol, price } = ticker;
-
-    // Store current price
-    const previousPrice = this.currentPrices.get(symbol);
     this.currentPrices.set(symbol, price);
-
-    // Evaluate price-based alerts
-    const alertStates = this.alertsBySymbol.get(symbol) || [];
-
-    for (const state of alertStates) {
-      await this.evaluateAlertWithPrice(state, symbol, price, previousPrice);
-    }
   }
 
   /**
-   * Handle indicator update
+   * Handle indicator update - detect stage transitions
    */
   private async handleIndicatorUpdate(indicator: CachedIndicatorValue): Promise<void> {
-    const { symbol, timeframe, type } = indicator;
-    const key = `${symbol}:${timeframe}:${type}`;
+    const { symbol, timeframe } = indicator;
+    const key = `${symbol}:${timeframe}`;
 
-    // Store current indicator
-    const previousIndicator = this.currentIndicators.get(key);
-    this.currentIndicators.set(key, indicator);
+    // Get current stage from indicator params
+    const currentStage = indicator.params?.stage as MACDVStage | undefined;
 
-    // Get current price for this symbol
-    const currentPrice = this.currentPrices.get(symbol);
-    if (!currentPrice) return;
+    if (!currentStage || currentStage === 'unknown') {
+      return;
+    }
 
-    // Evaluate indicator-based alerts
-    const alertStates = this.alertsBySymbol.get(symbol) || [];
+    // Get previous stage
+    const previousStage = this.previousStages.get(key);
 
-    for (const state of alertStates) {
-      await this.evaluateAlertWithIndicator(
-        state,
-        symbol,
-        timeframe,
-        indicator,
-        previousIndicator,
-        currentPrice
+    // Update tracking
+    this.previousStages.set(key, currentStage);
+
+    // Skip if no previous stage (first update after startup)
+    if (!previousStage) {
+      logger.debug({ symbol, timeframe, stage: currentStage }, 'Initial stage recorded');
+      return;
+    }
+
+    // Skip if stage hasn't changed
+    if (currentStage === previousStage) {
+      return;
+    }
+
+    // Check cooldown for this specific transition
+    const cooldownKey = `${key}:${currentStage}`;
+    const lastTriggered = this.stageTransitionCooldown.get(cooldownKey);
+    if (lastTriggered && Date.now() - lastTriggered < this.COOLDOWN_MS) {
+      logger.debug(
+        { symbol, timeframe, from: previousStage, to: currentStage },
+        'Stage transition in cooldown, skipping alert'
       );
-    }
-  }
-
-  /**
-   * Evaluate an alert against current price
-   */
-  private async evaluateAlertWithPrice(
-    state: AlertState,
-    _symbol: string,
-    price: number,
-    previousPrice: number | undefined
-  ): Promise<void> {
-    // Get alert from database
-    const alert = await this.db.query.alerts.findFirst({
-      where: eq(alerts.id, state.alertId),
-    });
-
-    if (!alert || !alert.isActive) return;
-
-    // Check cooldown
-    if (!this.checkCooldown(state, alert.cooldownMs)) return;
-
-    // Evaluate conditions
-    const conditions = alert.conditions as AlertCondition[];
-    const conditionsMet: AlertCondition[] = [];
-
-    for (const condition of conditions) {
-      if (condition.indicator !== 'price') continue;
-
-      const met = this.evaluateCondition(
-        condition,
-        price,
-        typeof condition.target === 'number' ? condition.target : 0,
-        previousPrice,
-        state
-      );
-
-      if (met) {
-        conditionsMet.push(condition);
-      }
+      return;
     }
 
-    // All conditions must be met
-    const priceConditions = conditions.filter((c) => c.indicator === 'price');
-    if (priceConditions.length > 0 && conditionsMet.length === priceConditions.length) {
-      await this.triggerAlert(alert, conditionsMet, price);
-      state.lastTriggeredAt = Date.now();
-    }
-  }
+    // Stage changed! Trigger alert
+    logger.info(
+      { symbol, timeframe, from: previousStage, to: currentStage },
+      'Stage transition detected'
+    );
 
-  /**
-   * Evaluate an alert against indicator values
-   */
-  private async evaluateAlertWithIndicator(
-    state: AlertState,
-    _symbol: string,
-    timeframe: Timeframe,
-    indicator: CachedIndicatorValue,
-    previousIndicator: CachedIndicatorValue | undefined,
-    currentPrice: number
-  ): Promise<void> {
-    // Get alert from database
-    const alert = await this.db.query.alerts.findFirst({
-      where: and(
-        eq(alerts.id, state.alertId),
-        eq(alerts.timeframe, timeframe)
-      ),
-    });
+    await this.triggerStageChangeAlert(
+      symbol,
+      timeframe as Timeframe,
+      previousStage,
+      currentStage,
+      indicator
+    );
 
-    if (!alert || !alert.isActive) return;
-
-    // Check cooldown
-    if (!this.checkCooldown(state, alert.cooldownMs)) return;
-
-    // Evaluate conditions
-    const conditions = alert.conditions as AlertCondition[];
-    const conditionsMet: AlertCondition[] = [];
-
-    for (const condition of conditions) {
-      // Skip non-indicator conditions
-      if (condition.indicator === 'price') continue;
-
-      // Get indicator value based on condition
-      let currentValue: number | undefined;
-      let previousValue: number | undefined;
-
-      if (condition.indicator === 'macd-v') {
-        currentValue = indicator.value['macdV'];
-        previousValue = previousIndicator?.value['macdV'];
-      } else if (condition.indicator === 'macd-v-signal') {
-        currentValue = indicator.value['signal'];
-        previousValue = previousIndicator?.value['signal'];
-      } else if (condition.indicator === 'macd-v-histogram') {
-        currentValue = indicator.value['histogram'];
-        previousValue = previousIndicator?.value['histogram'];
-      }
-
-      if (currentValue === undefined) continue;
-
-      const targetValue = typeof condition.target === 'number' ? condition.target : 0;
-
-      const met = this.evaluateCondition(
-        condition,
-        currentValue,
-        targetValue,
-        previousValue,
-        state
-      );
-
-      if (met) {
-        conditionsMet.push(condition);
-      }
-    }
-
-    // All indicator conditions must be met
-    const indicatorConditions = conditions.filter((c) => c.indicator !== 'price');
-    if (indicatorConditions.length > 0 && conditionsMet.length === indicatorConditions.length) {
-      await this.triggerAlert(alert, conditionsMet, currentPrice);
-      state.lastTriggeredAt = Date.now();
-    }
-  }
-
-  /**
-   * Evaluate a single condition
-   */
-  private evaluateCondition(
-    condition: AlertCondition,
-    currentValue: number,
-    targetValue: number,
-    previousValue: number | undefined,
-    state: AlertState
-  ): boolean {
-    const stateKey = `${condition.indicator}:${condition.operator}:${targetValue}`;
-
-    switch (condition.operator) {
-      case 'greater_than':
-        return currentValue > targetValue;
-
-      case 'less_than':
-        return currentValue < targetValue;
-
-      case 'equals':
-        return Math.abs(currentValue - targetValue) < 0.0001;
-
-      case 'crosses_above':
-        if (previousValue === undefined) {
-          // Initialize state
-          state.previousValues.set(stateKey, currentValue);
-          return false;
-        }
-        const wasBelow = previousValue <= targetValue;
-        const isAbove = currentValue > targetValue;
-        state.previousValues.set(stateKey, currentValue);
-        return wasBelow && isAbove;
-
-      case 'crosses_below':
-        if (previousValue === undefined) {
-          state.previousValues.set(stateKey, currentValue);
-          return false;
-        }
-        const wasAbove = previousValue >= targetValue;
-        const isBelow = currentValue < targetValue;
-        state.previousValues.set(stateKey, currentValue);
-        return wasAbove && isBelow;
-
-      default:
-        return false;
-    }
+    // Set cooldown
+    this.stageTransitionCooldown.set(cooldownKey, Date.now());
   }
 
   /**
    * Gather MACD-V data for all timeframes for a symbol
+   * Fetches directly from Redis cache to get current values
    */
-  private gatherMACDVTimeframes(symbol: string): MACDVTimeframeData[] {
-    const result: MACDVTimeframeData[] = [];
+  private async gatherMACDVTimeframes(symbol: string): Promise<MACDVTimeframeData[]> {
+    // Build bulk request for all timeframes
+    const requests = this.timeframes.map((timeframe) => ({
+      symbol,
+      timeframe,
+      type: 'macd-v',
+    }));
 
+    // Fetch all timeframes in one Redis call
+    const indicatorMap = await this.indicatorCache.getIndicatorsBulk(
+      this.TEST_USER_ID,
+      this.TEST_EXCHANGE_ID,
+      requests
+    );
+
+    // Build result array
+    const result: MACDVTimeframeData[] = [];
     for (const timeframe of this.timeframes) {
-      const key = `${symbol}:${timeframe}:macd-v`;
-      const indicator = this.currentIndicators.get(key);
+      const key = `${symbol}:${timeframe}`;
+      const indicator = indicatorMap.get(key);
 
       if (indicator) {
         result.push({
@@ -453,102 +279,73 @@ export class AlertEvaluationService {
   }
 
   /**
-   * Check if alert conditions are MACD-V related
+   * Trigger a stage change alert
    */
-  private isMACDVAlert(conditions: AlertCondition[]): boolean {
-    return conditions.some((c) =>
-      ['macd-v', 'macd-v-signal', 'macd-v-histogram'].includes(c.indicator)
-    );
-  }
-
-  /**
-   * Check if alert is in cooldown period
-   */
-  private checkCooldown(state: AlertState, cooldownMs: number): boolean {
-    if (!state.lastTriggeredAt) return true;
-
-    const elapsed = Date.now() - state.lastTriggeredAt;
-    return elapsed >= cooldownMs;
-  }
-
-  /**
-   * Trigger an alert
-   */
-  private async triggerAlert(
-    alert: typeof alerts.$inferSelect,
-    conditionsMet: AlertCondition[],
-    price: number
+  private async triggerStageChangeAlert(
+    symbol: string,
+    timeframe: Timeframe,
+    previousStage: MACDVStage,
+    currentStage: MACDVStage,
+    indicator: CachedIndicatorValue
   ): Promise<void> {
+    const price = this.currentPrices.get(symbol) || 0;
+    const macdVValue = indicator.value['macdV'] as number;
+
     logger.info(
-      { alertId: alert.id, alertName: alert.name, symbol: alert.symbol, price },
-      'Alert triggered'
+      { symbol, timeframe, from: previousStage, to: currentStage, price, macdV: macdVValue },
+      'Alert triggered: stage change'
     );
+
+    // Gather all timeframe data for context (fetches from Redis cache)
+    const timeframes = await this.gatherMACDVTimeframes(symbol);
+    const bias = this.calculateBias(timeframes);
 
     // Send Discord notification
     let notificationSent = false;
     let notificationError: string | null = null;
 
     try {
-      // Use specialized MACD-V alert format for indicator alerts
-      if (this.isMACDVAlert(conditionsMet)) {
-        const timeframes = this.gatherMACDVTimeframes(alert.symbol);
-        const bias = this.calculateBias(timeframes);
-
-        // Get trigger stage from cached indicator
-        const triggerKey = `${alert.symbol}:${alert.timeframe}:macd-v`;
-        const triggerIndicator = this.currentIndicators.get(triggerKey);
-        const triggerStage = (triggerIndicator?.params?.stage as string) || 'unknown';
-
-        await this.discordService.sendMACDVAlert(
-          alert.symbol,
-          alert.timeframe,
-          triggerStage,
-          timeframes,
-          bias,
-          price
-        );
-      } else {
-        // Use generic alert format for price alerts
-        const conditionDescriptions = conditionsMet.map((c) => {
-          const target = typeof c.target === 'number' ? c.target : 'N/A';
-          return `${c.indicator} ${c.operator.replace('_', ' ')} ${target}`;
-        });
-
-        const message = `${alert.name}: ${conditionDescriptions.join(' AND ')}`;
-
-        await this.discordService.sendAlert({
-          title: `Alert: ${alert.name}`,
-          description: message,
-          type: 'price_alert',
-          symbol: alert.symbol,
-          price,
-          fields: conditionsMet.map((c) => ({
-            name: c.indicator,
-            value: `${c.operator.replace('_', ' ')} ${typeof c.target === 'number' ? c.target : 'N/A'}`,
-            inline: true,
-          })),
-        });
-      }
+      await this.discordService.sendMACDVAlert(
+        symbol,
+        timeframe,
+        previousStage,
+        currentStage,
+        timeframes,
+        bias,
+        price
+      );
       notificationSent = true;
     } catch (error) {
       notificationError = (error as Error).message;
-      logger.error({ error, alertId: alert.id }, 'Failed to send Discord notification');
+      logger.error({ error, symbol, timeframe }, 'Failed to send Discord notification');
     }
 
-    // Record alert history
-    await this.db.insert(alertHistory).values({
-      alertId: alert.id,
-      price: price.toString(),
-      conditions: conditionsMet,
-      notificationSent,
-      notificationError,
-    });
-
-    // Update last triggered timestamp
-    await this.db
-      .update(alerts)
-      .set({ lastTriggeredAt: new Date() })
-      .where(eq(alerts.id, alert.id));
+    // Record to alert_history table
+    const now = new Date();
+    try {
+      await this.db.insert(alertHistory).values({
+        exchangeId: this.TEST_EXCHANGE_ID,
+        symbol,
+        timeframe,
+        alertType: 'macdv',
+        triggeredAtEpoch: now.getTime(),
+        triggeredAt: now,
+        price: price.toString(),
+        triggerValue: macdVValue?.toString() || null,
+        triggerLabel: currentStage,
+        previousLabel: previousStage,
+        details: {
+          timeframes,
+          bias,
+          histogram: indicator.value['histogram'],
+          signal: indicator.value['signal'],
+        },
+        notificationSent,
+        notificationError,
+      });
+    } catch (dbError) {
+      logger.error({ error: dbError, symbol, timeframe }, 'Failed to record alert to database');
+    }
   }
 
   /**
