@@ -218,6 +218,7 @@ export class DiscordNotificationService {
 
   /**
    * Send a MACD-V level crossing alert
+   * @param chartBuffer - Optional PNG image buffer to attach
    */
   async sendMACDVLevelAlert(
     symbol: string,
@@ -227,7 +228,8 @@ export class DiscordNotificationService {
     currentMacdV: number,
     timeframes: MACDVTimeframeData[],
     bias: string,
-    price: number
+    price: number,
+    chartBuffer?: Buffer
   ): Promise<void> {
     const zone = level > 0 ? 'overbought' : 'oversold';
     const title = `${symbol}: MACD-V crossed ${direction === 'up' ? 'above' : 'below'} ${level} (${timeframe})`;
@@ -241,16 +243,34 @@ export class DiscordNotificationService {
       `**Bias: ${bias}**`,
     ].join('\n');
 
-    await this.sendAlert({
+    const color = ALERT_COLORS.indicator_alert;
+    const timestamp = new Date().toISOString();
+
+    const embed = {
       title,
       description,
-      type: 'indicator_alert',
-      price,
-    });
+      color,
+      fields: [
+        { name: 'Price', value: formatPrice(price), inline: true },
+      ],
+      timestamp,
+      footer: { text: 'Livermore Trading System' },
+      // Reference the attachment if we have a chart
+      ...(chartBuffer ? { image: { url: 'attachment://macdv-chart.png' } } : {}),
+    };
+
+    const payload = { embeds: [embed] };
+
+    if (chartBuffer) {
+      await this.sendWithImage(payload, chartBuffer, 'macdv-chart.png');
+    } else {
+      await this.send(payload);
+    }
   }
 
   /**
    * Send a MACD-V reversal signal alert
+   * @param chartBuffer - Optional PNG image buffer to attach
    */
   async sendMACDVReversalAlert(
     symbol: string,
@@ -258,29 +278,47 @@ export class DiscordNotificationService {
     zone: 'oversold' | 'overbought',
     currentMacdV: number,
     histogram: number,
-    buffer: number,
+    bufferValue: number,
     timeframes: MACDVTimeframeData[],
     bias: string,
-    price: number
+    price: number,
+    chartBuffer?: Buffer
   ): Promise<void> {
     const direction = zone === 'oversold' ? 'up' : 'down';
     const title = `${symbol}: Potential reversal ${direction} from ${zone} (${timeframe})`;
 
     const description = [
       `Signal line crossover confirmed`,
-      `MACD-V: ${currentMacdV >= 0 ? '+' : ''}${currentMacdV.toFixed(1)} | Histogram: ${histogram >= 0 ? '+' : ''}${histogram.toFixed(1)} | Buffer: ${buffer.toFixed(1)}`,
+      `MACD-V: ${currentMacdV >= 0 ? '+' : ''}${currentMacdV.toFixed(1)} | Histogram: ${histogram >= 0 ? '+' : ''}${histogram.toFixed(1)} | Buffer: ${bufferValue.toFixed(1)}`,
       '```',
       this.formatTimeframeLines(timeframes),
       '```',
       `**Bias: ${bias}**`,
     ].join('\n');
 
-    await this.sendAlert({
+    const color = ALERT_COLORS.indicator_alert;
+    const timestamp = new Date().toISOString();
+
+    const embed = {
       title,
       description,
-      type: 'indicator_alert',
-      price,
-    });
+      color,
+      fields: [
+        { name: 'Price', value: formatPrice(price), inline: true },
+      ],
+      timestamp,
+      footer: { text: 'Livermore Trading System' },
+      // Reference the attachment if we have a chart
+      ...(chartBuffer ? { image: { url: 'attachment://macdv-chart.png' } } : {}),
+    };
+
+    const payload = { embeds: [embed] };
+
+    if (chartBuffer) {
+      await this.sendWithImage(payload, chartBuffer, 'macdv-chart.png');
+    } else {
+      await this.send(payload);
+    }
   }
 
   /**
@@ -376,7 +414,13 @@ export class DiscordNotificationService {
       if (!item) break;
 
       try {
-        await this.sendToDiscord(item.payload);
+        // Check if payload has an image attachment
+        if (item.payload.__image) {
+          const { buffer, filename } = item.payload.__image;
+          await this.sendToDiscordWithImage(item.payload, buffer, filename);
+        } else {
+          await this.sendToDiscord(item.payload);
+        }
         item.resolve();
       } catch (error) {
         item.reject(error as Error);
@@ -438,6 +482,82 @@ export class DiscordNotificationService {
     }
 
     logger.debug('Discord notification sent successfully');
+  }
+
+  /**
+   * Send a payload with an image attachment to Discord
+   * Uses multipart/form-data instead of JSON
+   */
+  private async sendWithImage(payload: any, imageBuffer: Buffer, filename: string): Promise<void> {
+    return new Promise((resolve, reject) => {
+      this.queue.push({
+        payload: { __image: { buffer: imageBuffer, filename }, ...payload },
+        resolve,
+        reject,
+      });
+      this.processQueue();
+    });
+  }
+
+  /**
+   * Send payload with image to Discord webhook using multipart/form-data
+   */
+  private async sendToDiscordWithImage(payload: any, imageBuffer: Buffer, filename: string): Promise<void> {
+    if (!this.webhookUrl) {
+      throw new Error('Discord webhook URL not configured');
+    }
+
+    logger.debug({ filename, size: imageBuffer.length }, 'Sending Discord notification with image');
+
+    // Create FormData for multipart upload
+    const formData = new FormData();
+
+    // Add the JSON payload (without the __image metadata)
+    const jsonPayload = { ...payload };
+    delete jsonPayload.__image;
+    formData.append('payload_json', JSON.stringify(jsonPayload));
+
+    // Add the image as a file attachment
+    const blob = new Blob([imageBuffer], { type: 'image/png' });
+    formData.append('files[0]', blob, filename);
+
+    const response = await fetch(this.webhookUrl, {
+      method: 'POST',
+      body: formData,
+      // Note: Do NOT set Content-Type header - fetch sets it automatically with boundary
+    });
+
+    // Update rate limit info from headers
+    const remaining = response.headers.get('X-RateLimit-Remaining');
+    const reset = response.headers.get('X-RateLimit-Reset');
+
+    if (remaining) {
+      this.rateLimitRemaining = parseInt(remaining, 10);
+    }
+    if (reset) {
+      this.rateLimitReset = parseInt(reset, 10) * 1000; // Convert to ms
+    }
+
+    if (!response.ok) {
+      const text = await response.text();
+
+      // Handle rate limiting
+      if (response.status === 429) {
+        const retryAfter = response.headers.get('Retry-After');
+        if (retryAfter) {
+          this.rateLimitReset = Date.now() + parseInt(retryAfter, 10) * 1000;
+        }
+        throw new Error(`Rate limited by Discord. Retry after: ${retryAfter}s`);
+      }
+
+      logger.error(
+        { status: response.status, error: text },
+        'Discord webhook with image request failed'
+      );
+      throw new Error(`Discord webhook error: ${response.status}`);
+    }
+
+    logger.debug('Discord notification with image sent successfully');
   }
 
   /**

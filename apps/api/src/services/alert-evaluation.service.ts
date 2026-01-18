@@ -1,8 +1,9 @@
 import Redis from 'ioredis';
-import { getRedisClient, tickerChannel, indicatorChannel, IndicatorCacheStrategy, type CachedIndicatorValue } from '@livermore/cache';
+import { getRedisClient, tickerChannel, indicatorChannel, IndicatorCacheStrategy, CandleCacheStrategy, type CachedIndicatorValue } from '@livermore/cache';
 import { getDbClient, alertHistory } from '@livermore/database';
 import { logger } from '@livermore/utils';
 import type { Ticker, Timeframe } from '@livermore/schemas';
+import { generateMacdVChart, type AlertMarker } from '@livermore/charts';
 import { getDiscordService, type MACDVTimeframeData } from './discord-notification.service';
 
 /**
@@ -22,6 +23,7 @@ export class AlertEvaluationService {
   private subscriber: Redis | null = null;
   private discordService = getDiscordService();
   private indicatorCache: IndicatorCacheStrategy;
+  private candleCache: CandleCacheStrategy;
 
   // Track previous MACD-V values for level crossing detection (key: "symbol:timeframe")
   private previousMacdV: Map<string, number> = new Map();
@@ -58,8 +60,13 @@ export class AlertEvaluationService {
   private symbols: string[] = [];
   private timeframes: Timeframe[] = [];
 
+  // Chart generation settings
+  private readonly CHART_BARS = 25;
+  private readonly CHART_TIMEOUT_MS = 3000;
+
   constructor() {
     this.indicatorCache = new IndicatorCacheStrategy(this.redis);
+    this.candleCache = new CandleCacheStrategy(this.redis);
   }
 
   /**
@@ -309,6 +316,59 @@ export class AlertEvaluationService {
   }
 
   /**
+   * Generate MACD-V chart for an alert
+   * Returns null if chart generation fails or times out
+   */
+  private async generateAlertChart(
+    symbol: string,
+    timeframe: Timeframe,
+    alertMarker?: AlertMarker
+  ): Promise<Buffer | null> {
+    try {
+      // Fetch candles (extra for MACD-V warmup period)
+      const candles = await this.candleCache.getRecentCandles(
+        this.TEST_USER_ID,
+        this.TEST_EXCHANGE_ID,
+        symbol,
+        timeframe,
+        this.CHART_BARS + 35 // Extra for MACD-V warmup (26 ATR + 9 signal)
+      );
+
+      if (candles.length < this.CHART_BARS) {
+        logger.warn({ symbol, timeframe, count: candles.length }, 'Insufficient candles for chart');
+        return null;
+      }
+
+      // Generate chart with timeout
+      const chartPromise = Promise.resolve().then(() =>
+        generateMacdVChart({
+          symbol,
+          timeframe,
+          candles,
+          alertMarkers: alertMarker ? [alertMarker] : [],
+        })
+      );
+
+      const timeoutPromise = new Promise<null>((resolve) =>
+        setTimeout(() => resolve(null), this.CHART_TIMEOUT_MS)
+      );
+
+      const result = await Promise.race([chartPromise, timeoutPromise]);
+
+      if (result) {
+        logger.debug({ symbol, timeframe, size: result.buffer.length }, 'Chart generated successfully');
+        return result.buffer;
+      }
+
+      logger.warn({ symbol, timeframe }, 'Chart generation timed out');
+      return null;
+    } catch (error) {
+      logger.error({ error, symbol, timeframe }, 'Chart generation failed');
+      return null;
+    }
+  }
+
+  /**
    * Trigger a level crossing alert
    */
   private async triggerLevelAlert(
@@ -330,6 +390,17 @@ export class AlertEvaluationService {
     const timeframes = await this.gatherMACDVTimeframes(symbol);
     const bias = this.calculateBias(timeframes);
 
+    // Generate chart (non-blocking with fallback)
+    const isOversold = level < 0;
+    const alertMarker: AlertMarker = {
+      barIndex: -1, // Last bar
+      type: isOversold ? 'oversold' : 'overbought',
+      label: `level_${level}`,
+      value: currentMacdV,
+    };
+
+    const chartBuffer = await this.generateAlertChart(symbol, timeframe, alertMarker);
+
     // Send Discord notification
     let notificationSent = false;
     let notificationError: string | null = null;
@@ -343,7 +414,8 @@ export class AlertEvaluationService {
         currentMacdV,
         timeframes,
         bias,
-        price
+        price,
+        chartBuffer ?? undefined
       );
       notificationSent = true;
     } catch (error) {
@@ -372,6 +444,7 @@ export class AlertEvaluationService {
           signal: indicator.value['signal'],
           timeframes,
           bias,
+          chartGenerated: chartBuffer !== null,
         },
         notificationSent,
         notificationError,
@@ -390,19 +463,29 @@ export class AlertEvaluationService {
     zone: 'oversold' | 'overbought',
     currentMacdV: number,
     histogram: number,
-    buffer: number,
+    bufferValue: number,
     indicator: CachedIndicatorValue
   ): Promise<void> {
     const price = this.currentPrices.get(symbol) || 0;
     const bufferPct = zone === 'oversold' ? this.OVERSOLD_BUFFER_PCT : this.OVERBOUGHT_BUFFER_PCT;
 
     logger.info(
-      { symbol, timeframe, zone, macdV: currentMacdV, histogram, buffer, price },
+      { symbol, timeframe, zone, macdV: currentMacdV, histogram, buffer: bufferValue, price },
       'Alert triggered: reversal signal'
     );
 
     const timeframes = await this.gatherMACDVTimeframes(symbol);
     const bias = this.calculateBias(timeframes);
+
+    // Generate chart (non-blocking with fallback)
+    const alertMarker: AlertMarker = {
+      barIndex: -1, // Last bar
+      type: zone,
+      label: `reversal_${zone}`,
+      value: currentMacdV,
+    };
+
+    const chartBuffer = await this.generateAlertChart(symbol, timeframe, alertMarker);
 
     // Send Discord notification
     let notificationSent = false;
@@ -415,10 +498,11 @@ export class AlertEvaluationService {
         zone,
         currentMacdV,
         histogram,
-        buffer,
+        bufferValue,
         timeframes,
         bias,
-        price
+        price,
+        chartBuffer ?? undefined
       );
       notificationSent = true;
     } catch (error) {
@@ -443,11 +527,12 @@ export class AlertEvaluationService {
         details: {
           zone,
           histogram,
-          buffer,
+          buffer: bufferValue,
           bufferPct,
           signal: indicator.value['signal'],
           timeframes,
           bias,
+          chartGenerated: chartBuffer !== null,
         },
         notificationSent,
         notificationError,
