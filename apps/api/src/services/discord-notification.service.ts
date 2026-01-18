@@ -217,6 +217,96 @@ export class DiscordNotificationService {
   }
 
   /**
+   * Send a MACD-V level crossing alert
+   */
+  async sendMACDVLevelAlert(
+    symbol: string,
+    timeframe: string,
+    level: number,
+    direction: 'up' | 'down',
+    currentMacdV: number,
+    timeframes: MACDVTimeframeData[],
+    bias: string,
+    price: number
+  ): Promise<void> {
+    const zone = level > 0 ? 'overbought' : 'oversold';
+    const title = `${symbol}: MACD-V crossed ${direction === 'up' ? 'above' : 'below'} ${level} (${timeframe})`;
+
+    const description = [
+      `Entering ${zone} territory`,
+      `MACD-V: ${currentMacdV >= 0 ? '+' : ''}${currentMacdV.toFixed(1)}`,
+      '```',
+      this.formatTimeframeLines(timeframes),
+      '```',
+      `**Bias: ${bias}**`,
+    ].join('\n');
+
+    await this.sendAlert({
+      title,
+      description,
+      type: 'indicator_alert',
+      price,
+    });
+  }
+
+  /**
+   * Send a MACD-V reversal signal alert
+   */
+  async sendMACDVReversalAlert(
+    symbol: string,
+    timeframe: string,
+    zone: 'oversold' | 'overbought',
+    currentMacdV: number,
+    histogram: number,
+    buffer: number,
+    timeframes: MACDVTimeframeData[],
+    bias: string,
+    price: number
+  ): Promise<void> {
+    const direction = zone === 'oversold' ? 'up' : 'down';
+    const title = `${symbol}: Potential reversal ${direction} from ${zone} (${timeframe})`;
+
+    const description = [
+      `Signal line crossover confirmed`,
+      `MACD-V: ${currentMacdV >= 0 ? '+' : ''}${currentMacdV.toFixed(1)} | Histogram: ${histogram >= 0 ? '+' : ''}${histogram.toFixed(1)} | Buffer: ${buffer.toFixed(1)}`,
+      '```',
+      this.formatTimeframeLines(timeframes),
+      '```',
+      `**Bias: ${bias}**`,
+    ].join('\n');
+
+    await this.sendAlert({
+      title,
+      description,
+      type: 'indicator_alert',
+      price,
+    });
+  }
+
+  /**
+   * Format timeframe data as compact lines for Discord display
+   */
+  private formatTimeframeLines(timeframes: MACDVTimeframeData[]): string {
+    const formatTf = (tf: MACDVTimeframeData | undefined): string => {
+      if (!tf || tf.macdV === null) return 'N/A';
+      return tf.macdV >= 0 ? `+${tf.macdV.toFixed(0)}` : tf.macdV.toFixed(0);
+    };
+
+    const tf1m = timeframes.find(t => t.timeframe === '1m');
+    const tf5m = timeframes.find(t => t.timeframe === '5m');
+    const tf15m = timeframes.find(t => t.timeframe === '15m');
+    const tf1h = timeframes.find(t => t.timeframe === '1h');
+    const tf4h = timeframes.find(t => t.timeframe === '4h');
+    const tf1d = timeframes.find(t => t.timeframe === '1d');
+
+    const line1 = `1m: ${formatTf(tf1m)} | 5m: ${formatTf(tf5m)}`;
+    const line2 = `15m: ${formatTf(tf15m)} | 1h: ${formatTf(tf1h)}`;
+    const line3 = `4h: ${formatTf(tf4h)} | 1d: ${formatTf(tf1d)}`;
+
+    return [line1, line2, line3].join('\n');
+  }
+
+  /**
    * Send a price cross alert
    */
   async sendPriceCrossAlert(

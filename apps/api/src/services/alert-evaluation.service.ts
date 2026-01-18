@@ -3,15 +3,18 @@ import { getRedisClient, tickerChannel, indicatorChannel, IndicatorCacheStrategy
 import { getDbClient, alertHistory } from '@livermore/database';
 import { logger } from '@livermore/utils';
 import type { Ticker, Timeframe } from '@livermore/schemas';
-import type { MACDVStage } from '@livermore/indicators';
 import { getDiscordService, type MACDVTimeframeData } from './discord-notification.service';
 
 /**
  * Alert Evaluation Service
  *
- * Monitors MACD-V stage transitions and triggers alerts when stages change.
- * Uses hardcoded stage classification rules from @livermore/indicators.
- * No database configuration - rules are built into the indicator library.
+ * Monitors MACD-V levels and triggers alerts based on:
+ * 1. Level crossings at ±150, ±200, ±250, etc.
+ * 2. Reversal signals (signal line crossovers) when in extreme territory
+ *
+ * Uses asymmetric buffer percentages:
+ * - Oversold reversals: 5% buffer (bottoms form gradually)
+ * - Overbought reversals: 3% buffer (tops can collapse fast)
  */
 export class AlertEvaluationService {
   private db = getDbClient();
@@ -20,11 +23,18 @@ export class AlertEvaluationService {
   private discordService = getDiscordService();
   private indicatorCache: IndicatorCacheStrategy;
 
-  // Track previous stages for transition detection (key: "symbol:timeframe")
-  private previousStages: Map<string, MACDVStage> = new Map();
+  // Track previous MACD-V values for level crossing detection (key: "symbol:timeframe")
+  private previousMacdV: Map<string, number> = new Map();
 
-  // Cooldown tracking to prevent alert spam (key: "symbol:timeframe:stage")
-  private stageTransitionCooldown: Map<string, number> = new Map();
+  // Track alerted levels with timestamps for cooldown (key: "symbol:timeframe:level")
+  private alertedLevels: Map<string, number> = new Map();
+
+  // Track reversal alert timestamps for cooldown (key: "symbol:timeframe:reversal")
+  private reversalAlertTimestamps: Map<string, number> = new Map();
+
+  // Track if we've alerted a reversal for current extreme move (key: "symbol:timeframe")
+  // Reset when entering a new extreme level
+  private inReversalState: Map<string, boolean> = new Map();
 
   // Current prices from ticker updates
   private currentPrices: Map<string, number> = new Map();
@@ -35,6 +45,14 @@ export class AlertEvaluationService {
 
   // Cooldown period in milliseconds (5 minutes)
   private readonly COOLDOWN_MS = 300000;
+
+  // Extreme level thresholds
+  private readonly OVERSOLD_LEVELS = [-150, -200, -250, -300, -350, -400];
+  private readonly OVERBOUGHT_LEVELS = [150, 200, 250, 300, 350, 400];
+
+  // Buffer percentages for reversal signals
+  private readonly OVERSOLD_BUFFER_PCT = 0.05;   // 5%
+  private readonly OVERBOUGHT_BUFFER_PCT = 0.03; // 3%
 
   // Supported symbols and timeframes
   private symbols: string[] = [];
@@ -82,8 +100,10 @@ export class AlertEvaluationService {
     }
 
     // Clear tracking maps
-    this.previousStages.clear();
-    this.stageTransitionCooldown.clear();
+    this.previousMacdV.clear();
+    this.alertedLevels.clear();
+    this.reversalAlertTimestamps.clear();
+    this.inReversalState.clear();
     this.currentPrices.clear();
   }
 
@@ -96,7 +116,6 @@ export class AlertEvaluationService {
     const channels: string[] = [];
 
     // Subscribe to ticker channels for all symbols (for price tracking)
-    // Note: Using exchange_id=1 for now; tickers are user-scoped in current cache design
     for (const symbol of this.symbols) {
       channels.push(tickerChannel(1, this.TEST_EXCHANGE_ID, symbol));
     }
@@ -140,7 +159,7 @@ export class AlertEvaluationService {
   }
 
   /**
-   * Handle ticker update - just track the price
+   * Handle ticker update - track the price
    */
   private async handleTickerUpdate(ticker: Ticker): Promise<void> {
     const { symbol, price } = ticker;
@@ -148,63 +167,294 @@ export class AlertEvaluationService {
   }
 
   /**
-   * Handle indicator update - detect stage transitions
+   * Handle indicator update - check for level crossings and reversal signals
    */
   private async handleIndicatorUpdate(indicator: CachedIndicatorValue): Promise<void> {
     const { symbol, timeframe } = indicator;
     const key = `${symbol}:${timeframe}`;
 
-    // Get current stage from indicator params
-    const currentStage = indicator.params?.stage as MACDVStage | undefined;
+    const currentMacdV = indicator.value['macdV'] as number;
+    const histogram = indicator.value['histogram'] as number;
 
-    if (!currentStage || currentStage === 'unknown') {
+    // Skip invalid data
+    if (currentMacdV === undefined || currentMacdV === null || Number.isNaN(currentMacdV)) {
       return;
     }
 
-    // Get previous stage
-    const previousStage = this.previousStages.get(key);
+    const previousMacdV = this.previousMacdV.get(key);
+    this.previousMacdV.set(key, currentMacdV);
 
-    // Update tracking
-    this.previousStages.set(key, currentStage);
-
-    // Skip if no previous stage (first update after startup)
-    if (!previousStage) {
-      logger.debug({ symbol, timeframe, stage: currentStage }, 'Initial stage recorded');
+    // Skip first update (no previous value to compare)
+    if (previousMacdV === undefined) {
+      logger.debug({ symbol, timeframe, macdV: currentMacdV }, 'Initial MACD-V recorded');
       return;
     }
 
-    // Skip if stage hasn't changed
-    if (currentStage === previousStage) {
-      return;
-    }
-
-    // Check cooldown for this specific transition
-    const cooldownKey = `${key}:${currentStage}`;
-    const lastTriggered = this.stageTransitionCooldown.get(cooldownKey);
-    if (lastTriggered && Date.now() - lastTriggered < this.COOLDOWN_MS) {
-      logger.debug(
-        { symbol, timeframe, from: previousStage, to: currentStage },
-        'Stage transition in cooldown, skipping alert'
-      );
-      return;
-    }
-
-    // Stage changed! Trigger alert
-    logger.info(
-      { symbol, timeframe, from: previousStage, to: currentStage },
-      'Stage transition detected'
-    );
-
-    await this.triggerStageChangeAlert(
+    // Check level crossings
+    await this.checkLevelCrossings(
       symbol,
       timeframe as Timeframe,
-      previousStage,
-      currentStage,
+      previousMacdV,
+      currentMacdV,
+      histogram,
       indicator
     );
 
-    // Set cooldown
-    this.stageTransitionCooldown.set(cooldownKey, Date.now());
+    // Check reversal signals
+    await this.checkReversalSignals(
+      symbol,
+      timeframe as Timeframe,
+      currentMacdV,
+      histogram,
+      indicator
+    );
+  }
+
+  /**
+   * Check for level crossings at extreme thresholds
+   */
+  private async checkLevelCrossings(
+    symbol: string,
+    timeframe: Timeframe,
+    previousMacdV: number,
+    currentMacdV: number,
+    histogram: number,
+    indicator: CachedIndicatorValue
+  ): Promise<void> {
+    const key = `${symbol}:${timeframe}`;
+
+    // Check oversold level crossings (crossing DOWN through negative levels)
+    for (const level of this.OVERSOLD_LEVELS) {
+      if (previousMacdV >= level && currentMacdV < level) {
+        const cooldownKey = `${key}:${level}`;
+        if (!this.isInCooldown(cooldownKey)) {
+          await this.triggerLevelAlert(symbol, timeframe, level, 'down', currentMacdV, histogram, indicator);
+          this.alertedLevels.set(cooldownKey, Date.now());
+          // Reset reversal state when entering new extreme level
+          this.inReversalState.set(key, false);
+        }
+      }
+    }
+
+    // Check overbought level crossings (crossing UP through positive levels)
+    for (const level of this.OVERBOUGHT_LEVELS) {
+      if (previousMacdV <= level && currentMacdV > level) {
+        const cooldownKey = `${key}:${level}`;
+        if (!this.isInCooldown(cooldownKey)) {
+          await this.triggerLevelAlert(symbol, timeframe, level, 'up', currentMacdV, histogram, indicator);
+          this.alertedLevels.set(cooldownKey, Date.now());
+          // Reset reversal state when entering new extreme level
+          this.inReversalState.set(key, false);
+        }
+      }
+    }
+  }
+
+  /**
+   * Check for reversal signals in extreme territory
+   */
+  private async checkReversalSignals(
+    symbol: string,
+    timeframe: Timeframe,
+    currentMacdV: number,
+    histogram: number,
+    indicator: CachedIndicatorValue
+  ): Promise<void> {
+    const key = `${symbol}:${timeframe}`;
+
+    // Skip if histogram is invalid
+    if (histogram === undefined || histogram === null || Number.isNaN(histogram)) {
+      return;
+    }
+
+    // Already alerted reversal for this extreme move?
+    if (this.inReversalState.get(key)) {
+      return;
+    }
+
+    // Check cooldown
+    const cooldownKey = `${key}:reversal`;
+    if (this.isInCooldown(cooldownKey)) {
+      return;
+    }
+
+    // Reversal from oversold (MACD-V < -150)
+    if (currentMacdV < -150) {
+      const buffer = Math.abs(currentMacdV) * this.OVERSOLD_BUFFER_PCT;
+      if (histogram > buffer) {
+        await this.triggerReversalAlert(symbol, timeframe, 'oversold', currentMacdV, histogram, buffer, indicator);
+        this.reversalAlertTimestamps.set(cooldownKey, Date.now());
+        this.inReversalState.set(key, true);
+      }
+    }
+
+    // Reversal from overbought (MACD-V > +150)
+    if (currentMacdV > 150) {
+      const buffer = Math.abs(currentMacdV) * this.OVERBOUGHT_BUFFER_PCT;
+      if (histogram < -buffer) {
+        await this.triggerReversalAlert(symbol, timeframe, 'overbought', currentMacdV, histogram, buffer, indicator);
+        this.reversalAlertTimestamps.set(cooldownKey, Date.now());
+        this.inReversalState.set(key, true);
+      }
+    }
+  }
+
+  /**
+   * Check if a cooldown key is still in cooldown period
+   */
+  private isInCooldown(key: string): boolean {
+    const lastTriggered = this.alertedLevels.get(key) ?? this.reversalAlertTimestamps.get(key);
+    if (lastTriggered === undefined) return false;
+    return Date.now() - lastTriggered < this.COOLDOWN_MS;
+  }
+
+  /**
+   * Trigger a level crossing alert
+   */
+  private async triggerLevelAlert(
+    symbol: string,
+    timeframe: Timeframe,
+    level: number,
+    direction: 'up' | 'down',
+    currentMacdV: number,
+    histogram: number,
+    indicator: CachedIndicatorValue
+  ): Promise<void> {
+    const price = this.currentPrices.get(symbol) || 0;
+
+    logger.info(
+      { symbol, timeframe, level, direction, macdV: currentMacdV, price },
+      'Alert triggered: level crossing'
+    );
+
+    const timeframes = await this.gatherMACDVTimeframes(symbol);
+    const bias = this.calculateBias(timeframes);
+
+    // Send Discord notification
+    let notificationSent = false;
+    let notificationError: string | null = null;
+
+    try {
+      await this.discordService.sendMACDVLevelAlert(
+        symbol,
+        timeframe,
+        level,
+        direction,
+        currentMacdV,
+        timeframes,
+        bias,
+        price
+      );
+      notificationSent = true;
+    } catch (error) {
+      notificationError = (error as Error).message;
+      logger.error({ error, symbol, timeframe }, 'Failed to send Discord notification');
+    }
+
+    // Record to database
+    const now = new Date();
+    try {
+      await this.db.insert(alertHistory).values({
+        exchangeId: this.TEST_EXCHANGE_ID,
+        symbol,
+        timeframe,
+        alertType: 'macdv',
+        triggeredAtEpoch: now.getTime(),
+        triggeredAt: now,
+        price: price.toString(),
+        triggerValue: currentMacdV.toString(),
+        triggerLabel: `level_${level}`,
+        previousLabel: null,
+        details: {
+          level,
+          direction,
+          histogram,
+          signal: indicator.value['signal'],
+          timeframes,
+          bias,
+        },
+        notificationSent,
+        notificationError,
+      });
+    } catch (dbError) {
+      logger.error({ error: dbError, symbol, timeframe }, 'Failed to record alert to database');
+    }
+  }
+
+  /**
+   * Trigger a reversal signal alert
+   */
+  private async triggerReversalAlert(
+    symbol: string,
+    timeframe: Timeframe,
+    zone: 'oversold' | 'overbought',
+    currentMacdV: number,
+    histogram: number,
+    buffer: number,
+    indicator: CachedIndicatorValue
+  ): Promise<void> {
+    const price = this.currentPrices.get(symbol) || 0;
+    const bufferPct = zone === 'oversold' ? this.OVERSOLD_BUFFER_PCT : this.OVERBOUGHT_BUFFER_PCT;
+
+    logger.info(
+      { symbol, timeframe, zone, macdV: currentMacdV, histogram, buffer, price },
+      'Alert triggered: reversal signal'
+    );
+
+    const timeframes = await this.gatherMACDVTimeframes(symbol);
+    const bias = this.calculateBias(timeframes);
+
+    // Send Discord notification
+    let notificationSent = false;
+    let notificationError: string | null = null;
+
+    try {
+      await this.discordService.sendMACDVReversalAlert(
+        symbol,
+        timeframe,
+        zone,
+        currentMacdV,
+        histogram,
+        buffer,
+        timeframes,
+        bias,
+        price
+      );
+      notificationSent = true;
+    } catch (error) {
+      notificationError = (error as Error).message;
+      logger.error({ error, symbol, timeframe }, 'Failed to send Discord notification');
+    }
+
+    // Record to database
+    const now = new Date();
+    try {
+      await this.db.insert(alertHistory).values({
+        exchangeId: this.TEST_EXCHANGE_ID,
+        symbol,
+        timeframe,
+        alertType: 'macdv',
+        triggeredAtEpoch: now.getTime(),
+        triggeredAt: now,
+        price: price.toString(),
+        triggerValue: currentMacdV.toString(),
+        triggerLabel: `reversal_${zone}`,
+        previousLabel: null,
+        details: {
+          zone,
+          histogram,
+          buffer,
+          bufferPct,
+          signal: indicator.value['signal'],
+          timeframes,
+          bias,
+        },
+        notificationSent,
+        notificationError,
+      });
+    } catch (dbError) {
+      logger.error({ error: dbError, symbol, timeframe }, 'Failed to record alert to database');
+    }
   }
 
   /**
@@ -276,76 +526,6 @@ export class AlertEvaluationService {
     if (bullishScore > bearishScore * 1.5) return 'Bullish';
     if (bearishScore > bullishScore * 1.5) return 'Bearish';
     return 'Neutral';
-  }
-
-  /**
-   * Trigger a stage change alert
-   */
-  private async triggerStageChangeAlert(
-    symbol: string,
-    timeframe: Timeframe,
-    previousStage: MACDVStage,
-    currentStage: MACDVStage,
-    indicator: CachedIndicatorValue
-  ): Promise<void> {
-    const price = this.currentPrices.get(symbol) || 0;
-    const macdVValue = indicator.value['macdV'] as number;
-
-    logger.info(
-      { symbol, timeframe, from: previousStage, to: currentStage, price, macdV: macdVValue },
-      'Alert triggered: stage change'
-    );
-
-    // Gather all timeframe data for context (fetches from Redis cache)
-    const timeframes = await this.gatherMACDVTimeframes(symbol);
-    const bias = this.calculateBias(timeframes);
-
-    // Send Discord notification
-    let notificationSent = false;
-    let notificationError: string | null = null;
-
-    try {
-      await this.discordService.sendMACDVAlert(
-        symbol,
-        timeframe,
-        previousStage,
-        currentStage,
-        timeframes,
-        bias,
-        price
-      );
-      notificationSent = true;
-    } catch (error) {
-      notificationError = (error as Error).message;
-      logger.error({ error, symbol, timeframe }, 'Failed to send Discord notification');
-    }
-
-    // Record to alert_history table
-    const now = new Date();
-    try {
-      await this.db.insert(alertHistory).values({
-        exchangeId: this.TEST_EXCHANGE_ID,
-        symbol,
-        timeframe,
-        alertType: 'macdv',
-        triggeredAtEpoch: now.getTime(),
-        triggeredAt: now,
-        price: price.toString(),
-        triggerValue: macdVValue?.toString() || null,
-        triggerLabel: currentStage,
-        previousLabel: previousStage,
-        details: {
-          timeframes,
-          bias,
-          histogram: indicator.value['histogram'],
-          signal: indicator.value['signal'],
-        },
-        notificationSent,
-        notificationError,
-      });
-    } catch (dbError) {
-      logger.error({ error: dbError, symbol, timeframe }, 'Failed to record alert to database');
-    }
   }
 
   /**
