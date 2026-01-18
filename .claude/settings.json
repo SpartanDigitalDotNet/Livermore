@@ -1,6 +1,12 @@
 {
   "enabledPlugins": {
     "frontend-design@claude-plugins-official": true,
-    "crypto-signal-generator@claude-code-plugins-plus": true
+    "crypto-signal-generator@claude-code-plugins-plus": true,
+    "full-stack-orchestration@claude-code-workflows": true,
+    "code-review-ai@claude-code-workflows": true,
+    "kubernetes-operations@claude-code-workflows": true,
+    "backend-development@claude-code-workflows": true,
+    "javascript-typescript@claude-code-workflows": true,
+    "python-development@claude-code-workflows": true
   }
 }

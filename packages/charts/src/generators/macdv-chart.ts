@@ -60,6 +60,7 @@ export function generateMacdVChart(options: ChartGenerationOptions): ChartResult
     timeframe,
     candles,
     alertMarkers = [],
+    displayBars,
     width = 800,
     height = 500,
   } = options;
@@ -79,16 +80,29 @@ export function generateMacdVChart(options: ChartGenerationOptions): ChartResult
     isSynthetic: (c as Candle & { isSynthetic?: boolean }).isSynthetic ?? false,
   }));
 
-  // Calculate MACD-V using the indicators package
-  const indicators = macdV(ohlcBars);
+  // Calculate MACD-V using the indicators package (on ALL candles for warmup)
+  const fullIndicators = macdV(ohlcBars);
 
-  if (!indicators.seeded) {
+  if (!fullIndicators.seeded) {
     throw new Error('MACD-V not seeded: insufficient trading activity');
   }
 
-  // Calculate EMA(9) for price chart
-  const closes = candles.map((c) => c.close);
-  const ema9 = calculateEMA(closes, 9);
+  // Calculate EMA(9) for price chart (on ALL candles for warmup)
+  const fullCloses = candles.map((c) => c.close);
+  const fullEma9 = calculateEMA(fullCloses, 9);
+
+  // Determine how many bars to display (slice from end)
+  const barsToShow = displayBars && displayBars < candles.length ? displayBars : candles.length;
+  const sliceStart = candles.length - barsToShow;
+
+  // Slice all data arrays to show only the display portion
+  const displayCandles = candles.slice(sliceStart);
+  const ema9 = fullEma9.slice(sliceStart);
+  const indicators = {
+    macdV: fullIndicators.macdV.slice(sliceStart),
+    signal: fullIndicators.signal.slice(sliceStart),
+    histogram: fullIndicators.histogram.slice(sliceStart),
+  };
 
   // Create canvas and initialize ECharts
   const canvas = createCanvas(width, height);
@@ -96,11 +110,23 @@ export function generateMacdVChart(options: ChartGenerationOptions): ChartResult
   const chart = echarts.init(canvas as any);
 
   // Format time labels
-  const times = candles.map((c) => formatTime(c.timestamp));
-  const prices = candles.map((c) => c.close);
+  const times = displayCandles.map((c) => formatTime(c.timestamp));
+  const prices = displayCandles.map((c) => c.close);
 
   // Candlestick data format: [open, close, low, high]
-  const candlestickData = candles.map((c) => [c.open, c.close, c.low, c.high]);
+  const candlestickData = displayCandles.map((c) => [c.open, c.close, c.low, c.high]);
+
+  // Volume data colored by candle direction (green up, red down)
+  const volumeData = displayCandles.map((c) => ({
+    value: c.volume,
+    itemStyle: {
+      color: c.close >= c.open ? CANDLE_COLORS.bullish : CANDLE_COLORS.bearish,
+      opacity: 0.5,
+    },
+  }));
+
+  // Calculate max volume for y-axis scaling (show volume in bottom ~25% of price panel)
+  const maxVolume = Math.max(...displayCandles.map((c) => c.volume));
 
   // Histogram bars colored by magnitude
   const histogramData = indicators.histogram.map((h) => ({
@@ -173,6 +199,7 @@ export function generateMacdVChart(options: ChartGenerationOptions): ChartResult
     ],
 
     yAxis: [
+      // Price y-axis (index 0)
       {
         type: 'value',
         gridIndex: 0,
@@ -185,12 +212,21 @@ export function generateMacdVChart(options: ChartGenerationOptions): ChartResult
           formatter: formatPrice,
         },
       },
+      // MACD-V y-axis (index 1)
       {
         type: 'value',
         gridIndex: 1,
         splitLine: { lineStyle: { color: DARK_THEME.grid, type: 'dashed' } },
         axisLine: { lineStyle: { color: DARK_THEME.axisLine } },
         axisLabel: { color: DARK_THEME.textSecondary, fontSize: 9 },
+      },
+      // Volume y-axis (index 2) - scaled to show in bottom 25% of price panel
+      {
+        type: 'value',
+        gridIndex: 0,
+        show: false, // Hide axis labels for volume
+        max: maxVolume * 4, // Scale so max volume is 25% of panel height
+        min: 0,
       },
     ],
 
@@ -231,6 +267,17 @@ export function generateMacdVChart(options: ChartGenerationOptions): ChartResult
         symbol: 'none',
         lineStyle: { color: LINE_COLORS.ema9, width: 1.5 },
         z: 2,
+      },
+      // Volume bars (behind candlesticks)
+      {
+        name: 'Volume',
+        type: 'bar',
+        xAxisIndex: 0,
+        yAxisIndex: 2, // Use volume y-axis
+        data: volumeData,
+        barWidth: '60%',
+        z: 0, // Behind everything
+        silent: true, // Non-interactive
       },
       // Histogram bars
       {
@@ -322,8 +369,8 @@ export function generateMacdVChart(options: ChartGenerationOptions): ChartResult
     const overboughtMarkers: Array<{ value: [number, number]; itemStyle: { color: string; borderColor: string; borderWidth: number } }> = [];
 
     for (const marker of alertMarkers) {
-      // Handle -1 as "last bar"
-      const barIndex = marker.barIndex === -1 ? candles.length - 1 : marker.barIndex;
+      // Handle -1 as "last bar" (in the display array)
+      const barIndex = marker.barIndex === -1 ? displayCandles.length - 1 : marker.barIndex;
 
       if (barIndex >= 0 && barIndex < indicators.macdV.length) {
         const alertValue = indicators.macdV[barIndex];

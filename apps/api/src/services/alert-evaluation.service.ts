@@ -61,7 +61,8 @@ export class AlertEvaluationService {
   private timeframes: Timeframe[] = [];
 
   // Chart generation settings
-  private readonly CHART_BARS = 25;
+  private readonly CHART_DISPLAY_BARS = 25;
+  private readonly CHART_WARMUP_BARS = 35; // 26 for ATR + 9 for signal
   private readonly CHART_TIMEOUT_MS = 3000;
 
   constructor() {
@@ -207,10 +208,11 @@ export class AlertEvaluationService {
       indicator
     );
 
-    // Check reversal signals
+    // Check reversal signals (only if we were already in extreme territory)
     await this.checkReversalSignals(
       symbol,
       timeframe as Timeframe,
+      previousMacdV,
       currentMacdV,
       histogram,
       indicator
@@ -231,38 +233,53 @@ export class AlertEvaluationService {
     const key = `${symbol}:${timeframe}`;
 
     // Check oversold level crossings (crossing DOWN through negative levels)
+    // Levels are ordered [-150, -200, -250, ...] - find the deepest level crossed
+    let deepestOversoldCrossed: number | null = null;
     for (const level of this.OVERSOLD_LEVELS) {
       if (previousMacdV >= level && currentMacdV < level) {
-        const cooldownKey = `${key}:${level}`;
-        if (!this.isInCooldown(cooldownKey)) {
-          await this.triggerLevelAlert(symbol, timeframe, level, 'down', currentMacdV, histogram, indicator);
-          this.alertedLevels.set(cooldownKey, Date.now());
-          // Reset reversal state when entering new extreme level
-          this.inReversalState.set(key, false);
-        }
+        deepestOversoldCrossed = level; // Keep going to find deepest
+      }
+    }
+    if (deepestOversoldCrossed !== null) {
+      const cooldownKey = `${key}:${deepestOversoldCrossed}`;
+      if (!this.isInCooldown(cooldownKey)) {
+        // Set guards BEFORE async call to prevent race condition with rapid messages
+        this.alertedLevels.set(cooldownKey, Date.now());
+        // Reset reversal state when entering new extreme level
+        this.inReversalState.set(key, false);
+        await this.triggerLevelAlert(symbol, timeframe, deepestOversoldCrossed, 'down', currentMacdV, histogram, indicator);
       }
     }
 
     // Check overbought level crossings (crossing UP through positive levels)
+    // Levels are ordered [150, 200, 250, ...] - find the highest level crossed
+    let highestOverboughtCrossed: number | null = null;
     for (const level of this.OVERBOUGHT_LEVELS) {
       if (previousMacdV <= level && currentMacdV > level) {
-        const cooldownKey = `${key}:${level}`;
-        if (!this.isInCooldown(cooldownKey)) {
-          await this.triggerLevelAlert(symbol, timeframe, level, 'up', currentMacdV, histogram, indicator);
-          this.alertedLevels.set(cooldownKey, Date.now());
-          // Reset reversal state when entering new extreme level
-          this.inReversalState.set(key, false);
-        }
+        highestOverboughtCrossed = level; // Keep going to find highest
+      }
+    }
+    if (highestOverboughtCrossed !== null) {
+      const cooldownKey = `${key}:${highestOverboughtCrossed}`;
+      if (!this.isInCooldown(cooldownKey)) {
+        // Set guards BEFORE async call to prevent race condition with rapid messages
+        this.alertedLevels.set(cooldownKey, Date.now());
+        // Reset reversal state when entering new extreme level
+        this.inReversalState.set(key, false);
+        await this.triggerLevelAlert(symbol, timeframe, highestOverboughtCrossed, 'up', currentMacdV, histogram, indicator);
       }
     }
   }
 
   /**
    * Check for reversal signals in extreme territory
+   * Only triggers if we were ALREADY in extreme territory on the previous tick
+   * (prevents double alert when crossing level and reversal at same time)
    */
   private async checkReversalSignals(
     symbol: string,
     timeframe: Timeframe,
+    previousMacdV: number,
     currentMacdV: number,
     histogram: number,
     indicator: CachedIndicatorValue
@@ -285,23 +302,27 @@ export class AlertEvaluationService {
       return;
     }
 
-    // Reversal from oversold (MACD-V < -150)
-    if (currentMacdV < -150) {
+    // Reversal from oversold (both previous and current MACD-V must be < -150)
+    // This prevents firing when we just crossed into oversold territory
+    if (currentMacdV < -150 && previousMacdV < -150) {
       const buffer = Math.abs(currentMacdV) * this.OVERSOLD_BUFFER_PCT;
       if (histogram > buffer) {
-        await this.triggerReversalAlert(symbol, timeframe, 'oversold', currentMacdV, histogram, buffer, indicator);
+        // Set guards BEFORE async call to prevent race condition with rapid messages
         this.reversalAlertTimestamps.set(cooldownKey, Date.now());
         this.inReversalState.set(key, true);
+        await this.triggerReversalAlert(symbol, timeframe, 'oversold', currentMacdV, histogram, buffer, indicator);
       }
     }
 
-    // Reversal from overbought (MACD-V > +150)
-    if (currentMacdV > 150) {
+    // Reversal from overbought (both previous and current MACD-V must be > +150)
+    // This prevents firing when we just crossed into overbought territory
+    if (currentMacdV > 150 && previousMacdV > 150) {
       const buffer = Math.abs(currentMacdV) * this.OVERBOUGHT_BUFFER_PCT;
       if (histogram < -buffer) {
-        await this.triggerReversalAlert(symbol, timeframe, 'overbought', currentMacdV, histogram, buffer, indicator);
+        // Set guards BEFORE async call to prevent race condition with rapid messages
         this.reversalAlertTimestamps.set(cooldownKey, Date.now());
         this.inReversalState.set(key, true);
+        await this.triggerReversalAlert(symbol, timeframe, 'overbought', currentMacdV, histogram, buffer, indicator);
       }
     }
   }
@@ -326,26 +347,29 @@ export class AlertEvaluationService {
   ): Promise<Buffer | null> {
     try {
       // Fetch candles (extra for MACD-V warmup period)
+      const totalBars = this.CHART_DISPLAY_BARS + this.CHART_WARMUP_BARS;
       const candles = await this.candleCache.getRecentCandles(
         this.TEST_USER_ID,
         this.TEST_EXCHANGE_ID,
         symbol,
         timeframe,
-        this.CHART_BARS + 35 // Extra for MACD-V warmup (26 ATR + 9 signal)
+        totalBars
       );
 
-      if (candles.length < this.CHART_BARS) {
+      if (candles.length < this.CHART_WARMUP_BARS) {
         logger.warn({ symbol, timeframe, count: candles.length }, 'Insufficient candles for chart');
         return null;
       }
 
       // Generate chart with timeout
+      // Use displayBars to show only the seeded portion (MACD-V fills entire chart)
       const chartPromise = Promise.resolve().then(() =>
         generateMacdVChart({
           symbol,
           timeframe,
           candles,
           alertMarkers: alertMarker ? [alertMarker] : [],
+          displayBars: this.CHART_DISPLAY_BARS,
         })
       );
 

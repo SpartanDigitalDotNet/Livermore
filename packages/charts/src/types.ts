@@ -22,10 +22,12 @@ export interface ChartGenerationOptions {
   symbol: string;
   /** Timeframe for the chart */
   timeframe: Timeframe;
-  /** Candle data (oldest first) */
+  /** Candle data (oldest first) - may include extra bars for warmup */
   candles: Candle[];
   /** Alert markers to display on chart */
   alertMarkers?: AlertMarker[];
+  /** Number of bars to display (slices from end after MACD-V warmup). If not set, displays all candles. */
+  displayBars?: number;
   /** Chart width in pixels (default: 800) */
   width?: number;
   /** Chart height in pixels (default: 500) */

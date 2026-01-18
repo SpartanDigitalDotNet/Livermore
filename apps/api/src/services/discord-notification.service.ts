@@ -231,6 +231,7 @@ export class DiscordNotificationService {
     price: number,
     chartBuffer?: Buffer
   ): Promise<void> {
+    logger.info({ symbol, timeframe, level, direction, hasChart: !!chartBuffer }, 'Discord: sendMACDVLevelAlert called');
     const zone = level > 0 ? 'overbought' : 'oversold';
     const title = `${symbol}: MACD-V crossed ${direction === 'up' ? 'above' : 'below'} ${level} (${timeframe})`;
 
@@ -284,6 +285,7 @@ export class DiscordNotificationService {
     price: number,
     chartBuffer?: Buffer
   ): Promise<void> {
+    logger.info({ symbol, timeframe, zone, hasChart: !!chartBuffer }, 'Discord: sendMACDVReversalAlert called');
     const direction = zone === 'oversold' ? 'up' : 'down';
     const title = `${symbol}: Potential reversal ${direction} from ${zone} (${timeframe})`;
 
@@ -384,8 +386,10 @@ export class DiscordNotificationService {
    * Send a raw payload to Discord
    */
   private async send(payload: any): Promise<void> {
+    const msgId = Math.random().toString(36).substring(7);
+    logger.debug({ msgId, queueLength: this.queue.length }, 'Discord send() called');
     return new Promise((resolve, reject) => {
-      this.queue.push({ payload, resolve, reject });
+      this.queue.push({ payload: { ...payload, __msgId: msgId }, resolve, reject });
       this.processQueue();
     });
   }
@@ -414,15 +418,21 @@ export class DiscordNotificationService {
       if (!item) break;
 
       try {
+        const msgId = item.payload.__msgId || 'unknown';
         // Check if payload has an image attachment
         if (item.payload.__image) {
           const { buffer, filename } = item.payload.__image;
+          logger.debug({ msgId, filename }, 'processQueue: sending with image');
           await this.sendToDiscordWithImage(item.payload, buffer, filename);
         } else {
+          logger.debug({ msgId }, 'processQueue: sending without image');
           await this.sendToDiscord(item.payload);
         }
+        logger.debug({ msgId }, 'processQueue: send complete');
         item.resolve();
       } catch (error) {
+        const msgId = item.payload.__msgId || 'unknown';
+        logger.error({ msgId, error }, 'processQueue: send failed');
         item.reject(error as Error);
       }
 
@@ -441,7 +451,8 @@ export class DiscordNotificationService {
       throw new Error('Discord webhook URL not configured');
     }
 
-    logger.debug({ payload }, 'Sending Discord notification');
+    const msgId = payload.__msgId || 'unknown';
+    logger.info({ msgId }, 'Discord: HTTP POST starting');
 
     const response = await fetch(this.webhookUrl, {
       method: 'POST',
@@ -481,7 +492,7 @@ export class DiscordNotificationService {
       throw new Error(`Discord webhook error: ${response.status}`);
     }
 
-    logger.debug('Discord notification sent successfully');
+    logger.info({ msgId }, 'Discord: HTTP POST completed successfully');
   }
 
   /**
@@ -489,9 +500,12 @@ export class DiscordNotificationService {
    * Uses multipart/form-data instead of JSON
    */
   private async sendWithImage(payload: any, imageBuffer: Buffer, filename: string): Promise<void> {
+    const msgId = Math.random().toString(36).substring(7);
+    const title = payload.embeds?.[0]?.title || 'unknown';
+    logger.info({ msgId, queueLength: this.queue.length, title }, 'Discord: sendWithImage queuing message');
     return new Promise((resolve, reject) => {
       this.queue.push({
-        payload: { __image: { buffer: imageBuffer, filename }, ...payload },
+        payload: { __image: { buffer: imageBuffer, filename }, __msgId: msgId, ...payload },
         resolve,
         reject,
       });
@@ -507,7 +521,8 @@ export class DiscordNotificationService {
       throw new Error('Discord webhook URL not configured');
     }
 
-    logger.debug({ filename, size: imageBuffer.length }, 'Sending Discord notification with image');
+    const msgId = payload.__msgId || 'unknown';
+    logger.info({ msgId, filename, size: imageBuffer.length }, 'Discord: HTTP POST with image starting');
 
     // Create FormData for multipart upload
     const formData = new FormData();
@@ -557,7 +572,7 @@ export class DiscordNotificationService {
       throw new Error(`Discord webhook error: ${response.status}`);
     }
 
-    logger.debug('Discord notification with image sent successfully');
+    logger.info({ msgId }, 'Discord: HTTP POST with image completed successfully');
   }
 
   /**
