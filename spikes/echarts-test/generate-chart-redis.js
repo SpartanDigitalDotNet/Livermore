@@ -8,6 +8,7 @@
 const echarts = require('echarts');
 const { createCanvas } = require('canvas');
 const Redis = require('ioredis');
+const { Pool } = require('pg');
 const fs = require('fs');
 
 // Hermes Color Zones
@@ -146,8 +147,69 @@ async function fetchCandles(redis, symbol, timeframe, count) {
   return results.map(json => JSON.parse(json));
 }
 
+// Fetch alerts from database for the given time range
+async function fetchAlerts(pool, symbol, timeframe, minTimestamp) {
+  const exchangeId = 1;
+
+  const query = `
+    SELECT
+      triggered_at_epoch,
+      trigger_label,
+      trigger_value
+    FROM alert_history
+    WHERE exchange_id = $1
+      AND symbol = $2
+      AND timeframe = $3
+      AND triggered_at_epoch >= $4
+    ORDER BY triggered_at_epoch ASC
+  `;
+
+  const result = await pool.query(query, [exchangeId, symbol, timeframe, minTimestamp]);
+  console.log(`Found ${result.rows.length} alerts in time range`);
+
+  return result.rows.map(row => ({
+    timestamp: parseInt(row.triggered_at_epoch),
+    triggerLabel: row.trigger_label,
+    triggerValue: parseFloat(row.trigger_value),
+  }));
+}
+
+// Map alerts to bar indices based on candle timestamps
+function mapAlertsToBarIndices(candles, alerts) {
+  const alertMarkers = [];
+
+  for (const alert of alerts) {
+    // Find the candle that contains this alert timestamp
+    for (let i = 0; i < candles.length; i++) {
+      const candle = candles[i];
+      const candleStart = candle.timestamp;
+      // Assume candle duration based on next candle or reasonable default
+      const candleEnd = i < candles.length - 1
+        ? candles[i + 1].timestamp
+        : candleStart + 60000; // Default 1 minute
+
+      if (alert.timestamp >= candleStart && alert.timestamp < candleEnd) {
+        // Determine alert type from trigger_label
+        const isOversold = alert.triggerLabel.includes('oversold') ||
+          alert.triggerLabel.match(/level_-\d+/);
+
+        alertMarkers.push({
+          barIndex: i,
+          type: isOversold ? 'oversold' : 'overbought',
+          label: alert.triggerLabel,
+          value: alert.triggerValue,
+        });
+        break;
+      }
+    }
+  }
+
+  return alertMarkers;
+}
+
 // Create the chart
-function createMacdVChart(candles, indicators, symbol, timeframe) {
+// alertMarkers: Array<{ barIndex: number, type: 'oversold' | 'overbought', label: string }> - optional alert markers
+function createMacdVChart(candles, indicators, symbol, timeframe, alertMarkers = []) {
   const canvas = createCanvas(800, 500);
   const chart = echarts.init(canvas);
 
@@ -159,6 +221,9 @@ function createMacdVChart(candles, indicators, symbol, timeframe) {
 
   const prices = candles.map(c => c.close);
   const { macdV, signal, histogram, ema9 } = indicators;
+
+  // Candlestick data format: [open, close, low, high]
+  const candlestickData = candles.map(c => [c.open, c.close, c.low, c.high]);
 
   // Histogram bars colored by magnitude
   const histogramData = histogram.map((h) => ({
@@ -188,12 +253,12 @@ function createMacdVChart(candles, indicators, symbol, timeframe) {
 
     legend: [
       {
-        data: ['Price', 'EMA(9)'],
+        data: ['Candles', 'Price', 'EMA(9)'],
         top: 25,
         left: 'center',
         textStyle: { color: DARK_THEME.textSecondary, fontSize: 10 },
         itemWidth: 15,
-        itemHeight: 2,
+        itemHeight: 10,
       },
       {
         data: ['MACD-V', 'Signal', 'Histogram'],
@@ -236,7 +301,17 @@ function createMacdVChart(candles, indicators, symbol, timeframe) {
         scale: true,
         splitLine: { lineStyle: { color: DARK_THEME.grid, type: 'dashed' } },
         axisLine: { lineStyle: { color: DARK_THEME.axisLine } },
-        axisLabel: { color: DARK_THEME.textSecondary, fontSize: 9, formatter: v => v.toFixed(0) },
+        axisLabel: {
+          color: DARK_THEME.textSecondary,
+          fontSize: 9,
+          formatter: v => {
+            // Smart decimal formatting based on price magnitude
+            if (v >= 1000) return v.toFixed(0);
+            if (v >= 1) return v.toFixed(2);
+            if (v >= 0.01) return v.toFixed(4);
+            return v.toFixed(6);
+          }
+        },
       },
       {
         type: 'value',
@@ -248,7 +323,22 @@ function createMacdVChart(candles, indicators, symbol, timeframe) {
     ],
 
     series: [
-      // Price line
+      // Candlesticks
+      {
+        name: 'Candles',
+        type: 'candlestick',
+        xAxisIndex: 0,
+        yAxisIndex: 0,
+        data: candlestickData,
+        itemStyle: {
+          color: '#2ECC71',        // Bullish (close > open) - lime
+          color0: '#E74C3C',       // Bearish (close < open) - red
+          borderColor: '#2ECC71',
+          borderColor0: '#E74C3C',
+        },
+        z: 1,
+      },
+      // Price line (close prices)
       {
         name: 'Price',
         type: 'line',
@@ -257,6 +347,7 @@ function createMacdVChart(candles, indicators, symbol, timeframe) {
         data: prices,
         symbol: 'none',
         lineStyle: { color: '#5cadff', width: 1.5 },
+        z: 2,
       },
       // EMA(9) line
       {
@@ -267,17 +358,18 @@ function createMacdVChart(candles, indicators, symbol, timeframe) {
         data: ema9,
         symbol: 'none',
         lineStyle: { color: '#ffaa00', width: 1.5 },
+        z: 2,
       },
-      // Histogram bars
+      // Histogram bars (very subtle, behind everything)
       {
         name: 'Histogram',
         type: 'bar',
         xAxisIndex: 1,
         yAxisIndex: 1,
         data: histogramData,
-        barWidth: '40%',
-        z: 1,
-        itemStyle: { opacity: 0.7 },
+        barWidth: '30%',
+        z: 0,
+        itemStyle: { opacity: 0.35 },
       },
       // Signal line
       {
@@ -344,6 +436,70 @@ function createMacdVChart(candles, indicators, symbol, timeframe) {
     ],
   };
 
+  // Add alert markers if provided
+  if (alertMarkers.length > 0) {
+    const oversoldMarkers = [];
+    const overboughtMarkers = [];
+
+    for (const marker of alertMarkers) {
+      if (marker.barIndex >= 0 && marker.barIndex < macdV.length) {
+        const alertValue = macdV[marker.barIndex];
+        const isOversold = marker.type === 'oversold';
+
+        // Position triangle above (overbought) or below (oversold) the MACD-V value
+        const offset = isOversold ? -25 : 25;
+        const markerY = alertValue + offset;
+
+        const markerData = {
+          value: [marker.barIndex, markerY],
+          itemStyle: {
+            color: isOversold ? HERMES_COLORS.lime : HERMES_COLORS.red,
+            borderColor: '#ffffff',
+            borderWidth: 1,
+          },
+        };
+
+        if (isOversold) {
+          oversoldMarkers.push(markerData);
+        } else {
+          overboughtMarkers.push(markerData);
+        }
+      }
+    }
+
+    // Add oversold markers (green triangles pointing up)
+    if (oversoldMarkers.length > 0) {
+      option.series.push({
+        name: 'Oversold Alert',
+        type: 'scatter',
+        xAxisIndex: 1,
+        yAxisIndex: 1,
+        data: oversoldMarkers,
+        symbol: 'triangle',
+        symbolSize: 18,
+        symbolRotate: 0,
+        z: 10,
+      });
+    }
+
+    // Add overbought markers (red triangles pointing down)
+    if (overboughtMarkers.length > 0) {
+      option.series.push({
+        name: 'Overbought Alert',
+        type: 'scatter',
+        xAxisIndex: 1,
+        yAxisIndex: 1,
+        data: overboughtMarkers,
+        symbol: 'triangle',
+        symbolSize: 18,
+        symbolRotate: 180,
+        z: 10,
+      });
+    }
+
+    console.log(`Added ${oversoldMarkers.length} oversold and ${overboughtMarkers.length} overbought markers`);
+  }
+
   chart.setOption(option);
   return chart;
 }
@@ -355,7 +511,7 @@ async function main() {
   const timeframe = args[1] || '1m';
   const bars = parseInt(args[2]) || 25;
 
-  console.log(`Generating chart for ${symbol} (${timeframe}, ${bars} bars)`);
+  console.log(`Generating chart for ${symbol} (${timeframe}, ${bars} bars})`);
 
   // Connect to Redis
   const redis = new Redis({
@@ -364,16 +520,27 @@ async function main() {
     password: process.env.REDIS_PASSWORD || undefined,
   });
 
-  try {
-    // Fetch candles
-    const candles = await fetchCandles(redis, symbol, timeframe, bars + 30); // Extra for EMA warmup
+  // Connect to PostgreSQL
+  // Build connection string from individual env vars (matching project convention)
+  const dbHost = process.env.DATABASE_HOST || 'localhost';
+  const dbPort = process.env.DATABASE_PORT || '5432';
+  const dbUser = process.env.DATABASE_LIVERMORE_USERNAME;
+  const dbPass = process.env.DATABASE_LIVERMORE_PASSWORD;
+  const dbName = process.env.LIVERMORE_DATABASE_NAME || 'livermore';
 
-    // Calculate indicators
+  const connectionString = `postgresql://${dbUser}:${dbPass}@${dbHost}:${dbPort}/${dbName}`;
+  const pool = new Pool({ connectionString });
+
+  try {
+    // Fetch candles (extra for EMA warmup)
+    const allCandles = await fetchCandles(redis, symbol, timeframe, bars + 30);
+
+    // Calculate indicators on all candles
     console.log('Calculating MACD-V...');
-    const indicators = calculateMACDV(candles);
+    const indicators = calculateMACDV(allCandles);
 
     // Use only the last N bars for display
-    const displayCandles = candles.slice(-bars);
+    const displayCandles = allCandles.slice(-bars);
     const displayIndicators = {
       macdV: indicators.macdV.slice(-bars),
       signal: indicators.signal.slice(-bars),
@@ -381,9 +548,23 @@ async function main() {
       ema9: indicators.ema9.slice(-bars),
     };
 
-    // Create chart
+    // Get the minimum timestamp from display candles for alert query
+    const minTimestamp = displayCandles[0].timestamp;
+    console.log(`Chart time range starts at: ${new Date(minTimestamp).toISOString()}`);
+
+    // Fetch alerts from database
+    console.log('Fetching alerts from database...');
+    const alerts = await fetchAlerts(pool, symbol, timeframe, minTimestamp);
+
+    // Map alerts to bar indices
+    const alertMarkers = mapAlertsToBarIndices(displayCandles, alerts);
+    if (alertMarkers.length > 0) {
+      console.log('Alert markers:', alertMarkers.map(m => `${m.label} at bar ${m.barIndex}`).join(', '));
+    }
+
+    // Create chart with alert markers
     console.log('Creating chart...');
-    const chart = createMacdVChart(displayCandles, displayIndicators, symbol, timeframe);
+    const chart = createMacdVChart(displayCandles, displayIndicators, symbol, timeframe, alertMarkers);
 
     // Export
     console.log('Exporting to PNG...');
@@ -397,6 +578,7 @@ async function main() {
     chart.dispose();
   } finally {
     redis.disconnect();
+    await pool.end();
   }
 }
 
