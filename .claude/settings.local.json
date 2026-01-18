@@ -32,7 +32,8 @@
       "Bash(npm run build:*)",
       "WebFetch(domain:forums.coinbasecloud.dev)",
       "Bash(ls -la \"C:\\\\Dev\\\\Perseus\\\\PERSEUS\\\\lib\"\" 2>/dev/null || echo \"lib directory not found \")",
-      "Bash(grep:*)"
+      "Bash(grep:*)",
+      "Bash(node generate-chart.js:*)"
     ]
   }
 }
