@@ -63,28 +63,28 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| DATA-01 | Phase ? | Pending |
-| DATA-02 | Phase ? | Pending |
-| DATA-03 | Phase ? | Pending |
-| SYMBOL-01 | Phase ? | Pending |
-| SYMBOL-02 | Phase ? | Pending |
-| SYMBOL-03 | Phase ? | Pending |
-| SYMBOL-04 | Phase ? | Pending |
-| SIDE-01 | Phase ? | Pending |
-| SIDE-02 | Phase ? | Pending |
-| MONTH-01 | Phase ? | Pending |
-| MONTH-02 | Phase ? | Pending |
-| MONTH-03 | Phase ? | Pending |
-| MONTH-04 | Phase ? | Pending |
-| OUT-01 | Phase ? | Pending |
-| OUT-02 | Phase ? | Pending |
-| OUT-03 | Phase ? | Pending |
+| DATA-01 | Phase 1 | Pending |
+| DATA-02 | Phase 1 | Pending |
+| DATA-03 | Phase 1 | Pending |
+| SYMBOL-01 | Phase 2 | Pending |
+| SYMBOL-02 | Phase 2 | Pending |
+| SYMBOL-03 | Phase 2 | Pending |
+| SYMBOL-04 | Phase 2 | Pending |
+| SIDE-01 | Phase 2 | Pending |
+| SIDE-02 | Phase 2 | Pending |
+| MONTH-01 | Phase 2 | Pending |
+| MONTH-02 | Phase 2 | Pending |
+| MONTH-03 | Phase 2 | Pending |
+| MONTH-04 | Phase 2 | Pending |
+| OUT-01 | Phase 3 | Pending |
+| OUT-02 | Phase 3 | Pending |
+| OUT-03 | Phase 3 | Pending |
 
 **Coverage:**
 - v1 requirements: 16 total
-- Mapped to phases: 0
-- Unmapped: 16 (awaiting roadmap)
+- Mapped to phases: 16
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-01-18*
-*Last updated: 2026-01-18 after initial definition*
+*Last updated: 2026-01-18 after roadmap creation*
