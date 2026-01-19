@@ -14,6 +14,11 @@ Three-phase spike to analyze Coinbase trading fees. Phase 1 retrieves all filled
 
 **Requirements:** DATA-01, DATA-02, DATA-03
 
+**Plans:** 1 plan
+
+Plans:
+- [ ] 01-01-PLAN.md — Add getFilledOrders() to client and create analyze-fees spike script
+
 **Success Criteria:**
 1. Running script retrieves all filled orders from Coinbase API (not just first page)
 2. Script displays current fee tier and 30-day volume from transaction_summary endpoint
@@ -56,7 +61,7 @@ Three-phase spike to analyze Coinbase trading fees. Phase 1 retrieves all filled
 
 | Phase | Status | Requirements | Completed |
 |-------|--------|--------------|-----------|
-| 1 - Data Retrieval | Not Started | 3 | 0/3 |
+| 1 - Data Retrieval | Planned | 3 | 0/3 |
 | 2 - Fee Analysis | Not Started | 10 | 0/10 |
 | 3 - Output Generation | Not Started | 3 | 0/3 |
 
