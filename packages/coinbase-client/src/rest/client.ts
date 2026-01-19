@@ -94,6 +94,18 @@ export interface CoinbaseOrder {
 }
 
 /**
+ * Options for filtering filled orders
+ */
+export interface FilledOrdersOptions {
+  /** Filter by trading pair (e.g., "BTC-USD") */
+  productId?: string;
+  /** RFC3339 timestamp - orders created after this date (e.g., new Date().toISOString()) */
+  startDate?: string;
+  /** RFC3339 timestamp - orders created before this date */
+  endDate?: string;
+}
+
+/**
  * Transaction summary with fee tier information from Coinbase
  */
 export interface CoinbaseTransactionSummary {
@@ -530,6 +542,60 @@ export class CoinbaseRestClient {
     } while (cursor);
 
     logger.debug({ count: allOrders.length, productId }, 'Fetched open orders from Coinbase');
+    return allOrders;
+  }
+
+  /**
+   * Get filled orders (completed orders with FILLED status)
+   * Returns all orders that have been fully executed
+   *
+   * Reference: https://docs.cdp.coinbase.com/api-reference/advanced-trade-api/rest-api/orders/list-orders
+   *
+   * @param options - Optional filters for product, date range
+   * @returns Array of filled orders
+   */
+  async getFilledOrders(options?: FilledOrdersOptions): Promise<CoinbaseOrder[]> {
+    const allOrders: CoinbaseOrder[] = [];
+    let cursor: string | undefined;
+
+    do {
+      const params = new URLSearchParams();
+      params.append('order_status', 'FILLED');
+      params.append('limit', '100');
+
+      if (options?.productId) {
+        params.append('product_id', options.productId);
+      }
+
+      if (options?.startDate) {
+        params.append('start_date', options.startDate);
+      }
+
+      if (options?.endDate) {
+        params.append('end_date', options.endDate);
+      }
+
+      if (cursor) {
+        params.append('cursor', cursor);
+      }
+
+      const path = `/api/v3/brokerage/orders/historical/batch?${params.toString()}`;
+
+      try {
+        const response = await this.request('GET', path);
+        const orders = response.orders || [];
+        allOrders.push(...orders);
+
+        // Check for more pages
+        cursor = response.has_next && response.cursor ? response.cursor : undefined;
+
+      } catch (error) {
+        logger.error({ error, options }, 'Failed to fetch filled orders from Coinbase');
+        throw error;
+      }
+    } while (cursor);
+
+    logger.debug({ count: allOrders.length }, 'Fetched filled orders from Coinbase');
     return allOrders;
   }
 
