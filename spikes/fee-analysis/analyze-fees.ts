@@ -10,6 +10,9 @@
  * Requires:
  *   - Coinbase_ApiKeyId and Coinbase_EcPrivateKeyPem env vars
  */
+import { writeFile, mkdir } from 'node:fs/promises';
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { CoinbaseRestClient, type CoinbaseOrder, type CoinbaseTransactionSummary } from '@livermore/coinbase-client';
 import {
   calculateSymbolFees,
@@ -400,6 +403,26 @@ ${generateMonthlyTable(data.monthlyFees)}
 `;
 }
 
+/**
+ * Save report to file in reports directory
+ */
+async function saveReport(content: string): Promise<string> {
+  // Get directory of current file (ESM compatible)
+  const __dirname = dirname(fileURLToPath(import.meta.url));
+  const reportDir = join(__dirname, 'reports');
+
+  // Create reports directory if needed
+  await mkdir(reportDir, { recursive: true });
+
+  // Generate timestamped filename
+  const date = new Date().toISOString().split('T')[0];
+  const filename = `fee-analysis-${date}.md`;
+  const filepath = join(reportDir, filename);
+
+  await writeFile(filepath, content, 'utf-8');
+  return filepath;
+}
+
 async function main() {
   console.log('=== Coinbase Fee Analysis ===\n');
 
@@ -463,7 +486,21 @@ async function main() {
     const monthlyFees = calculateMonthlyFees(orders);
     displayMonthlyFees(monthlyFees);
 
-    console.log('\nFee analysis complete.');
+    // Generate markdown report
+    console.log('\nGenerating markdown report...');
+    const reportContent = generateReport({
+      feeTier: summary,
+      symbolFees,
+      sideFees,
+      monthlyFees,
+      dateRange,
+      orderCount: orders.length,
+    });
+
+    const reportPath = await saveReport(reportContent);
+    console.log(`Report saved: ${reportPath}`);
+
+    console.log('\nFee analysis complete. Report saved.');
 
   } catch (error) {
     console.error('\nError fetching data:', error instanceof Error ? error.message : error);
