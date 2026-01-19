@@ -10,7 +10,15 @@
  * Requires:
  *   - Coinbase_ApiKeyId and Coinbase_EcPrivateKeyPem env vars
  */
-import { CoinbaseRestClient, type CoinbaseOrder } from '@livermore/coinbase-client';
+import { CoinbaseRestClient, type CoinbaseOrder, type CoinbaseTransactionSummary } from '@livermore/coinbase-client';
+import {
+  calculateSymbolFees,
+  calculateSideFees,
+  calculateMonthlyFees,
+  type SymbolFeeReport,
+  type SideFeeReport,
+  type MonthlyFeeReport,
+} from './calculations.js';
 
 // Read credentials from environment
 const apiKeyId = process.env.Coinbase_ApiKeyId;
@@ -75,6 +83,323 @@ function getDateRange(orders: CoinbaseOrder[]): { earliest: string; latest: stri
   return { earliest, latest };
 }
 
+/**
+ * Display symbol fee report as formatted table
+ */
+function displaySymbolFees(reports: SymbolFeeReport[]): void {
+  if (reports.length === 0) {
+    console.log('No symbol data to display.');
+    return;
+  }
+
+  // Header
+  console.log(
+    'Symbol'.padEnd(14) +
+    'Total Fees'.padStart(14) +
+    'Total Volume'.padStart(16) +
+    'Eff Rate'.padStart(10) +
+    'Avg Fee'.padStart(12) +
+    'Orders'.padStart(8)
+  );
+  console.log('-'.repeat(74));
+
+  // Data rows
+  for (const report of reports) {
+    console.log(
+      report.symbol.padEnd(14) +
+      formatCurrency(report.totalFees).padStart(14) +
+      formatCurrency(report.totalVolume).padStart(16) +
+      (report.effectiveFeeRate.toFixed(3) + '%').padStart(10) +
+      formatCurrency(report.averageFeePerTrade).padStart(12) +
+      report.orderCount.toString().padStart(8)
+    );
+  }
+
+  // Summary row
+  const totals = reports.reduce(
+    (acc, r) => ({
+      fees: acc.fees + r.totalFees,
+      volume: acc.volume + r.totalVolume,
+      orders: acc.orders + r.orderCount,
+    }),
+    { fees: 0, volume: 0, orders: 0 }
+  );
+  const overallRate = totals.volume > 0 ? (totals.fees / totals.volume) * 100 : 0;
+
+  console.log('-'.repeat(74));
+  console.log(
+    'TOTAL'.padEnd(14) +
+    formatCurrency(totals.fees).padStart(14) +
+    formatCurrency(totals.volume).padStart(16) +
+    (overallRate.toFixed(3) + '%').padStart(10) +
+    ''.padStart(12) +
+    totals.orders.toString().padStart(8)
+  );
+}
+
+/**
+ * Display side fee comparison as formatted table
+ */
+function displaySideFees(reports: SideFeeReport[]): void {
+  if (reports.length === 0) {
+    console.log('No side data to display.');
+    return;
+  }
+
+  // Header
+  console.log(
+    'Symbol'.padEnd(14) +
+    'Side'.padEnd(6) +
+    'Total Fees'.padStart(14) +
+    'Total Volume'.padStart(16) +
+    'Eff Rate'.padStart(10) +
+    'Orders'.padStart(8)
+  );
+  console.log('-'.repeat(68));
+
+  // Group by symbol for easier comparison
+  let currentSymbol = '';
+  for (const report of reports) {
+    if (report.symbol !== currentSymbol && currentSymbol !== '') {
+      console.log(''); // Blank line between symbols
+    }
+    currentSymbol = report.symbol;
+
+    console.log(
+      report.symbol.padEnd(14) +
+      report.side.padEnd(6) +
+      formatCurrency(report.totalFees).padStart(14) +
+      formatCurrency(report.totalVolume).padStart(16) +
+      (report.effectiveFeeRate.toFixed(3) + '%').padStart(10) +
+      report.orderCount.toString().padStart(8)
+    );
+  }
+}
+
+/**
+ * Display monthly fee breakdown as formatted table
+ */
+function displayMonthlyFees(reports: MonthlyFeeReport[]): void {
+  if (reports.length === 0) {
+    console.log('No monthly data to display.');
+    return;
+  }
+
+  // Header
+  console.log(
+    'Month'.padEnd(10) +
+    'Total Fees'.padStart(14) +
+    'Total Volume'.padStart(16) +
+    'Eff Rate'.padStart(10) +
+    'Orders'.padStart(8)
+  );
+  console.log('-'.repeat(58));
+
+  // Data rows
+  for (const report of reports) {
+    console.log(
+      report.yearMonth.padEnd(10) +
+      formatCurrency(report.totalFees).padStart(14) +
+      formatCurrency(report.totalVolume).padStart(16) +
+      (report.effectiveFeeRate.toFixed(3) + '%').padStart(10) +
+      report.orderCount.toString().padStart(8)
+    );
+  }
+
+  // Summary row
+  const totals = reports.reduce(
+    (acc, r) => ({
+      fees: acc.fees + r.totalFees,
+      volume: acc.volume + r.totalVolume,
+      orders: acc.orders + r.orderCount,
+    }),
+    { fees: 0, volume: 0, orders: 0 }
+  );
+  const overallRate = totals.volume > 0 ? (totals.fees / totals.volume) * 100 : 0;
+
+  console.log('-'.repeat(58));
+  console.log(
+    'TOTAL'.padEnd(10) +
+    formatCurrency(totals.fees).padStart(14) +
+    formatCurrency(totals.volume).padStart(16) +
+    (overallRate.toFixed(3) + '%').padStart(10) +
+    totals.orders.toString().padStart(8)
+  );
+}
+
+// ============================================================
+// Markdown Generation Functions
+// ============================================================
+
+/**
+ * Generate a markdown table from headers and rows
+ */
+function generateMarkdownTable(
+  headers: string[],
+  rows: string[][],
+  alignments?: ('left' | 'right')[]
+): string {
+  const lines: string[] = [];
+
+  // Header row
+  lines.push('| ' + headers.join(' | ') + ' |');
+
+  // Separator row with alignment
+  const separators = headers.map((_, i) => {
+    const align = alignments?.[i] || 'left';
+    return align === 'right' ? '---:' : '---';
+  });
+  lines.push('| ' + separators.join(' | ') + ' |');
+
+  // Data rows
+  for (const row of rows) {
+    lines.push('| ' + row.join(' | ') + ' |');
+  }
+
+  return lines.join('\n');
+}
+
+/**
+ * Generate markdown table for symbol fee report
+ */
+function generateSymbolTable(reports: SymbolFeeReport[]): string {
+  const headers = ['Symbol', 'Total Fees', 'Total Volume', 'Eff Rate', 'Avg Fee', 'Orders'];
+  const alignments: ('left' | 'right')[] = ['left', 'right', 'right', 'right', 'right', 'right'];
+
+  const rows: string[][] = reports.map(r => [
+    r.symbol,
+    formatCurrency(r.totalFees),
+    formatCurrency(r.totalVolume),
+    r.effectiveFeeRate.toFixed(3) + '%',
+    formatCurrency(r.averageFeePerTrade),
+    r.orderCount.toString(),
+  ]);
+
+  // Calculate totals row
+  const totals = reports.reduce(
+    (acc, r) => ({
+      fees: acc.fees + r.totalFees,
+      volume: acc.volume + r.totalVolume,
+      orders: acc.orders + r.orderCount,
+    }),
+    { fees: 0, volume: 0, orders: 0 }
+  );
+  const overallRate = totals.volume > 0 ? (totals.fees / totals.volume) * 100 : 0;
+
+  rows.push([
+    '**TOTAL**',
+    '**' + formatCurrency(totals.fees) + '**',
+    '**' + formatCurrency(totals.volume) + '**',
+    '**' + overallRate.toFixed(3) + '%**',
+    '',
+    '**' + totals.orders.toString() + '**',
+  ]);
+
+  return generateMarkdownTable(headers, rows, alignments);
+}
+
+/**
+ * Generate markdown table for side fee report
+ */
+function generateSideTable(reports: SideFeeReport[]): string {
+  const headers = ['Symbol', 'Side', 'Total Fees', 'Total Volume', 'Eff Rate', 'Orders'];
+  const alignments: ('left' | 'right')[] = ['left', 'left', 'right', 'right', 'right', 'right'];
+
+  const rows: string[][] = reports.map(r => [
+    r.symbol,
+    r.side,
+    formatCurrency(r.totalFees),
+    formatCurrency(r.totalVolume),
+    r.effectiveFeeRate.toFixed(3) + '%',
+    r.orderCount.toString(),
+  ]);
+
+  return generateMarkdownTable(headers, rows, alignments);
+}
+
+/**
+ * Generate markdown table for monthly fee report
+ */
+function generateMonthlyTable(reports: MonthlyFeeReport[]): string {
+  const headers = ['Month', 'Total Fees', 'Total Volume', 'Eff Rate', 'Orders'];
+  const alignments: ('left' | 'right')[] = ['left', 'right', 'right', 'right', 'right'];
+
+  const rows: string[][] = reports.map(r => [
+    r.yearMonth,
+    formatCurrency(r.totalFees),
+    formatCurrency(r.totalVolume),
+    r.effectiveFeeRate.toFixed(3) + '%',
+    r.orderCount.toString(),
+  ]);
+
+  // Calculate totals row
+  const totals = reports.reduce(
+    (acc, r) => ({
+      fees: acc.fees + r.totalFees,
+      volume: acc.volume + r.totalVolume,
+      orders: acc.orders + r.orderCount,
+    }),
+    { fees: 0, volume: 0, orders: 0 }
+  );
+  const overallRate = totals.volume > 0 ? (totals.fees / totals.volume) * 100 : 0;
+
+  rows.push([
+    '**TOTAL**',
+    '**' + formatCurrency(totals.fees) + '**',
+    '**' + formatCurrency(totals.volume) + '**',
+    '**' + overallRate.toFixed(3) + '%**',
+    '**' + totals.orders.toString() + '**',
+  ]);
+
+  return generateMarkdownTable(headers, rows, alignments);
+}
+
+/**
+ * Generate complete markdown report
+ */
+function generateReport(data: {
+  feeTier: CoinbaseTransactionSummary;
+  symbolFees: SymbolFeeReport[];
+  sideFees: SideFeeReport[];
+  monthlyFees: MonthlyFeeReport[];
+  dateRange: { earliest: string; latest: string } | null;
+  orderCount: number;
+}): string {
+  const generatedDate = new Date().toISOString().split('T')[0];
+  const dateRangeStr = data.dateRange
+    ? `${formatDate(data.dateRange.earliest)} to ${formatDate(data.dateRange.latest)}`
+    : 'N/A';
+
+  return `# Coinbase Fee Analysis Report
+
+**Generated:** ${generatedDate}
+**Data Range:** ${dateRangeStr}
+**Total Orders:** ${data.orderCount}
+
+## Current Fee Tier
+
+| Property | Value |
+|----------|-------|
+| Tier | ${data.feeTier.fee_tier.pricing_tier} |
+| Maker Rate | ${formatPercent(data.feeTier.fee_tier.maker_fee_rate)} |
+| Taker Rate | ${formatPercent(data.feeTier.fee_tier.taker_fee_rate)} |
+| 30-Day Volume | ${formatCurrency(data.feeTier.advanced_trade_only_volume)} |
+| 30-Day Fees | ${formatCurrency(data.feeTier.advanced_trade_only_fees)} |
+
+## Fee Analysis by Symbol
+
+${generateSymbolTable(data.symbolFees)}
+
+## Buy vs Sell Comparison
+
+${generateSideTable(data.sideFees)}
+
+## Monthly Breakdown
+
+${generateMonthlyTable(data.monthlyFees)}
+`;
+}
+
 async function main() {
   console.log('=== Coinbase Fee Analysis ===\n');
 
@@ -124,6 +449,21 @@ async function main() {
     console.log(`  Total Fees (from orders): ${formatCurrency(totalFees)}`);
 
     console.log('\nData retrieval complete.');
+
+    // Calculate and display fee analysis
+    console.log('\n=== Fee Analysis by Symbol ===\n');
+    const symbolFees = calculateSymbolFees(orders);
+    displaySymbolFees(symbolFees);
+
+    console.log('\n=== Buy vs Sell Comparison ===\n');
+    const sideFees = calculateSideFees(orders);
+    displaySideFees(sideFees);
+
+    console.log('\n=== Monthly Breakdown ===\n');
+    const monthlyFees = calculateMonthlyFees(orders);
+    displayMonthlyFees(monthlyFees);
+
+    console.log('\nFee analysis complete.');
 
   } catch (error) {
     console.error('\nError fetching data:', error instanceof Error ? error.message : error);
