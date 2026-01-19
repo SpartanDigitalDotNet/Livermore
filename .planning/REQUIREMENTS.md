@@ -15,28 +15,28 @@ Requirements for this spike. Each maps to roadmap phases.
 
 ### Fee Analysis by Symbol
 
-- [ ] **SYMBOL-01**: Calculate total fees paid per trading pair (e.g., BTC-USD)
-- [ ] **SYMBOL-02**: Calculate total volume traded per trading pair
-- [ ] **SYMBOL-03**: Calculate effective fee rate per symbol (total_fees / filled_value as %)
-- [ ] **SYMBOL-04**: Calculate average fee per trade per symbol
+- [x] **SYMBOL-01**: Calculate total fees paid per trading pair (e.g., BTC-USD)
+- [x] **SYMBOL-02**: Calculate total volume traded per trading pair
+- [x] **SYMBOL-03**: Calculate effective fee rate per symbol (total_fees / filled_value as %)
+- [x] **SYMBOL-04**: Calculate average fee per trade per symbol
 
 ### Buy vs Sell Analysis
 
-- [ ] **SIDE-01**: Separate fee totals by trade side (BUY vs SELL)
-- [ ] **SIDE-02**: Compare effective fee rates between buys and sells per symbol
+- [x] **SIDE-01**: Separate fee totals by trade side (BUY vs SELL)
+- [x] **SIDE-02**: Compare effective fee rates between buys and sells per symbol
 
 ### Monthly Breakdown
 
-- [ ] **MONTH-01**: Group orders by calendar month
-- [ ] **MONTH-02**: Calculate monthly volume totals
-- [ ] **MONTH-03**: Calculate monthly fee totals
-- [ ] **MONTH-04**: Calculate monthly effective fee rate
+- [x] **MONTH-01**: Group orders by calendar month
+- [x] **MONTH-02**: Calculate monthly volume totals
+- [x] **MONTH-03**: Calculate monthly fee totals
+- [x] **MONTH-04**: Calculate monthly effective fee rate
 
 ### Output
 
-- [ ] **OUT-01**: Display formatted tables in console output
-- [ ] **OUT-02**: Generate markdown report saved to file
-- [ ] **OUT-03**: Include current fee tier info in report header
+- [x] **OUT-01**: Display formatted tables in console output
+- [x] **OUT-02**: Generate markdown report saved to file
+- [x] **OUT-03**: Include current fee tier info in report header
 
 ## v2 Requirements
 
@@ -66,19 +66,19 @@ Which phases cover which requirements. Updated during roadmap creation.
 | DATA-01 | Phase 1 | Complete |
 | DATA-02 | Phase 1 | Complete |
 | DATA-03 | Phase 1 | Complete |
-| SYMBOL-01 | Phase 2 | Pending |
-| SYMBOL-02 | Phase 2 | Pending |
-| SYMBOL-03 | Phase 2 | Pending |
-| SYMBOL-04 | Phase 2 | Pending |
-| SIDE-01 | Phase 2 | Pending |
-| SIDE-02 | Phase 2 | Pending |
-| MONTH-01 | Phase 2 | Pending |
-| MONTH-02 | Phase 2 | Pending |
-| MONTH-03 | Phase 2 | Pending |
-| MONTH-04 | Phase 2 | Pending |
-| OUT-01 | Phase 3 | Pending |
-| OUT-02 | Phase 3 | Pending |
-| OUT-03 | Phase 3 | Pending |
+| SYMBOL-01 | Phase 2 | Complete |
+| SYMBOL-02 | Phase 2 | Complete |
+| SYMBOL-03 | Phase 2 | Complete |
+| SYMBOL-04 | Phase 2 | Complete |
+| SIDE-01 | Phase 2 | Complete |
+| SIDE-02 | Phase 2 | Complete |
+| MONTH-01 | Phase 2 | Complete |
+| MONTH-02 | Phase 2 | Complete |
+| MONTH-03 | Phase 2 | Complete |
+| MONTH-04 | Phase 2 | Complete |
+| OUT-01 | Phase 3 | Complete |
+| OUT-02 | Phase 3 | Complete |
+| OUT-03 | Phase 3 | Complete |
 
 **Coverage:**
 - v1 requirements: 16 total
@@ -87,4 +87,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ---
 *Requirements defined: 2026-01-18*
-*Last updated: 2026-01-18 after Phase 1 completion*
+*Last updated: 2026-01-19 after Phase 3 completion*
