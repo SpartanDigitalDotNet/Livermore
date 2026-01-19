@@ -1,0 +1,12 @@
+{
+  "name": "fee-analysis-spike",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "analyze": "npx tsx analyze-fees.ts"
+  },
+  "dependencies": {
+    "@livermore/coinbase-client": "workspace:*",
+    "tsx": "^4.19.0"
+  }
+}
