@@ -34,6 +34,11 @@ Plans:
 
 **Requirements:** SYMBOL-01, SYMBOL-02, SYMBOL-03, SYMBOL-04, SIDE-01, SIDE-02, MONTH-01, MONTH-02, MONTH-03, MONTH-04
 
+**Plans:** 1 plan
+
+Plans:
+- [ ] 02-01-PLAN.md — Add calculation functions and integrate into analyze-fees spike
+
 **Success Criteria:**
 1. User can see total fees, volume, and effective fee rate for each symbol traded
 2. User can compare fee totals and rates between BUY and SELL orders per symbol
@@ -61,12 +66,12 @@ Plans:
 
 | Phase | Status | Requirements | Completed |
 |-------|--------|--------------|-----------|
-| 1 - Data Retrieval | ✓ Complete | 3 | 3/3 |
-| 2 - Fee Analysis | Not Started | 10 | 0/10 |
+| 1 - Data Retrieval | Complete | 3 | 3/3 |
+| 2 - Fee Analysis | Planned | 10 | 0/10 |
 | 3 - Output Generation | Not Started | 3 | 0/3 |
 
 **Total:** 3/16 requirements complete
 
 ---
 *Roadmap created: 2026-01-18*
-*Last updated: 2026-01-18 after Phase 1 completion*
+*Last updated: 2026-01-18 after Phase 2 planning*
