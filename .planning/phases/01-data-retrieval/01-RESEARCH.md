@@ -230,6 +230,16 @@ interface CoinbaseFill {
   size_in_quote: boolean;
   user_id: string;
   side: 'BUY' | 'SELL';
+  // Commission breakdown (from official docs)
+  commission_detail_total?: {
+    total_commission: string;
+    gst_commission: string;
+    withholding_commission: string;
+    client_commission: string;
+    venue_commission: string;
+    regulatory_commission: string;
+    clearing_commission: string;
+  };
 }
 
 async getFills(options: FillsOptions = {}): Promise<CoinbaseFill[]> {
