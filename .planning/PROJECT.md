@@ -18,12 +18,16 @@ Understand actual fee costs by symbol and over time to inform future trading dec
 
 ### Active
 
-- [ ] Fetch all filled orders from Coinbase history
-- [ ] Calculate total and average fees by symbol
-- [ ] Calculate effective fee rate (fees / volume) per symbol
-- [ ] Monthly breakdown showing volume and fee trends
-- [ ] Console output with formatted tables
-- [ ] Markdown report saved to file
+(v1.0 complete - no active requirements)
+
+### Shipped (v1.0)
+
+- [x] Fetch all filled orders from Coinbase history — v1.0
+- [x] Calculate total and average fees by symbol — v1.0
+- [x] Calculate effective fee rate (fees / volume) per symbol — v1.0
+- [x] Monthly breakdown showing volume and fee trends — v1.0
+- [x] Console output with formatted tables — v1.0
+- [x] Markdown report saved to file — v1.0
 
 ### Out of Scope
 
@@ -59,9 +63,30 @@ Existing codebase has:
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| Standalone script in scripts/ | Spike should not pollute main codebase | — Pending |
-| Extend CoinbaseRestClient | Reuse existing auth and patterns | — Pending |
-| Console + Markdown output | User wants both for review and reference | — Pending |
+| Standalone script in spikes/ | Spike should not pollute main codebase | ✓ Good |
+| Extend CoinbaseRestClient | Reuse existing auth and patterns | ✓ Good |
+| Console + Markdown output | User wants both for review and reference | ✓ Good |
+| Cursor-based pagination | Follow existing getOpenOrders() pattern | ✓ Good |
+| ESM-compatible path resolution | Use import.meta.url for __dirname | ✓ Good |
+
+## Current State (v1.0 Shipped)
+
+**Shipped:** 2026-01-19
+
+**Deliverables:**
+- `spikes/fee-analysis/analyze-fees.ts` — Main analysis script (514 lines)
+- `spikes/fee-analysis/calculations.ts` — Fee calculation functions (189 lines)
+- `spikes/fee-analysis/reports/fee-analysis-{date}.md` — Generated reports
+
+**Run with:** `cd spikes/fee-analysis && pnpm analyze`
+
+**Results from first run:**
+- 1,622 orders analyzed
+- 140 unique symbols
+- $8,455,609 total volume
+- $13,076 total fees
+- 0.155% effective fee rate
+- Date range: 2022-11 to 2026-01
 
 ---
-*Last updated: 2026-01-18 after initialization*
+*Last updated: 2026-01-19 after v1.0 milestone*
