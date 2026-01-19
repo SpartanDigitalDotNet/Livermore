@@ -37,7 +37,7 @@ Plans:
 **Plans:** 1 plan
 
 Plans:
-- [ ] 02-01-PLAN.md — Add calculation functions and integrate into analyze-fees spike
+- [x] 02-01-PLAN.md — Add calculation functions and integrate into analyze-fees spike
 
 **Success Criteria:**
 1. User can see total fees, volume, and effective fee rate for each symbol traded
@@ -55,6 +55,11 @@ Plans:
 
 **Requirements:** OUT-01, OUT-02, OUT-03
 
+**Plans:** 1 plan
+
+Plans:
+- [ ] 03-01-PLAN.md — Add markdown report generation with fee tier header
+
 **Success Criteria:**
 1. Console displays formatted tables for symbol summary, side comparison, and monthly breakdown
 2. Running script creates markdown file in predictable location (e.g., reports/fee-analysis.md)
@@ -67,11 +72,11 @@ Plans:
 | Phase | Status | Requirements | Completed |
 |-------|--------|--------------|-----------|
 | 1 - Data Retrieval | Complete | 3 | 3/3 |
-| 2 - Fee Analysis | Planned | 10 | 0/10 |
-| 3 - Output Generation | Not Started | 3 | 0/3 |
+| 2 - Fee Analysis | Complete | 10 | 10/10 |
+| 3 - Output Generation | Planned | 3 | 0/3 |
 
-**Total:** 3/16 requirements complete
+**Total:** 13/16 requirements complete
 
 ---
 *Roadmap created: 2026-01-18*
-*Last updated: 2026-01-18 after Phase 2 planning*
+*Last updated: 2026-01-18 after Phase 3 planning*
