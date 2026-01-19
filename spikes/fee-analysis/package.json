@@ -8,5 +8,8 @@
   "dependencies": {
     "@livermore/coinbase-client": "workspace:*",
     "tsx": "^4.19.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0"
   }
 }
