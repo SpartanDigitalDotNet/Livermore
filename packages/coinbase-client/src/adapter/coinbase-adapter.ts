@@ -363,10 +363,11 @@ export class CoinbaseAdapter extends BaseExchangeAdapter {
 
   /**
    * Handle incoming WebSocket messages
+   * Routes messages to appropriate handlers based on channel type
    */
   private handleMessage(data: WebSocket.Data): void {
     try {
-      const message = JSON.parse(data.toString());
+      const message = JSON.parse(data.toString()) as CoinbaseWSMessage;
 
       // Log subscription confirmations
       if (message.channel === 'subscriptions') {
@@ -380,8 +381,22 @@ export class CoinbaseAdapter extends BaseExchangeAdapter {
         return;
       }
 
-      // TODO: Handle candles and heartbeats in Plan 02
-      logger.debug({ channel: message.channel }, 'Received message');
+      // Handle candles - fire and forget to avoid blocking
+      if (message.channel === 'candles') {
+        this.handleCandlesMessage(message as CandlesMessage).catch(error => {
+          logger.error({ error }, 'Error processing candles message');
+        });
+        return;
+      }
+
+      // Handle heartbeats - just log at debug level for now
+      if (message.channel === 'heartbeats') {
+        logger.debug({ counter: (message as HeartbeatsMessage).events[0]?.heartbeat_counter }, 'Heartbeat received');
+        return;
+      }
+
+      // Unknown channel
+      logger.warn({ channel: (message as { channel: string }).channel }, 'Unknown WebSocket channel');
     } catch (error) {
       logger.error({ error, data: data.toString() }, 'Failed to parse WebSocket message');
     }
