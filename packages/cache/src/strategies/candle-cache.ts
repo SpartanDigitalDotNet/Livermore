@@ -1,5 +1,5 @@
 import type { Redis } from 'ioredis';
-import { CandleSchema, type Candle, type Timeframe, HARDCODED_CONFIG } from '@livermore/schemas';
+import { CandleSchema, UnifiedCandleSchema, type Candle, type UnifiedCandle, type Timeframe, HARDCODED_CONFIG } from '@livermore/schemas';
 import { candleKey, candleChannel } from '../keys';
 
 /**
@@ -79,6 +79,60 @@ export class CandleCacheStrategy {
     }
 
     await pipeline.exec();
+  }
+
+  /**
+   * Add candle only if newer than existing (versioned write)
+   * Uses sequence number for ordering when timestamps match.
+   * This prevents out-of-order WebSocket messages from overwriting newer data.
+   *
+   * @returns true if written, false if skipped (older or same sequence number)
+   */
+  async addCandleIfNewer(
+    userId: number,
+    exchangeId: number,
+    candle: UnifiedCandle
+  ): Promise<boolean> {
+    // Validate with Zod
+    const validated = UnifiedCandleSchema.parse(candle);
+
+    const key = candleKey(userId, exchangeId, validated.symbol, validated.timeframe);
+
+    // Get existing candle at this timestamp
+    const existing = await this.redis.zrangebyscore(
+      key,
+      validated.timestamp,
+      validated.timestamp
+    );
+
+    if (existing.length > 0) {
+      // Candle exists at this timestamp - check if we should update
+      const existingCandle = JSON.parse(existing[0]) as UnifiedCandle;
+
+      // If both have sequence numbers, use them for ordering
+      if (validated.sequenceNum !== undefined && existingCandle.sequenceNum !== undefined) {
+        if (validated.sequenceNum <= existingCandle.sequenceNum) {
+          return false; // Skip - older or same data
+        }
+      } else if (validated.sequenceNum === undefined && existingCandle.sequenceNum !== undefined) {
+        // New candle has no sequence, existing does - skip (existing is more authoritative)
+        return false;
+      }
+      // If existing has no sequence but new does, or neither has sequence, allow overwrite
+    }
+
+    // Remove existing candle at this timestamp and write new one
+    await this.redis.zremrangebyscore(key, validated.timestamp, validated.timestamp);
+    await this.redis.zadd(key, validated.timestamp, JSON.stringify(validated));
+
+    // Set expiration (24 hours for candle data)
+    const ttlSeconds = HARDCODED_CONFIG.cache.candleTtlHours * 3600;
+    await this.redis.expire(key, ttlSeconds);
+
+    // Keep only the most recent candles (limit to 1000)
+    await this.redis.zremrangebyrank(key, 0, -1001);
+
+    return true;
   }
 
   /**
