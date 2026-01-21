@@ -142,6 +142,12 @@ export class CoinbaseAdapter extends BaseExchangeAdapter {
   /** Track last candle timestamp per symbol for close detection */
   private lastCandleTimestamps = new Map<string, number>();
 
+  /** Watchdog timer to detect silent disconnections */
+  private watchdogTimeout: NodeJS.Timeout | null = null;
+
+  /** Watchdog interval - force reconnect if no message received within this time */
+  private readonly WATCHDOG_INTERVAL_MS = 30_000; // 30 seconds
+
   constructor(options: CoinbaseAdapterOptions) {
     super();
     this.auth = new CoinbaseAuth(options.apiKeyId, options.privateKeyPem);
@@ -165,6 +171,7 @@ export class CoinbaseAdapter extends BaseExchangeAdapter {
         logger.info({ exchangeId: this.exchangeId }, 'Connected to Coinbase WebSocket');
         this.resetReconnectAttempts();
         this.subscribeToHeartbeats();
+        this.resetWatchdog();
         this.emit('connected');
         resolve();
       });
@@ -197,6 +204,7 @@ export class CoinbaseAdapter extends BaseExchangeAdapter {
    * Sets intentional close flag to prevent auto-reconnection.
    */
   disconnect(): void {
+    this.stopWatchdog();
     this.isIntentionalClose = true;
     if (this.ws) {
       this.ws.close();
@@ -366,6 +374,9 @@ export class CoinbaseAdapter extends BaseExchangeAdapter {
    * Routes messages to appropriate handlers based on channel type
    */
   private handleMessage(data: WebSocket.Data): void {
+    // Reset watchdog on every message (including heartbeats)
+    this.resetWatchdog();
+
     try {
       const message = JSON.parse(data.toString()) as CoinbaseWSMessage;
 
@@ -400,5 +411,53 @@ export class CoinbaseAdapter extends BaseExchangeAdapter {
     } catch (error) {
       logger.error({ error, data: data.toString() }, 'Failed to parse WebSocket message');
     }
+  }
+
+  /**
+   * Reset watchdog timer - call on every message
+   * If no message received within WATCHDOG_INTERVAL_MS, force reconnect
+   */
+  private resetWatchdog(): void {
+    if (this.watchdogTimeout) {
+      clearTimeout(this.watchdogTimeout);
+    }
+
+    this.watchdogTimeout = setTimeout(() => {
+      logger.warn(
+        { exchangeId: this.exchangeId, intervalMs: this.WATCHDOG_INTERVAL_MS },
+        'Watchdog timeout - no message received, forcing reconnect'
+      );
+      this.forceReconnect();
+    }, this.WATCHDOG_INTERVAL_MS);
+  }
+
+  /**
+   * Stop watchdog timer - call on intentional disconnect
+   */
+  private stopWatchdog(): void {
+    if (this.watchdogTimeout) {
+      clearTimeout(this.watchdogTimeout);
+      this.watchdogTimeout = null;
+    }
+  }
+
+  /**
+   * Force reconnection due to watchdog timeout or other issue
+   */
+  private forceReconnect(): void {
+    logger.info({ exchangeId: this.exchangeId }, 'Forcing reconnect');
+
+    // Close existing connection without triggering normal disconnect
+    if (this.ws) {
+      this.ws.removeAllListeners();
+      this.ws.close();
+      this.ws = null;
+    }
+
+    // Clear watchdog
+    this.stopWatchdog();
+
+    // Trigger reconnect via base class
+    this.handleReconnect();
   }
 }
