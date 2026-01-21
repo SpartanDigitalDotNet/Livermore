@@ -5,7 +5,7 @@ import {
   candleClosePattern,
   type CachedIndicatorValue,
 } from '@livermore/cache';
-import { createLogger, getCandleTimestamp, fillCandleGaps, calculateZeroRangeRatio } from '@livermore/utils';
+import { createLogger, getCandleTimestamp, fillCandleGaps, calculateZeroRangeRatio, aggregateCandles } from '@livermore/utils';
 
 // Create service-specific logger for file output
 const logger = createLogger({ name: 'indicators:scheduler', service: 'indicators' });
@@ -57,6 +57,16 @@ export class IndicatorCalculationService {
 
   // Higher timeframes to check when 5m candle closes
   private readonly HIGHER_TIMEFRAMES: Timeframe[] = ['15m', '1h', '4h', '1d'];
+
+  // Number of 5m candles needed per target timeframe candle
+  // Only includes timeframes used by this service (5m source + higher timeframes)
+  private readonly AGGREGATION_FACTORS: Partial<Record<Timeframe, number>> = {
+    '5m': 1,    // No aggregation needed
+    '15m': 3,   // 3 x 5m = 15m
+    '1h': 12,   // 12 x 5m = 1h
+    '4h': 48,   // 48 x 5m = 4h
+    '1d': 288,  // 288 x 5m = 1d
+  };
 
   // NOTE: Constructor parameters kept for backward compatibility with existing server.ts
   // REST client functionality moved to Phase 07 (Startup Backfill)
@@ -152,8 +162,84 @@ export class IndicatorCalculationService {
   }
 
   /**
+   * Get candles for a target timeframe by aggregating cached 5m candles
+   * This eliminates the need for REST API calls for higher timeframes
+   *
+   * @param symbol - Trading pair
+   * @param targetTimeframe - Timeframe to aggregate to
+   * @param requiredCount - Number of target timeframe candles needed
+   * @returns Aggregated candles at target timeframe
+   */
+  private async getAggregatedCandles(
+    symbol: string,
+    targetTimeframe: Timeframe,
+    requiredCount: number
+  ): Promise<Candle[]> {
+    // For 5m, just read directly from cache
+    if (targetTimeframe === '5m') {
+      return this.candleCache.getRecentCandles(
+        this.TEST_USER_ID,
+        this.TEST_EXCHANGE_ID,
+        symbol,
+        '5m',
+        requiredCount
+      );
+    }
+
+    // Calculate how many 5m candles we need
+    const factor = this.AGGREGATION_FACTORS[targetTimeframe] || 1;
+    // Need extra to ensure we get enough complete periods
+    const sourceCount = (requiredCount + 1) * factor;
+
+    // Read 5m candles from cache
+    const sourceCandles = await this.candleCache.getRecentCandles(
+      this.TEST_USER_ID,
+      this.TEST_EXCHANGE_ID,
+      symbol,
+      '5m',
+      sourceCount
+    );
+
+    if (sourceCandles.length < factor) {
+      // Not enough candles even for one complete period
+      return [];
+    }
+
+    // Aggregate to target timeframe
+    return aggregateCandles(sourceCandles, '5m', targetTimeframe);
+  }
+
+  /**
+   * Recalculate indicator for a higher timeframe using aggregated 5m candles
+   * This is the cache-only path for all higher timeframes
+   */
+  private async recalculateFromAggregated(symbol: string, timeframe: Timeframe): Promise<void> {
+    // Get aggregated candles (builds from cached 5m data)
+    const candles = await this.getAggregatedCandles(symbol, timeframe, 200);
+
+    // Readiness gate
+    if (candles.length < this.REQUIRED_CANDLES) {
+      logger.debug({
+        symbol,
+        timeframe,
+        available: candles.length,
+        required: this.REQUIRED_CANDLES,
+      }, 'Skipping higher timeframe calculation - insufficient aggregated candles');
+      return;
+    }
+
+    logger.debug({
+      symbol,
+      timeframe,
+      aggregatedCount: candles.length,
+    }, 'Calculating indicator from aggregated candles');
+
+    await this.calculateIndicators(symbol, timeframe, candles);
+  }
+
+  /**
    * Check if any higher timeframes closed and trigger recalculation
-   * Uses cache-only reads for higher timeframe candles
+   * Uses aggregated 5m candles instead of REST API calls
    */
   private async checkHigherTimeframes(symbol: string, timestamp: number): Promise<void> {
     for (const timeframe of this.HIGHER_TIMEFRAMES) {
@@ -165,19 +251,16 @@ export class IndicatorCalculationService {
       if (currentBoundary > lastBoundary) {
         this.lastProcessedBoundary.set(key, currentBoundary);
 
-        // Detailed boundary crossing log for debugging
         logger.info({
           event: 'boundary_crossing_detected',
           symbol,
           timeframe,
           previousBoundary: lastBoundary ? new Date(lastBoundary).toISOString() : 'none',
           newBoundary: new Date(currentBoundary).toISOString(),
-          triggerTimestamp: new Date(timestamp).toISOString(),
-          action: 'recalculate_from_cache',
         }, `Boundary crossed: ${symbol} ${timeframe}`);
 
-        // Recalculate from cache (no REST calls)
-        await this.recalculateFromCache(symbol, timeframe);
+        // Recalculate using aggregated candles (no REST calls)
+        await this.recalculateFromAggregated(symbol, timeframe);
       }
     }
   }
