@@ -11,11 +11,11 @@ See: .planning/PROJECT.md
 
 **Milestone:** v2.0 Data Pipeline Redesign
 **Phase:** 05-coinbase-adapter (2 of 6)
-**Plan:** 01 of 4 complete
+**Plan:** 02 of 4 complete
 **Status:** In progress
-**Last activity:** 2026-01-21 — Completed 05-01-PLAN.md (Coinbase Adapter Skeleton)
+**Last activity:** 2026-01-21 — Completed 05-02-PLAN.md (Message Processing)
 
-**Progress:** [####------] 4/18 plans (22%)
+**Progress:** [#####-----] 5/18 plans (28%)
 
 ## Milestones
 
@@ -89,33 +89,37 @@ Low-liquidity symbols have massive gaps, causing 30+ point MACD-V variance.
 ### Last Session
 
 **Date:** 2026-01-21
-**Activity:** Executed 05-01-PLAN.md - Coinbase Adapter Skeleton
-**Stopped At:** Completed Plan 05-01, ready for Plan 05-02
+**Activity:** Executed 05-02-PLAN.md - Message Processing
+**Stopped At:** Completed Plan 05-02, ready for Plan 05-03
 
 ### Resume Context
 
-Phase 05 (Coinbase Adapter) IN PROGRESS. Plan 05-01 delivered:
+Phase 05 (Coinbase Adapter) IN PROGRESS. Plans 05-01 and 05-02 delivered:
 
 1. **05-01:** CoinbaseAdapter class with WebSocket connection and dual channel subscription
+2. **05-02:** Candle processing pipeline with normalization, close detection, cache writes, events
 
-**Key artifacts from 05-01:**
-- `packages/coinbase-client/src/adapter/coinbase-adapter.ts` — CoinbaseAdapter class
-- Added @livermore/cache and ioredis dependencies to coinbase-client
+**Key artifacts from 05-02:**
+- `packages/coinbase-client/src/adapter/coinbase-adapter.ts` — Full candle processing (404 lines)
+  - Type definitions for Coinbase WebSocket messages
+  - normalizeCandle() for format conversion
+  - handleCandlesMessage() for close detection
+  - onCandleClose() for events and Redis pub/sub
 
-**Builds on Phase 04:**
-- `packages/schemas/src/adapter/exchange-adapter.schema.ts` — IExchangeAdapter interface
-- `packages/coinbase-client/src/adapter/base-adapter.ts` — BaseExchangeAdapter class
+**Decisions made:**
+- Fire-and-forget async for candle processing (prevents message queue backup)
+- Emit close event on new candle arrival (Coinbase sends finalized data in new candle)
 
 **Phase order:**
 1. Phase 04: Foundation (interfaces, base classes) **COMPLETE**
-2. Phase 05: Coinbase Adapter (native candles channel) **IN PROGRESS** (1/4)
+2. Phase 05: Coinbase Adapter (native candles channel) **IN PROGRESS** (2/4)
 3. Phase 06: Indicator Refactor (event-driven, cache-only)
 4. Phase 07: Startup Backfill (parallel with 08)
 5. Phase 08: Reconciliation (parallel with 07)
 6. Phase 09: Cleanup
 
-**Next:** Execute 05-02-PLAN.md (Message Processing)
+**Next:** Execute 05-03-PLAN.md (Reconnection Logic)
 
 ---
 *State initialized: 2026-01-18*
-*Last updated: 2026-01-21 after completing 05-01-PLAN.md*
+*Last updated: 2026-01-21 after completing 05-02-PLAN.md*
