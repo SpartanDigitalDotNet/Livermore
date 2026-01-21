@@ -67,6 +67,20 @@ export function candleChannel(
 }
 
 /**
+ * Build a Redis pub/sub channel name for candle close events
+ * Used by exchange adapters to publish and indicator service to subscribe
+ * when candles finalize
+ */
+export function candleCloseChannel(
+  userId: number,
+  exchangeId: number,
+  symbol: string,
+  timeframe: Timeframe
+): string {
+  return `channel:candle:close:${userId}:${exchangeId}:${symbol}:${timeframe}`;
+}
+
+/**
  * Build a Redis pub/sub channel name for ticker updates
  */
 export function tickerChannel(userId: number, exchangeId: number, symbol: string): string {
