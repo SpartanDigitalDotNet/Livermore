@@ -10,12 +10,12 @@ See: .planning/PROJECT.md
 ## Current Position
 
 **Milestone:** v2.0 Data Pipeline Redesign
-**Phase:** 07-startup-backfill (4 of 6)
-**Plan:** 01 of 2 complete
-**Status:** In progress
-**Last activity:** 2026-01-21 - Completed 07-01-PLAN.md (StartupBackfillService)
+**Phase:** 07-startup-backfill (4 of 6) **COMPLETE**
+**Plan:** 02 of 2 complete
+**Status:** Phase complete
+**Last activity:** 2026-01-21 - Completed 07-02-PLAN.md (Server Integration)
 
-**Progress:** [#########---] 9/12 plans (75%)
+**Progress:** [##########--] 10/12 plans (83%)
 
 ## Milestones
 
@@ -93,6 +93,7 @@ Low-liquidity symbols have massive gaps, causing 30+ point MACD-V variance.
 |----|----------|--------|
 | BKFL-RATE | 5 requests per batch with 1s delay (5 req/sec) | Conservative rate limiting - 6x safety margin under Coinbase's 30 req/sec limit |
 | BKFL-PRIORITY | 5m, 15m, 1h, 4h, 1d priority order (no 1m) | 5m first since WebSocket provides it, enables indicator calculations sooner |
+| STARTUP-ORDER | Backfill -> Indicators -> WebSocket startup ordering | Ensures indicators have 60+ candles in cache before processing candle:close events |
 
 ### Open Items
 
@@ -105,37 +106,38 @@ Low-liquidity symbols have massive gaps, causing 30+ point MACD-V variance.
 ### Last Session
 
 **Date:** 2026-01-21
-**Activity:** Completed Phase 07 Plan 01 - StartupBackfillService
-**Stopped At:** Plan 07-01 COMPLETE, ready for Plan 07-02
+**Activity:** Completed Phase 07 Plan 02 - Server Integration
+**Stopped At:** Phase 07 COMPLETE, ready for Phase 08
 
 ### Resume Context
 
-Phase 07 (Startup Backfill) IN PROGRESS. 1 of 2 plans delivered:
+Phase 07 (Startup Backfill) COMPLETE. 2 of 2 plans delivered:
 
 1. **07-01:** StartupBackfillService with priority-ordered timeframes and rate-limited batch processing
+2. **07-02:** Server integration with correct startup ordering (backfill -> indicators -> WebSocket)
 
-**Key artifacts created:**
-- `packages/coinbase-client/src/backfill/types.ts` - BackfillConfig, DEFAULT_BACKFILL_CONFIG, TIMEFRAME_PRIORITY
-- `packages/coinbase-client/src/backfill/startup-backfill-service.ts` - StartupBackfillService class
-- `packages/coinbase-client/src/backfill/index.ts` - Module re-exports
+**Key artifacts:**
+- `packages/coinbase-client/src/backfill/` - BackfillConfig, StartupBackfillService, TIMEFRAME_PRIORITY
+- `packages/coinbase-client/src/index.ts` - Exports StartupBackfillService
+- `apps/api/src/server.ts` - Startup orchestration with backfill step
 
-**Phase 07-01 Result:**
-- StartupBackfillService created with backfill(symbols, timeframes) method
+**Phase 07 Result:**
+- Server startup runs backfill BEFORE starting indicator service
+- All symbols have 60+ candles in cache before indicators start
+- Backfill uses 5m, 15m, 1h, 4h, 1d timeframes (no 1m since WebSocket provides it)
 - Rate limiting: 5 requests/batch, 1s delay between batches
-- Priority ordering: 5m first, then 15m, 1h, 4h, 1d
 - Progress logging with completion %, elapsed time, ETA
-- Uses CoinbaseRestClient.getCandles() and CandleCacheStrategy.addCandles()
 
 **Phase order:**
 1. Phase 04: Foundation (interfaces, base classes) **COMPLETE**
 2. Phase 05: Coinbase Adapter (native candles channel) **COMPLETE** (3/3)
 3. Phase 06: Indicator Refactor (event-driven, cache-only) **COMPLETE** (2/2)
-4. Phase 07: Startup Backfill **IN PROGRESS** (1/2)
+4. Phase 07: Startup Backfill **COMPLETE** (2/2)
 5. Phase 08: Reconciliation (parallel with 07)
 6. Phase 09: Cleanup
 
-**Next:** Execute Phase 07 Plan 02 (Server Integration)
+**Next:** Execute Phase 08 (Reconciliation)
 
 ---
 *State initialized: 2026-01-18*
-*Last updated: 2026-01-21 after completing Phase 07 Plan 01*
+*Last updated: 2026-01-21 after completing Phase 07 Plan 02*
