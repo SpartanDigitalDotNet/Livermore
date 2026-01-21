@@ -37,27 +37,28 @@ export interface LogConfig {
 /**
  * Default log configuration
  *
- * Services set to 'debug' are critical for debugging the 4h/1d boundary bug
+ * Production: error-only for high-transaction services
+ * To debug, set LOG_LEVEL=debug or LOG_LEVEL_INDICATORS=debug env var
  */
 export const DEFAULT_LOG_CONFIG: LogConfig = {
   defaultLevel: 'info',
   services: {
-    // Indicator-related (verbose for debugging)
-    indicators: 'debug',
-    'indicators:macdv': 'debug',
-    'indicators:atr': 'debug',
-    'indicators:scheduler': 'debug',
+    // Indicator-related (error-only in production, high transaction volume)
+    indicators: 'error',
+    'indicators:macdv': 'error',
+    'indicators:atr': 'error',
+    'indicators:scheduler': 'error',
 
-    // Candle-related (verbose for debugging)
-    candles: 'debug',
-    'candles:cache': 'debug',
-    'candles:gaps': 'debug',
-    'candles:fetch': 'debug',
+    // Candle-related (error-only in production)
+    candles: 'error',
+    'candles:cache': 'error',
+    'candles:gaps': 'error',
+    'candles:fetch': 'error',
 
-    // Scheduler (verbose for boundary debugging)
-    scheduler: 'debug',
-    'scheduler:boundary': 'debug',
-    'scheduler:recalculate': 'debug',
+    // Scheduler (error-only in production)
+    scheduler: 'error',
+    'scheduler:boundary': 'error',
+    'scheduler:recalculate': 'error',
 
     // API (standard level)
     api: 'info',
