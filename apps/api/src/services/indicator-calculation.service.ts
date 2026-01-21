@@ -28,8 +28,16 @@ export interface IndicatorConfig {
 /**
  * Indicator Calculation Service
  *
- * Fetches historical candle data, calculates technical indicators,
- * caches results in Redis, and publishes updates.
+ * Event-driven service that calculates technical indicators from cached candle data.
+ *
+ * Architecture (v2.0):
+ * - Subscribes to candle:close events via Redis psubscribe
+ * - Reads 5m candles exclusively from Redis cache (no REST API calls)
+ * - Aggregates 5m candles to higher timeframes (15m, 1h, 4h, 1d) in memory
+ * - Caches calculated indicators in Redis and publishes updates
+ *
+ * Readiness: Requires 60+ candles before calculating (IND-03)
+ * Warmup: Handled by separate startup backfill service (Phase 07)
  */
 export class IndicatorCalculationService {
   private candleCache: CandleCacheStrategy;
@@ -330,6 +338,16 @@ export class IndicatorCalculationService {
     timeframe: Timeframe,
     candles: Candle[]
   ): Promise<void> {
+    // Log candle source for debugging aggregation path
+    const isAggregated = timeframe !== '5m';
+    logger.debug({
+      event: 'indicator_calculation_start',
+      symbol,
+      timeframe,
+      candleCount: candles.length,
+      source: isAggregated ? 'aggregated_5m' : 'cache_direct',
+    }, `Calculating ${symbol} ${timeframe} from ${isAggregated ? 'aggregated' : 'cached'} candles`);
+
     // Fill gaps in sparse candle data (e.g., low-liquidity symbols)
     // This matches TradingView behavior and prevents ATR from being near-zero
     const { candles: filledCandles, stats } = fillCandleGaps(candles, timeframe);
@@ -439,6 +457,7 @@ export class IndicatorCalculationService {
       event: 'indicator_cached',
       symbol,
       timeframe,
+      source: isAggregated ? 'aggregated_5m' : 'cache_direct',
       timestamp: new Date(latestCandle.timestamp).toISOString(),
       macdV: Number.isNaN(macdVResult.macdV) ? null : macdVResult.macdV,
       signal: Number.isNaN(macdVResult.signal) ? null : macdVResult.signal,
