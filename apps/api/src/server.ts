@@ -6,7 +6,7 @@ import { logger, validateEnv } from '@livermore/utils';
 import { getDbClient } from '@livermore/database';
 import { getRedisClient } from '@livermore/cache';
 import { createContext } from '@livermore/trpc-config';
-import { CoinbaseRestClient } from '@livermore/coinbase-client';
+import { CoinbaseRestClient, StartupBackfillService } from '@livermore/coinbase-client';
 import { CoinbaseWebSocketService } from './services/coinbase-websocket.service';
 import { IndicatorCalculationService } from './services/indicator-calculation.service';
 import { AlertEvaluationService } from './services/alert-evaluation.service';
@@ -189,6 +189,18 @@ async function start() {
   // Clean up Redis cache for excluded symbols (positions < $2)
   await cleanupExcludedSymbols(redis, excludedSymbols, SUPPORTED_TIMEFRAMES);
 
+  // Step 1: Backfill cache with historical candles (MUST complete before indicators)
+  // This ensures indicator service has 60+ candles per symbol/timeframe
+  logger.info('Starting cache backfill...');
+  const backfillTimeframes: Timeframe[] = ['5m', '15m', '1h', '4h', '1d'];
+  const backfillService = new StartupBackfillService(
+    config.Coinbase_ApiKeyId,
+    config.Coinbase_EcPrivateKeyPem,
+    redis
+  );
+  await backfillService.backfill(monitoredSymbols, backfillTimeframes);
+  logger.info('Cache backfill complete');
+
   // Register tRPC router
   await fastify.register(fastifyTRPCPlugin, {
     prefix: '/trpc',
@@ -215,16 +227,8 @@ async function start() {
     };
   });
 
-  // Start Coinbase WebSocket data ingestion
-  const coinbaseWsService = new CoinbaseWebSocketService(
-    config.Coinbase_ApiKeyId,
-    config.Coinbase_EcPrivateKeyPem
-  );
-
-  await coinbaseWsService.start(monitoredSymbols);
-  logger.info('Coinbase WebSocket service started');
-
-  // Start Indicator Calculation Service
+  // Step 2: Start Indicator Calculation Service (must start before WebSocket)
+  // Indicators subscribe to Redis candle:close events - need to be listening before events arrive
   const indicatorService = new IndicatorCalculationService(
     config.Coinbase_ApiKeyId,
     config.Coinbase_EcPrivateKeyPem
@@ -237,6 +241,15 @@ async function start() {
 
   await indicatorService.start(indicatorConfigs);
   logger.info('Indicator Calculation Service started (subscribed to Redis candle:close events)');
+
+  // Step 3: Start Coinbase WebSocket data ingestion (starts emitting candle:close events)
+  const coinbaseWsService = new CoinbaseWebSocketService(
+    config.Coinbase_ApiKeyId,
+    config.Coinbase_EcPrivateKeyPem
+  );
+
+  await coinbaseWsService.start(monitoredSymbols);
+  logger.info('Coinbase WebSocket service started');
 
   // Start Alert Evaluation Service
   const alertService = new AlertEvaluationService();
