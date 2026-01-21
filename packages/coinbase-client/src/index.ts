@@ -5,3 +5,6 @@
 export { CoinbaseRestClient, type CoinbaseAccount, type CoinbaseOrder, type CoinbaseTransactionSummary, type FilledOrdersOptions } from './rest/client';
 export { CoinbaseAuth } from './rest/auth';
 export { CoinbaseWebSocketClient, type CoinbaseWSMessage, type MessageHandler } from './websocket/client';
+
+// Adapter base class
+export * from './adapter';
