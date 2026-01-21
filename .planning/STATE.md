@@ -10,12 +10,12 @@ See: .planning/PROJECT.md
 ## Current Position
 
 **Milestone:** v2.0 Data Pipeline Redesign
-**Phase:** 04-foundation (1 of 6) **COMPLETE**
-**Plan:** 03 of 3 complete
-**Status:** Phase 04 complete, ready for Phase 05
-**Last activity:** 2026-01-21 — Completed 04-03-PLAN.md (Base Adapter Class)
+**Phase:** 05-coinbase-adapter (2 of 6)
+**Plan:** 01 of 4 complete
+**Status:** In progress
+**Last activity:** 2026-01-21 — Completed 05-01-PLAN.md (Coinbase Adapter Skeleton)
 
-**Progress:** [###-------] 3/18 plans (17%)
+**Progress:** [####------] 4/18 plans (22%)
 
 ## Milestones
 
@@ -89,33 +89,33 @@ Low-liquidity symbols have massive gaps, causing 30+ point MACD-V variance.
 ### Last Session
 
 **Date:** 2026-01-21
-**Activity:** Executed 04-03-PLAN.md - Base Adapter Class
-**Stopped At:** Completed Phase 04 (Foundation), ready for Phase 05
+**Activity:** Executed 05-01-PLAN.md - Coinbase Adapter Skeleton
+**Stopped At:** Completed Plan 05-01, ready for Plan 05-02
 
 ### Resume Context
 
-Phase 04 (Foundation) COMPLETE. All 3 plans delivered:
+Phase 05 (Coinbase Adapter) IN PROGRESS. Plan 05-01 delivered:
 
-1. **04-01:** UnifiedCandle schema, ExchangeAdapterEvents, IExchangeAdapter interface
-2. **04-02:** candleCloseChannel() pub/sub, addCandleIfNewer() versioned writes
-3. **04-03:** BaseExchangeAdapter abstract class with reconnection logic
+1. **05-01:** CoinbaseAdapter class with WebSocket connection and dual channel subscription
 
-**Key artifacts:**
-- `packages/schemas/src/adapter/exchange-adapter.schema.ts` — interfaces and schemas
-- `packages/cache/src/keys.ts` — candleCloseChannel function
-- `packages/cache/src/strategies/candle-cache.ts` — addCandleIfNewer method
+**Key artifacts from 05-01:**
+- `packages/coinbase-client/src/adapter/coinbase-adapter.ts` — CoinbaseAdapter class
+- Added @livermore/cache and ioredis dependencies to coinbase-client
+
+**Builds on Phase 04:**
+- `packages/schemas/src/adapter/exchange-adapter.schema.ts` — IExchangeAdapter interface
 - `packages/coinbase-client/src/adapter/base-adapter.ts` — BaseExchangeAdapter class
 
 **Phase order:**
 1. Phase 04: Foundation (interfaces, base classes) **COMPLETE**
-2. Phase 05: Coinbase Adapter (native candles channel)
+2. Phase 05: Coinbase Adapter (native candles channel) **IN PROGRESS** (1/4)
 3. Phase 06: Indicator Refactor (event-driven, cache-only)
 4. Phase 07: Startup Backfill (parallel with 08)
 5. Phase 08: Reconciliation (parallel with 07)
 6. Phase 09: Cleanup
 
-**Next:** Execute 05-01-PLAN.md (Coinbase Candle Adapter)
+**Next:** Execute 05-02-PLAN.md (Message Processing)
 
 ---
 *State initialized: 2026-01-18*
-*Last updated: 2026-01-21 after completing 04-03-PLAN.md (Phase 04 complete)*
+*Last updated: 2026-01-21 after completing 05-01-PLAN.md*
