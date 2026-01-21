@@ -10,12 +10,12 @@ See: .planning/PROJECT.md
 ## Current Position
 
 **Milestone:** v2.0 Data Pipeline Redesign
-**Phase:** 06-indicator-refactor (3 of 6) **COMPLETE**
-**Plan:** 02 of 2 complete
-**Status:** Phase complete
-**Last activity:** 2026-01-21 - Corrected approach: direct cache reads instead of aggregation
+**Phase:** 07-startup-backfill (4 of 6)
+**Plan:** 01 of 2 complete
+**Status:** In progress
+**Last activity:** 2026-01-21 - Completed 07-01-PLAN.md (StartupBackfillService)
 
-**Progress:** [########----] 8/12 plans (67%)
+**Progress:** [#########---] 9/12 plans (75%)
 
 ## Milestones
 
@@ -87,6 +87,13 @@ Low-liquidity symbols have massive gaps, causing 30+ point MACD-V variance.
 | IND-NO-WARMUP | Defer warmup to Phase 07 | Clear separation of concerns |
 | IND-NO-AGGREGATION | Fetch each timeframe from cache directly | User preference - REST API provides all timeframes natively |
 
+### Decisions Made (Phase 07)
+
+| ID | Decision | Reason |
+|----|----------|--------|
+| BKFL-RATE | 5 requests per batch with 1s delay (5 req/sec) | Conservative rate limiting - 6x safety margin under Coinbase's 30 req/sec limit |
+| BKFL-PRIORITY | 5m, 15m, 1h, 4h, 1d priority order (no 1m) | 5m first since WebSocket provides it, enables indicator calculations sooner |
+
 ### Open Items
 
 - v2.0 research completed in `.planning/research/SUMMARY.md` (on hold pending Option A results)
@@ -98,42 +105,37 @@ Low-liquidity symbols have massive gaps, causing 30+ point MACD-V variance.
 ### Last Session
 
 **Date:** 2026-01-21
-**Activity:** Corrected Phase 06 approach - removed aggregation, use direct cache reads
-**Stopped At:** Phase 06 COMPLETE, ready for Phase 07
+**Activity:** Completed Phase 07 Plan 01 - StartupBackfillService
+**Stopped At:** Plan 07-01 COMPLETE, ready for Plan 07-02
 
 ### Resume Context
 
-Phase 06 (Indicator Refactor) COMPLETE. 2 plans delivered:
+Phase 07 (Startup Backfill) IN PROGRESS. 1 of 2 plans delivered:
 
-1. **06-01:** candleClosePattern helper for Redis psubscribe patterns
-2. **06-02:** Event-driven IndicatorCalculationService with Redis psubscribe, cache-only reads
+1. **07-01:** StartupBackfillService with priority-ordered timeframes and rate-limited batch processing
 
-**Correction made:** User requested NOT to aggregate 5m candles to higher timeframes.
-Instead, higher timeframes are fetched directly from REST API by Phase 07 backfill and
-read from cache. Aggregation code was reverted (commit d9c2124).
+**Key artifacts created:**
+- `packages/coinbase-client/src/backfill/types.ts` - BackfillConfig, DEFAULT_BACKFILL_CONFIG, TIMEFRAME_PRIORITY
+- `packages/coinbase-client/src/backfill/startup-backfill-service.ts` - StartupBackfillService class
+- `packages/coinbase-client/src/backfill/index.ts` - Module re-exports
 
-**Key artifacts:**
-- `apps/api/src/services/indicator-calculation.service.ts` - Refactored (406 lines)
-  - Subscribes to candle:close for ALL timeframes via wildcard pattern
-  - Cache-only reads for all timeframe calculations
-  - 60-candle readiness gate
-  - checkHigherTimeframes() reads directly from cache (no aggregation)
-
-**Phase 06 Result:**
-- Zero REST API calls in indicator hot path for any timeframe
-- All timeframes read directly from cache (populated by Phase 07 backfill)
-- 60-candle readiness gate applies to all calculation paths
+**Phase 07-01 Result:**
+- StartupBackfillService created with backfill(symbols, timeframes) method
+- Rate limiting: 5 requests/batch, 1s delay between batches
+- Priority ordering: 5m first, then 15m, 1h, 4h, 1d
+- Progress logging with completion %, elapsed time, ETA
+- Uses CoinbaseRestClient.getCandles() and CandleCacheStrategy.addCandles()
 
 **Phase order:**
 1. Phase 04: Foundation (interfaces, base classes) **COMPLETE**
 2. Phase 05: Coinbase Adapter (native candles channel) **COMPLETE** (3/3)
 3. Phase 06: Indicator Refactor (event-driven, cache-only) **COMPLETE** (2/2)
-4. Phase 07: Startup Backfill (parallel with 08)
+4. Phase 07: Startup Backfill **IN PROGRESS** (1/2)
 5. Phase 08: Reconciliation (parallel with 07)
 6. Phase 09: Cleanup
 
-**Next:** Execute Phase 07 (Startup Backfill)
+**Next:** Execute Phase 07 Plan 02 (Server Integration)
 
 ---
 *State initialized: 2026-01-18*
-*Last updated: 2026-01-21 after correcting Phase 06 (no aggregation)*
+*Last updated: 2026-01-21 after completing Phase 07 Plan 01*
