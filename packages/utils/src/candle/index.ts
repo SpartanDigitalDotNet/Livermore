@@ -3,4 +3,5 @@
  */
 
 export * from './candle-utils';
-export * from './aggregate-candles';
+// Note: aggregate-candles.ts exists but is not exported - higher timeframes
+// are fetched directly from REST API and cached, not aggregated from 5m

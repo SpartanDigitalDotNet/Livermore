@@ -2,10 +2,9 @@ import {
   getRedisClient,
   CandleCacheStrategy,
   IndicatorCacheStrategy,
-  candleClosePattern,
   type CachedIndicatorValue,
 } from '@livermore/cache';
-import { createLogger, getCandleTimestamp, fillCandleGaps, calculateZeroRangeRatio, aggregateCandles } from '@livermore/utils';
+import { createLogger, getCandleTimestamp, fillCandleGaps, calculateZeroRangeRatio } from '@livermore/utils';
 
 // Create service-specific logger for file output
 const logger = createLogger({ name: 'indicators:scheduler', service: 'indicators' });
@@ -31,9 +30,9 @@ export interface IndicatorConfig {
  * Event-driven service that calculates technical indicators from cached candle data.
  *
  * Architecture (v2.0):
- * - Subscribes to candle:close events via Redis psubscribe
- * - Reads 5m candles exclusively from Redis cache (no REST API calls)
- * - Aggregates 5m candles to higher timeframes (15m, 1h, 4h, 1d) in memory
+ * - Subscribes to candle:close events via Redis psubscribe for all configured timeframes
+ * - Reads candles exclusively from Redis cache (no REST API calls in hot path)
+ * - Each timeframe is fetched and cached independently (by Phase 07 backfill)
  * - Caches calculated indicators in Redis and publishes updates
  *
  * Readiness: Requires 60+ candles before calculating (IND-03)
@@ -65,16 +64,6 @@ export class IndicatorCalculationService {
 
   // Higher timeframes to check when 5m candle closes
   private readonly HIGHER_TIMEFRAMES: Timeframe[] = ['15m', '1h', '4h', '1d'];
-
-  // Number of 5m candles needed per target timeframe candle
-  // Only includes timeframes used by this service (5m source + higher timeframes)
-  private readonly AGGREGATION_FACTORS: Partial<Record<Timeframe, number>> = {
-    '5m': 1,    // No aggregation needed
-    '15m': 3,   // 3 x 5m = 15m
-    '1h': 12,   // 12 x 5m = 1h
-    '4h': 48,   // 48 x 5m = 4h
-    '1d': 288,  // 288 x 5m = 1d
-  };
 
   // NOTE: Constructor parameters kept for backward compatibility with existing server.ts
   // REST client functionality moved to Phase 07 (Startup Backfill)
@@ -118,7 +107,7 @@ export class IndicatorCalculationService {
 
   /**
    * Handle candle:close event from Redis pub/sub
-   * Parses the channel to extract symbol and processes the candle
+   * Parses the channel to extract symbol and timeframe, then recalculates from cache
    */
   private async handleCandleCloseEvent(channel: string, message: string): Promise<void> {
     // Parse channel to extract symbol: "channel:candle:close:1:1:BTC-USD:5m"
@@ -134,11 +123,14 @@ export class IndicatorCalculationService {
     const candle = JSON.parse(message) as UnifiedCandle;
     logger.debug({ symbol, timeframe, timestamp: candle.timestamp }, 'Processing candle:close event');
 
-    // Recalculate 5m indicator (cache-only)
-    await this.recalculateFromCache(symbol, '5m');
+    // Recalculate indicator for this timeframe (cache-only)
+    await this.recalculateFromCache(symbol, timeframe);
 
-    // Check and recalculate higher timeframes
-    await this.checkHigherTimeframes(symbol, candle.timestamp);
+    // If this was a 5m candle, also check if higher timeframes need recalculation
+    // Higher timeframe candles are in cache (populated by Phase 07 backfill)
+    if (timeframe === '5m') {
+      await this.checkHigherTimeframes(symbol, candle.timestamp);
+    }
   }
 
   /**
@@ -170,84 +162,8 @@ export class IndicatorCalculationService {
   }
 
   /**
-   * Get candles for a target timeframe by aggregating cached 5m candles
-   * This eliminates the need for REST API calls for higher timeframes
-   *
-   * @param symbol - Trading pair
-   * @param targetTimeframe - Timeframe to aggregate to
-   * @param requiredCount - Number of target timeframe candles needed
-   * @returns Aggregated candles at target timeframe
-   */
-  private async getAggregatedCandles(
-    symbol: string,
-    targetTimeframe: Timeframe,
-    requiredCount: number
-  ): Promise<Candle[]> {
-    // For 5m, just read directly from cache
-    if (targetTimeframe === '5m') {
-      return this.candleCache.getRecentCandles(
-        this.TEST_USER_ID,
-        this.TEST_EXCHANGE_ID,
-        symbol,
-        '5m',
-        requiredCount
-      );
-    }
-
-    // Calculate how many 5m candles we need
-    const factor = this.AGGREGATION_FACTORS[targetTimeframe] || 1;
-    // Need extra to ensure we get enough complete periods
-    const sourceCount = (requiredCount + 1) * factor;
-
-    // Read 5m candles from cache
-    const sourceCandles = await this.candleCache.getRecentCandles(
-      this.TEST_USER_ID,
-      this.TEST_EXCHANGE_ID,
-      symbol,
-      '5m',
-      sourceCount
-    );
-
-    if (sourceCandles.length < factor) {
-      // Not enough candles even for one complete period
-      return [];
-    }
-
-    // Aggregate to target timeframe
-    return aggregateCandles(sourceCandles, '5m', targetTimeframe);
-  }
-
-  /**
-   * Recalculate indicator for a higher timeframe using aggregated 5m candles
-   * This is the cache-only path for all higher timeframes
-   */
-  private async recalculateFromAggregated(symbol: string, timeframe: Timeframe): Promise<void> {
-    // Get aggregated candles (builds from cached 5m data)
-    const candles = await this.getAggregatedCandles(symbol, timeframe, 200);
-
-    // Readiness gate
-    if (candles.length < this.REQUIRED_CANDLES) {
-      logger.debug({
-        symbol,
-        timeframe,
-        available: candles.length,
-        required: this.REQUIRED_CANDLES,
-      }, 'Skipping higher timeframe calculation - insufficient aggregated candles');
-      return;
-    }
-
-    logger.debug({
-      symbol,
-      timeframe,
-      aggregatedCount: candles.length,
-    }, 'Calculating indicator from aggregated candles');
-
-    await this.calculateIndicators(symbol, timeframe, candles);
-  }
-
-  /**
    * Check if any higher timeframes closed and trigger recalculation
-   * Uses aggregated 5m candles instead of REST API calls
+   * Reads directly from cache (cache populated by Phase 07 backfill)
    */
   private async checkHigherTimeframes(symbol: string, timestamp: number): Promise<void> {
     for (const timeframe of this.HIGHER_TIMEFRAMES) {
@@ -267,8 +183,8 @@ export class IndicatorCalculationService {
           newBoundary: new Date(currentBoundary).toISOString(),
         }, `Boundary crossed: ${symbol} ${timeframe}`);
 
-        // Recalculate using aggregated candles (no REST calls)
-        await this.recalculateFromAggregated(symbol, timeframe);
+        // Recalculate from cache (cache populated by Phase 07 backfill)
+        await this.recalculateFromCache(symbol, timeframe);
       }
     }
   }
@@ -292,8 +208,9 @@ export class IndicatorCalculationService {
     // Create dedicated subscriber (required for pub/sub mode)
     this.subscriber = this.redis.duplicate();
 
-    // Subscribe to all 5m candle:close events
-    const pattern = candleClosePattern(this.TEST_USER_ID, this.TEST_EXCHANGE_ID, '*', '5m');
+    // Subscribe to candle:close events for ALL timeframes (wildcard pattern)
+    // Each timeframe's cache is populated independently by Phase 07 backfill
+    const pattern = `channel:candle:close:${this.TEST_USER_ID}:${this.TEST_EXCHANGE_ID}:*:*`;
     await this.subscriber.psubscribe(pattern);
 
     // Handle pattern messages (pmessage for psubscribe, not message)
@@ -338,15 +255,12 @@ export class IndicatorCalculationService {
     timeframe: Timeframe,
     candles: Candle[]
   ): Promise<void> {
-    // Log candle source for debugging aggregation path
-    const isAggregated = timeframe !== '5m';
     logger.debug({
       event: 'indicator_calculation_start',
       symbol,
       timeframe,
       candleCount: candles.length,
-      source: isAggregated ? 'aggregated_5m' : 'cache_direct',
-    }, `Calculating ${symbol} ${timeframe} from ${isAggregated ? 'aggregated' : 'cached'} candles`);
+    }, `Calculating ${symbol} ${timeframe} from cached candles`);
 
     // Fill gaps in sparse candle data (e.g., low-liquidity symbols)
     // This matches TradingView behavior and prevents ATR from being near-zero
@@ -457,7 +371,6 @@ export class IndicatorCalculationService {
       event: 'indicator_cached',
       symbol,
       timeframe,
-      source: isAggregated ? 'aggregated_5m' : 'cache_direct',
       timestamp: new Date(latestCandle.timestamp).toISOString(),
       macdV: Number.isNaN(macdVResult.macdV) ? null : macdVResult.macdV,
       signal: Number.isNaN(macdVResult.signal) ? null : macdVResult.signal,
