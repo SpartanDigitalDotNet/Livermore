@@ -8,3 +8,7 @@ export { CoinbaseWebSocketClient, type CoinbaseWSMessage, type MessageHandler } 
 
 // Adapter base class
 export * from './adapter';
+
+// Backfill service
+export { StartupBackfillService, DEFAULT_BACKFILL_CONFIG, TIMEFRAME_PRIORITY } from './backfill';
+export type { BackfillConfig } from './backfill';
