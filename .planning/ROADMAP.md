@@ -156,6 +156,10 @@ Transform from REST-heavy, request-driven architecture to cache-first, event-dri
 - Rate-limited backfill for detected gaps
 - `node-cron` integration
 
+**Plans:** 2 plans
+- [ ] 08-01-PLAN.md — ReconciliationService with gap detection and cron jobs
+- [ ] 08-02-PLAN.md — Server.ts integration (start reconciliation after other services)
+
 **Success Criteria:**
 - [ ] Gaps detected within 5 minutes of occurrence
 - [ ] Gaps filled via REST backfill automatically
@@ -213,11 +217,11 @@ Phase 06 (Indicator Refactor)
 | 05 | Coinbase Adapter | Complete | 3/3 |
 | 06 | Indicator Refactor | Complete | 2/2 |
 | 07 | Startup Backfill | Complete | 2/2 |
-| 08 | Reconciliation | Pending | 0/? |
+| 08 | Reconciliation | Ready | 0/2 |
 | 09 | Cleanup | Pending | 0/? |
 
 **Overall:** 67% complete (4/6 phases)
 
 ---
 *Roadmap created: 2026-01-21*
-*Last updated: 2026-01-21 after Phase 07 completion*
+*Last updated: 2026-01-21 after Phase 08 planning*
