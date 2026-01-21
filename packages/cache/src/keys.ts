@@ -114,3 +114,21 @@ export function indicatorChannel(
 export function alertChannel(userId: number): string {
   return `channel:alerts:${userId}`;
 }
+
+/**
+ * Build a Redis psubscribe pattern for candle close events
+ * Supports wildcards for symbol to subscribe to all symbols at once
+ *
+ * @example
+ * // Subscribe to all 5m closes for user 1, exchange 1
+ * candleClosePattern(1, 1, '*', '5m')
+ * // Returns: "channel:candle:close:1:1:*:5m"
+ */
+export function candleClosePattern(
+  userId: number,
+  exchangeId: number,
+  symbol: string, // Can be '*' for wildcard
+  timeframe: Timeframe
+): string {
+  return `channel:candle:close:${userId}:${exchangeId}:${symbol}:${timeframe}`;
+}
