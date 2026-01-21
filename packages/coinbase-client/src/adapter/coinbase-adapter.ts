@@ -139,6 +139,9 @@ export class CoinbaseAdapter extends BaseExchangeAdapter {
   /** Flag to prevent reconnection on intentional disconnect */
   private isIntentionalClose = false;
 
+  /** Track last candle timestamp per symbol for close detection */
+  private lastCandleTimestamps = new Map<string, number>();
+
   constructor(options: CoinbaseAdapterOptions) {
     super();
     this.auth = new CoinbaseAuth(options.apiKeyId, options.privateKeyPem);
@@ -276,8 +279,90 @@ export class CoinbaseAdapter extends BaseExchangeAdapter {
   }
 
   /**
+   * Normalize Coinbase WebSocket candle to UnifiedCandle format
+   */
+  private normalizeCandle(candle: CoinbaseWebSocketCandle, sequenceNum: number): UnifiedCandle {
+    return {
+      timestamp: parseInt(candle.start, 10) * 1000, // Convert seconds to milliseconds
+      open: parseFloat(candle.open),
+      high: parseFloat(candle.high),
+      low: parseFloat(candle.low),
+      close: parseFloat(candle.close),
+      volume: parseFloat(candle.volume),
+      symbol: candle.product_id,
+      timeframe: '5m',  // Coinbase WebSocket candles are always 5m
+      exchange: 'coinbase',
+      sequenceNum,
+    };
+  }
+
+  /**
+   * Process incoming candle messages
+   * Detects candle close by comparing timestamps
+   */
+  private async handleCandlesMessage(message: CandlesMessage): Promise<void> {
+    const sequenceNum = message.sequence_num;
+
+    for (const event of message.events) {
+      for (const rawCandle of event.candles) {
+        const candle = this.normalizeCandle(rawCandle, sequenceNum);
+        const symbol = candle.symbol;
+        const previousTimestamp = this.lastCandleTimestamps.get(symbol);
+
+        // Detect candle close: timestamp changed means previous candle closed
+        if (previousTimestamp !== undefined && previousTimestamp !== candle.timestamp) {
+          // Previous candle just closed - emit close event for it
+          // Note: We emit for the NEW candle (which contains the finalized OHLCV)
+          // because Coinbase sends the new candle when the old one closes
+          await this.onCandleClose(candle);
+        }
+
+        // Update tracking
+        this.lastCandleTimestamps.set(symbol, candle.timestamp);
+
+        // Always write to cache (addCandleIfNewer handles versioning)
+        try {
+          await this.candleCache.addCandleIfNewer(
+            this.userId,
+            this.exchangeIdNum,
+            candle
+          );
+        } catch (error) {
+          logger.error({ error, symbol, timestamp: candle.timestamp }, 'Failed to write candle to cache');
+        }
+      }
+    }
+  }
+
+  /**
+   * Handle candle close event
+   * Writes to cache, publishes to Redis, emits event
+   */
+  private async onCandleClose(candle: UnifiedCandle): Promise<void> {
+    logger.debug(
+      { symbol: candle.symbol, timestamp: new Date(candle.timestamp).toISOString() },
+      'Candle closed'
+    );
+
+    // Emit typed event for local subscribers
+    this.emit('candle:close', candle);
+
+    // Publish to Redis pub/sub for distributed subscribers (indicator service)
+    try {
+      const channel = candleCloseChannel(
+        this.userId,
+        this.exchangeIdNum,
+        candle.symbol,
+        candle.timeframe
+      );
+      await this.redis.publish(channel, JSON.stringify(candle));
+    } catch (error) {
+      logger.error({ error, symbol: candle.symbol }, 'Failed to publish candle:close to Redis');
+    }
+  }
+
+  /**
    * Handle incoming WebSocket messages
-   * TODO: Process candles and heartbeats in Plan 02
    */
   private handleMessage(data: WebSocket.Data): void {
     try {
