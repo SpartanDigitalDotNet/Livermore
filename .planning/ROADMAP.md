@@ -99,6 +99,11 @@ Transform from REST-heavy, request-driven architecture to cache-first, event-dri
 - Readiness gate (skip calculation if < 60 candles)
 - Aggregation logic: build 15m/1h/4h/1d from cached 5m candles
 
+**Plans:** 3 plans
+- [ ] 06-01-PLAN.md — Candle aggregation utility (aggregateCandles function)
+- [ ] 06-02-PLAN.md — Event-driven indicator service (psubscribe, cache-only, readiness gate)
+- [ ] 06-03-PLAN.md — Higher timeframe integration (aggregate 5m to 15m/1h/4h/1d)
+
 **Success Criteria:**
 - [ ] Zero REST API calls during normal indicator operation
 - [ ] Indicators recalculate on candle:close events only
@@ -203,7 +208,7 @@ Phase 06 (Indicator Refactor)
 |-------|------|--------|-------|
 | 04 | Foundation | Complete | 3/3 |
 | 05 | Coinbase Adapter | Complete | 3/3 |
-| 06 | Indicator Refactor | Pending | 0/? |
+| 06 | Indicator Refactor | Planned | 0/3 |
 | 07 | Startup Backfill | Pending | 0/? |
 | 08 | Reconciliation | Pending | 0/? |
 | 09 | Cleanup | Pending | 0/? |
@@ -212,4 +217,4 @@ Phase 06 (Indicator Refactor)
 
 ---
 *Roadmap created: 2026-01-21*
-*Last updated: 2026-01-21 after Phase 05 execution*
+*Last updated: 2026-01-21 after Phase 06 planning*
