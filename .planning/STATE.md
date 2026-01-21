@@ -11,11 +11,11 @@ See: .planning/PROJECT.md
 
 **Milestone:** v2.0 Data Pipeline Redesign
 **Phase:** 06-indicator-refactor (3 of 6) **COMPLETE**
-**Plan:** 03 of 3 complete
+**Plan:** 02 of 2 complete
 **Status:** Phase complete
-**Last activity:** 2026-01-21 - Completed 06-03-PLAN.md (Higher Timeframe Integration)
+**Last activity:** 2026-01-21 - Corrected approach: direct cache reads instead of aggregation
 
-**Progress:** [############] 12/12 plans (100%)
+**Progress:** [########----] 8/12 plans (67%)
 
 ## Milestones
 
@@ -82,11 +82,10 @@ Low-liquidity symbols have massive gaps, causing 30+ point MACD-V variance.
 
 | ID | Decision | Reason |
 |----|----------|--------|
-| IND-PATTERN | Redis psubscribe with wildcard pattern | Scales to any number of symbols |
+| IND-PATTERN | Redis psubscribe with wildcard pattern for all timeframes | Scales to any number of symbols/timeframes |
 | IND-THRESHOLD | 60-candle readiness threshold | TradingView alignment (IND-03) |
 | IND-NO-WARMUP | Defer warmup to Phase 07 | Clear separation of concerns |
-| IND-AGG-FACTORS | AGGREGATION_FACTORS constant with Partial<Record<Timeframe, number>> | TypeScript type safety while only defining used timeframes |
-| IND-AGG-OVERFETCH | Fetch (requiredCount + 1) * factor 5m candles | Ensures enough complete periods after aggregation filtering |
+| IND-NO-AGGREGATION | Fetch each timeframe from cache directly | User preference - REST API provides all timeframes natively |
 
 ### Open Items
 
@@ -99,38 +98,36 @@ Low-liquidity symbols have massive gaps, causing 30+ point MACD-V variance.
 ### Last Session
 
 **Date:** 2026-01-21
-**Activity:** Executed 06-03-PLAN.md - Higher Timeframe Integration
+**Activity:** Corrected Phase 06 approach - removed aggregation, use direct cache reads
 **Stopped At:** Phase 06 COMPLETE, ready for Phase 07
 
 ### Resume Context
 
-Phase 06 (Indicator Refactor) COMPLETE. All 3 plans delivered:
+Phase 06 (Indicator Refactor) COMPLETE. 2 plans delivered:
 
-1. **06-01:** aggregateCandles() utility for building higher timeframes from 5m candles
+1. **06-01:** candleClosePattern helper for Redis psubscribe patterns
 2. **06-02:** Event-driven IndicatorCalculationService with Redis psubscribe, cache-only reads
-3. **06-03:** Higher timeframe integration via 5m aggregation
 
-**Key artifacts from 06-03:**
-- `apps/api/src/services/indicator-calculation.service.ts` - Extended (513 lines)
-  - `AGGREGATION_FACTORS` constant for 5m->higher timeframe conversion
-  - `getAggregatedCandles()` method builds higher TFs from cached 5m
-  - `recalculateFromAggregated()` for higher timeframe calculation path
-  - `checkHigherTimeframes()` now uses aggregation instead of direct cache
-  - Source logging: `aggregated_5m` vs `cache_direct`
+**Correction made:** User requested NOT to aggregate 5m candles to higher timeframes.
+Instead, higher timeframes are fetched directly from REST API by Phase 07 backfill and
+read from cache. Aggregation code was reverted (commit d9c2124).
 
-**Commits (06-03):**
-- 505f2eb: feat(06-03): add aggregation import and getAggregatedCandles method
-- 6637567: docs(06-03): add integration logging and update documentation
+**Key artifacts:**
+- `apps/api/src/services/indicator-calculation.service.ts` - Refactored (406 lines)
+  - Subscribes to candle:close for ALL timeframes via wildcard pattern
+  - Cache-only reads for all timeframe calculations
+  - 60-candle readiness gate
+  - checkHigherTimeframes() reads directly from cache (no aggregation)
 
 **Phase 06 Result:**
 - Zero REST API calls in indicator hot path for any timeframe
-- All higher timeframes (15m, 1h, 4h, 1d) built from aggregated 5m cache data
+- All timeframes read directly from cache (populated by Phase 07 backfill)
 - 60-candle readiness gate applies to all calculation paths
 
 **Phase order:**
 1. Phase 04: Foundation (interfaces, base classes) **COMPLETE**
 2. Phase 05: Coinbase Adapter (native candles channel) **COMPLETE** (3/3)
-3. Phase 06: Indicator Refactor (event-driven, cache-only) **COMPLETE** (3/3)
+3. Phase 06: Indicator Refactor (event-driven, cache-only) **COMPLETE** (2/2)
 4. Phase 07: Startup Backfill (parallel with 08)
 5. Phase 08: Reconciliation (parallel with 07)
 6. Phase 09: Cleanup
@@ -139,4 +136,4 @@ Phase 06 (Indicator Refactor) COMPLETE. All 3 plans delivered:
 
 ---
 *State initialized: 2026-01-18*
-*Last updated: 2026-01-21 after completing 06-03-PLAN.md*
+*Last updated: 2026-01-21 after correcting Phase 06 (no aggregation)*

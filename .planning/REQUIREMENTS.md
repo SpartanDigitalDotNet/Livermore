@@ -34,7 +34,7 @@ Requirements for eliminating 429 errors and data gaps through cache-first, event
 - [ ] **IND-01**: Indicator service subscribes to `candle:close` events (no timer-based polling)
 - [ ] **IND-02**: Indicator calculations read exclusively from Redis cache
 - [ ] **IND-03**: Readiness check ensures 60+ candles before calculating (MACD-V minimum)
-- [ ] **IND-04**: Higher timeframes (15m, 1h, 4h, 1d) aggregated from cached 5m candles
+- [ ] **IND-04**: Higher timeframes (15m, 1h, 4h, 1d) read from cache (populated by Phase 07 backfill)
 
 ### Backfill
 

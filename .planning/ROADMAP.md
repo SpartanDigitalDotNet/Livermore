@@ -90,26 +90,25 @@ Transform from REST-heavy, request-driven architecture to cache-first, event-dri
 - IND-01: Subscribe to candle:close events
 - IND-02: Read exclusively from cache
 - IND-03: 60-candle readiness check
-- IND-04: Timeframe aggregation
+- IND-04: Higher timeframes from cache
 
 **Deliverables:**
 - Indicator service subscribes to `candle:close` Redis pub/sub
 - Remove all REST API calls from recalculation path
-- Cache-only reads for candle data
+- Cache-only reads for candle data (all timeframes)
 - Readiness gate (skip calculation if < 60 candles)
-- Aggregation logic: build 15m/1h/4h/1d from cached 5m candles
+- Higher timeframe boundary detection triggers cache reads
 
-**Plans:** 3 plans
-- [ ] 06-01-PLAN.md — Candle aggregation utility (aggregateCandles function)
-- [ ] 06-02-PLAN.md — Event-driven indicator service (psubscribe, cache-only, readiness gate)
-- [ ] 06-03-PLAN.md — Higher timeframe integration (aggregate 5m to 15m/1h/4h/1d)
+**Plans:** 2 plans
+- [x] 06-01-PLAN.md — candleClosePattern helper for Redis psubscribe
+- [x] 06-02-PLAN.md — Event-driven indicator service (psubscribe, cache-only, readiness gate)
 
 **Success Criteria:**
-- [ ] Zero REST API calls during normal indicator operation
-- [ ] Indicators recalculate on candle:close events only
-- [ ] Symbols with < 60 candles skipped gracefully
-- [ ] Higher timeframes aggregate correctly from 5m data
-- [ ] Existing MACD-V calculations produce same results
+- [x] Zero REST API calls during normal indicator operation
+- [x] Indicators recalculate on candle:close events only
+- [x] Symbols with < 60 candles skipped gracefully
+- [x] Higher timeframes read from cache (populated by Phase 07 backfill)
+- [x] Existing MACD-V calculations produce same results
 
 ---
 
@@ -208,13 +207,13 @@ Phase 06 (Indicator Refactor)
 |-------|------|--------|-------|
 | 04 | Foundation | Complete | 3/3 |
 | 05 | Coinbase Adapter | Complete | 3/3 |
-| 06 | Indicator Refactor | Planned | 0/3 |
+| 06 | Indicator Refactor | Complete | 2/2 |
 | 07 | Startup Backfill | Pending | 0/? |
 | 08 | Reconciliation | Pending | 0/? |
 | 09 | Cleanup | Pending | 0/? |
 
-**Overall:** 33% complete (2/6 phases)
+**Overall:** 50% complete (3/6 phases)
 
 ---
 *Roadmap created: 2026-01-21*
-*Last updated: 2026-01-21 after Phase 06 planning*
+*Last updated: 2026-01-21 after Phase 06 completion (no aggregation)*
