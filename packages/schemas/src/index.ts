@@ -22,6 +22,9 @@ export * from './indicators/alert.schema';
 // Position schemas
 export * from './position/position.schema';
 
+// Adapter schemas
+export * from './adapter';
+
 // Asset utilities
 export * from './assets/crypto-icons';
 
