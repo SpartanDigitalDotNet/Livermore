@@ -10,12 +10,12 @@ See: .planning/PROJECT.md
 ## Current Position
 
 **Milestone:** v2.0 Data Pipeline Redesign
-**Phase:** 04-foundation (1 of 6)
-**Plan:** 02 of 3 complete
-**Status:** In Progress
-**Last activity:** 2026-01-21 — Completed 04-02-PLAN.md (Cache Infrastructure)
+**Phase:** 04-foundation (1 of 6) **COMPLETE**
+**Plan:** 03 of 3 complete
+**Status:** Phase 04 complete, ready for Phase 05
+**Last activity:** 2026-01-21 — Completed 04-03-PLAN.md (Base Adapter Class)
 
-**Progress:** [##--------] 2/18 plans (11%)
+**Progress:** [###-------] 3/18 plans (17%)
 
 ## Milestones
 
@@ -89,30 +89,33 @@ Low-liquidity symbols have massive gaps, causing 30+ point MACD-V variance.
 ### Last Session
 
 **Date:** 2026-01-21
-**Activity:** Executed 04-02-PLAN.md - Cache Infrastructure
-**Stopped At:** Completed plan 04-02, ready for 04-03
+**Activity:** Executed 04-03-PLAN.md - Base Adapter Class
+**Stopped At:** Completed Phase 04 (Foundation), ready for Phase 05
 
 ### Resume Context
 
-Phase 04-02 complete. Delivered:
-- candleCloseChannel() function for Redis pub/sub (finalized candle events)
-- addCandleIfNewer() method for versioned cache writes (sequence number comparison)
+Phase 04 (Foundation) COMPLETE. All 3 plans delivered:
+
+1. **04-01:** UnifiedCandle schema, ExchangeAdapterEvents, IExchangeAdapter interface
+2. **04-02:** candleCloseChannel() pub/sub, addCandleIfNewer() versioned writes
+3. **04-03:** BaseExchangeAdapter abstract class with reconnection logic
 
 **Key artifacts:**
-- `.planning/phases/04-foundation/04-02-SUMMARY.md` — execution summary
+- `packages/schemas/src/adapter/exchange-adapter.schema.ts` — interfaces and schemas
 - `packages/cache/src/keys.ts` — candleCloseChannel function
 - `packages/cache/src/strategies/candle-cache.ts` — addCandleIfNewer method
+- `packages/coinbase-client/src/adapter/base-adapter.ts` — BaseExchangeAdapter class
 
 **Phase order:**
-1. Phase 04: Foundation (interfaces, base classes) **IN PROGRESS**
+1. Phase 04: Foundation (interfaces, base classes) **COMPLETE**
 2. Phase 05: Coinbase Adapter (native candles channel)
 3. Phase 06: Indicator Refactor (event-driven, cache-only)
 4. Phase 07: Startup Backfill (parallel with 08)
 5. Phase 08: Reconciliation (parallel with 07)
 6. Phase 09: Cleanup
 
-**Next:** Execute 04-03-PLAN.md (Base Adapter Class)
+**Next:** Execute 05-01-PLAN.md (Coinbase Candle Adapter)
 
 ---
 *State initialized: 2026-01-18*
-*Last updated: 2026-01-21 after completing 04-02-PLAN.md*
+*Last updated: 2026-01-21 after completing 04-03-PLAN.md (Phase 04 complete)*
