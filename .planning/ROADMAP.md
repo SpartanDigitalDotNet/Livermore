@@ -124,8 +124,12 @@ Transform from REST-heavy, request-driven architecture to cache-first, event-dri
 **Deliverables:**
 - Startup backfill service
 - Rate limiter (5 requests/batch, 1s delay)
-- Priority queue (1m → 5m → 15m → 1h → 4h → 1d)
+- Priority queue (5m → 15m → 1h → 4h → 1d)
 - Progress logging (X/Y symbols loaded)
+
+**Plans:** 2 plans
+- [ ] 07-01-PLAN.md — StartupBackfillService class with rate-limited REST fetching
+- [ ] 07-02-PLAN.md — Server.ts integration (backfill before indicators)
 
 **Success Criteria:**
 - [ ] All symbols have 60+ candles in cache before indicators start
@@ -208,7 +212,7 @@ Phase 06 (Indicator Refactor)
 | 04 | Foundation | Complete | 3/3 |
 | 05 | Coinbase Adapter | Complete | 3/3 |
 | 06 | Indicator Refactor | Complete | 2/2 |
-| 07 | Startup Backfill | Pending | 0/? |
+| 07 | Startup Backfill | Planned | 0/2 |
 | 08 | Reconciliation | Pending | 0/? |
 | 09 | Cleanup | Pending | 0/? |
 
@@ -216,4 +220,4 @@ Phase 06 (Indicator Refactor)
 
 ---
 *Roadmap created: 2026-01-21*
-*Last updated: 2026-01-21 after Phase 06 completion (no aggregation)*
+*Last updated: 2026-01-21 after Phase 07 planning*
