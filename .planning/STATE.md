@@ -11,11 +11,11 @@ See: .planning/PROJECT.md
 
 **Milestone:** v2.0 Data Pipeline Redesign
 **Phase:** 04-foundation (1 of 6)
-**Plan:** 01 of 3 complete
+**Plan:** 02 of 3 complete
 **Status:** In Progress
-**Last activity:** 2026-01-21 — Completed 04-01-PLAN.md (Exchange Adapter Interfaces)
+**Last activity:** 2026-01-21 — Completed 04-02-PLAN.md (Cache Infrastructure)
 
-**Progress:** [##--------] 1/18 plans (6%)
+**Progress:** [##--------] 2/18 plans (11%)
 
 ## Milestones
 
@@ -89,19 +89,19 @@ Low-liquidity symbols have massive gaps, causing 30+ point MACD-V variance.
 ### Last Session
 
 **Date:** 2026-01-21
-**Activity:** Executed 04-01-PLAN.md - Exchange Adapter Interfaces
-**Stopped At:** Completed plan 04-01, ready for 04-02
+**Activity:** Executed 04-02-PLAN.md - Cache Infrastructure
+**Stopped At:** Completed plan 04-02, ready for 04-03
 
 ### Resume Context
 
-Phase 04-01 complete. Delivered:
-- UnifiedCandleSchema (extends CandleSchema with exchange, exchangeTimestamp, sequenceNum)
-- ExchangeAdapterEvents (typed event map for 5 events)
-- IExchangeAdapter (interface extending typed EventEmitter)
+Phase 04-02 complete. Delivered:
+- candleCloseChannel() function for Redis pub/sub (finalized candle events)
+- addCandleIfNewer() method for versioned cache writes (sequence number comparison)
 
 **Key artifacts:**
-- `.planning/phases/04-foundation/04-01-SUMMARY.md` — execution summary
-- `packages/schemas/src/adapter/exchange-adapter.schema.ts` — new schema file
+- `.planning/phases/04-foundation/04-02-SUMMARY.md` — execution summary
+- `packages/cache/src/keys.ts` — candleCloseChannel function
+- `packages/cache/src/strategies/candle-cache.ts` — addCandleIfNewer method
 
 **Phase order:**
 1. Phase 04: Foundation (interfaces, base classes) **IN PROGRESS**
@@ -111,8 +111,8 @@ Phase 04-01 complete. Delivered:
 5. Phase 08: Reconciliation (parallel with 07)
 6. Phase 09: Cleanup
 
-**Next:** Execute 04-02-PLAN.md (Base Adapter Class)
+**Next:** Execute 04-03-PLAN.md (Base Adapter Class)
 
 ---
 *State initialized: 2026-01-18*
-*Last updated: 2026-01-21 after completing 04-01-PLAN.md*
+*Last updated: 2026-01-21 after completing 04-02-PLAN.md*
