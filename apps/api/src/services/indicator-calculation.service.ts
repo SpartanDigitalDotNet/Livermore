@@ -1,22 +1,21 @@
-import { CoinbaseRestClient } from '@livermore/coinbase-client';
 import {
   getRedisClient,
   CandleCacheStrategy,
   IndicatorCacheStrategy,
+  candleClosePattern,
   type CachedIndicatorValue,
 } from '@livermore/cache';
-import { createLogger, getCandleTimestamp, timeframeToMs, fillCandleGaps, calculateZeroRangeRatio } from '@livermore/utils';
+import { createLogger, getCandleTimestamp, fillCandleGaps, calculateZeroRangeRatio } from '@livermore/utils';
 
 // Create service-specific logger for file output
 const logger = createLogger({ name: 'indicators:scheduler', service: 'indicators' });
-import { classifyLiquidity, type Candle, type Timeframe, type LiquidityTier } from '@livermore/schemas';
+import { classifyLiquidity, type Candle, type Timeframe, type LiquidityTier, type UnifiedCandle } from '@livermore/schemas';
 import {
   macdVWithStage,
-  macdVMinBars,
   MACD_V_DEFAULTS,
   type OHLCWithSynthetic,
 } from '@livermore/indicators';
-import type { CandleData } from './coinbase-websocket.service';
+import type { Redis } from 'ioredis';
 
 /**
  * Configuration for a symbol/timeframe pair to calculate indicators for
@@ -33,10 +32,10 @@ export interface IndicatorConfig {
  * caches results in Redis, and publishes updates.
  */
 export class IndicatorCalculationService {
-  private restClient: CoinbaseRestClient;
   private candleCache: CandleCacheStrategy;
   private indicatorCache: IndicatorCacheStrategy;
   private redis = getRedisClient();
+  private subscriber: Redis | null = null;
 
   // Active calculation configs
   private configs: IndicatorConfig[] = [];
@@ -53,67 +52,17 @@ export class IndicatorCalculationService {
   private readonly TEST_USER_ID = 1;
   private readonly TEST_EXCHANGE_ID = 1;
 
-  // Calculation settings
-  private readonly MIN_CANDLES_FOR_MACDV = macdVMinBars(); // ~35 candles
+  // IND-03: Project requirement for TradingView alignment (60 candles minimum)
+  private readonly REQUIRED_CANDLES = 60;
 
-  // Higher timeframes to check when 1m candle closes
-  private readonly HIGHER_TIMEFRAMES: Timeframe[] = ['5m', '15m', '1h', '4h', '1d'];
+  // Higher timeframes to check when 5m candle closes
+  private readonly HIGHER_TIMEFRAMES: Timeframe[] = ['15m', '1h', '4h', '1d'];
 
-  // Rate limiting settings to avoid Coinbase API throttling
-  private readonly BATCH_SIZE = 5; // Requests per batch (reduced to avoid rate limits)
-  private readonly BATCH_DELAY_MS = 1000; // Delay between batches
-
-  // Priority symbols - loaded first for faster startup
-  private readonly PRIORITY_SYMBOLS = [
-    'BTC-USD', 'ETH-USD', 'SOL-USD', 'XRP-USD', 'DOGE-USD',
-    'ADA-USD', 'AVAX-USD', 'LINK-USD', 'DOT-USD', 'MATIC-USD',
-  ];
-
-  constructor(apiKeyId: string, privateKeyPem: string) {
-    this.restClient = new CoinbaseRestClient(apiKeyId, privateKeyPem);
+  // NOTE: Constructor parameters kept for backward compatibility with existing server.ts
+  // REST client functionality moved to Phase 07 (Startup Backfill)
+  constructor(_apiKeyId: string, _privateKeyPem: string) {
     this.candleCache = new CandleCacheStrategy(this.redis);
     this.indicatorCache = new IndicatorCacheStrategy(this.redis);
-  }
-
-  /**
-   * Sleep helper for rate limiting
-   */
-  private sleep(ms: number): Promise<void> {
-    return new Promise((resolve) => setTimeout(resolve, ms));
-  }
-
-  /**
-   * Process configs in batches with delays to avoid rate limiting
-   */
-  private async processBatched<T>(
-    items: T[],
-    processor: (item: T) => Promise<void>,
-    label: string
-  ): Promise<void> {
-    const total = items.length;
-    let processed = 0;
-
-    for (let i = 0; i < items.length; i += this.BATCH_SIZE) {
-      const batch = items.slice(i, i + this.BATCH_SIZE);
-
-      // Process batch in parallel
-      await Promise.all(
-        batch.map((item) =>
-          processor(item).catch((err) => {
-            const message = err instanceof Error ? err.message : String(err);
-            logger.error({ err: message, item }, `Failed to process ${label}`);
-          })
-        )
-      );
-
-      processed += batch.length;
-      logger.info({ processed, total, label }, 'Batch complete');
-
-      // Delay before next batch (skip delay after last batch)
-      if (i + this.BATCH_SIZE < items.length) {
-        await this.sleep(this.BATCH_DELAY_MS);
-      }
-    }
   }
 
   /**
@@ -150,37 +99,63 @@ export class IndicatorCalculationService {
   }
 
   /**
-   * Handle candle close event from WebSocket service
-   * Called when a 1m candle closes for a symbol
-   *
-   * NOTE: We use the WebSocket event as a TRIGGER only, then fetch actual
-   * candle data from REST API for accuracy. The locally-aggregated ticker
-   * data may miss trades or have incorrect high/low values.
+   * Handle candle:close event from Redis pub/sub
+   * Parses the channel to extract symbol and processes the candle
    */
-  async onCandleClose(symbol: string, _timeframe: Timeframe, candle: CandleData): Promise<void> {
-    // Only process symbols we're monitoring
+  private async handleCandleCloseEvent(channel: string, message: string): Promise<void> {
+    // Parse channel to extract symbol: "channel:candle:close:1:1:BTC-USD:5m"
+    const parts = channel.split(':');
+    const symbol = parts[4];
+    const timeframe = parts[5] as Timeframe;
+
+    // Only process monitored symbols
     if (!this.monitoredSymbols.has(symbol)) {
       return;
     }
 
-    logger.debug({ symbol, timestamp: new Date(candle.timestamp).toISOString() }, 'Processing candle close event');
+    const candle = JSON.parse(message) as UnifiedCandle;
+    logger.debug({ symbol, timeframe, timestamp: candle.timestamp }, 'Processing candle:close event');
 
-    // Fetch actual 1m candle from REST API (not the locally-aggregated ticker data)
-    // This ensures accurate OHLC values from Coinbase
-    await this.recalculateForConfig({ symbol, timeframe: '1m' });
+    // Recalculate 5m indicator (cache-only)
+    await this.recalculateFromCache(symbol, '5m');
 
-    // Check if higher timeframes also closed
+    // Check and recalculate higher timeframes
     await this.checkHigherTimeframes(symbol, candle.timestamp);
   }
 
   /**
+   * Recalculate indicators from cache only - no REST API calls
+   * This is the hot path for event-driven indicator updates
+   */
+  private async recalculateFromCache(symbol: string, timeframe: Timeframe): Promise<void> {
+    // Read from cache ONLY - no REST API calls
+    const candles = await this.candleCache.getRecentCandles(
+      this.TEST_USER_ID,
+      this.TEST_EXCHANGE_ID,
+      symbol,
+      timeframe,
+      200
+    );
+
+    // Readiness gate: skip if insufficient candles (IND-03)
+    if (candles.length < this.REQUIRED_CANDLES) {
+      logger.debug({
+        symbol,
+        timeframe,
+        available: candles.length,
+        required: this.REQUIRED_CANDLES,
+      }, 'Skipping indicator calculation - insufficient candles');
+      return;
+    }
+
+    await this.calculateIndicators(symbol, timeframe, candles);
+  }
+
+  /**
    * Check if any higher timeframes closed and trigger recalculation
-   * Uses REST API to fetch the actual candle data for higher timeframes
-   * Batches requests to avoid Coinbase rate limiting
+   * Uses cache-only reads for higher timeframe candles
    */
   private async checkHigherTimeframes(symbol: string, timestamp: number): Promise<void> {
-    const configsToRecalculate: IndicatorConfig[] = [];
-
     for (const timeframe of this.HIGHER_TIMEFRAMES) {
       const key = `${symbol}:${timeframe}`;
       const lastBoundary = this.lastProcessedBoundary.get(key) || 0;
@@ -198,27 +173,19 @@ export class IndicatorCalculationService {
           previousBoundary: lastBoundary ? new Date(lastBoundary).toISOString() : 'none',
           newBoundary: new Date(currentBoundary).toISOString(),
           triggerTimestamp: new Date(timestamp).toISOString(),
-          action: 'queue_recalculate',
+          action: 'recalculate_from_cache',
         }, `Boundary crossed: ${symbol} ${timeframe}`);
 
-        configsToRecalculate.push({ symbol, timeframe });
+        // Recalculate from cache (no REST calls)
+        await this.recalculateFromCache(symbol, timeframe);
       }
-    }
-
-    // Process boundary crossings in batches to avoid rate limiting
-    if (configsToRecalculate.length > 0) {
-      await this.processBatched(
-        configsToRecalculate,
-        (config) => this.recalculateForConfig(config),
-        'boundary recalculation'
-      );
     }
   }
 
   /**
    * Start the indicator calculation service
-   * Performs warmup by fetching historical candles via REST API
-   * After warmup, relies on WebSocket candle close events for updates
+   * Subscribes to candle:close events via Redis psubscribe
+   * NOTE: Warmup is handled by Phase 07 (Startup Backfill)
    */
   async start(configs: IndicatorConfig[]): Promise<void> {
     logger.info({ configCount: configs.length }, 'Starting Indicator Calculation Service');
@@ -231,249 +198,45 @@ export class IndicatorCalculationService {
     // Initialize boundary tracking for higher timeframes
     this.initializeBoundaryTracking();
 
-    // Initial data fetch and calculation for all configs (warmup via REST API)
-    await this.initializeAllConfigs();
+    // Create dedicated subscriber (required for pub/sub mode)
+    this.subscriber = this.redis.duplicate();
+
+    // Subscribe to all 5m candle:close events
+    const pattern = candleClosePattern(this.TEST_USER_ID, this.TEST_EXCHANGE_ID, '*', '5m');
+    await this.subscriber.psubscribe(pattern);
+
+    // Handle pattern messages (pmessage for psubscribe, not message)
+    this.subscriber.on('pmessage', (_pattern: string, channel: string, message: string) => {
+      this.handleCandleCloseEvent(channel, message).catch((error) => {
+        logger.error({ error, channel }, 'Error handling candle:close event');
+      });
+    });
 
     logger.info(
       {
+        pattern,
         symbols: this.monitoredSymbols.size,
         timeframes: Array.from(this.configsByTimeframe.keys()),
       },
-      'Indicator Calculation Service started (event-driven mode)'
+      'Indicator service subscribed to candle:close events'
     );
   }
 
   /**
    * Stop the service
    */
-  stop(): void {
+  async stop(): Promise<void> {
     logger.info('Stopping Indicator Calculation Service');
+
+    if (this.subscriber) {
+      await this.subscriber.punsubscribe();
+      await this.subscriber.quit();
+      this.subscriber = null;
+    }
 
     this.lastProcessedBoundary.clear();
     this.configsByTimeframe.clear();
     this.monitoredSymbols.clear();
-  }
-
-  /**
-   * Initialize all configured symbol/timeframe pairs
-   * Prioritizes major symbols first, then batches remaining to avoid rate limits
-   */
-  private async initializeAllConfigs(): Promise<void> {
-    // Separate priority configs from the rest
-    const priorityConfigs = this.configs.filter((c) =>
-      this.PRIORITY_SYMBOLS.includes(c.symbol)
-    );
-    const remainingConfigs = this.configs.filter(
-      (c) => !this.PRIORITY_SYMBOLS.includes(c.symbol)
-    );
-
-    logger.info(
-      { priority: priorityConfigs.length, remaining: remainingConfigs.length },
-      'Initializing indicators with prioritization'
-    );
-
-    // Load priority symbols first (still batched to avoid rate limits)
-    if (priorityConfigs.length > 0) {
-      logger.info('Loading priority symbols...');
-      await this.processBatched(
-        priorityConfigs,
-        (config) => this.initializeConfig(config),
-        'priority initialization'
-      );
-      logger.info('Priority symbols loaded');
-    }
-
-    // Load remaining symbols in batches
-    if (remainingConfigs.length > 0) {
-      logger.info('Loading remaining symbols...');
-      await this.processBatched(
-        remainingConfigs,
-        (config) => this.initializeConfig(config),
-        'remaining initialization'
-      );
-    }
-  }
-
-  /**
-   * Initialize a single symbol/timeframe pair
-   * Fetches historical data and calculates initial indicators
-   */
-  private async initializeConfig(config: IndicatorConfig): Promise<void> {
-    const { symbol, timeframe } = config;
-
-    logger.info({ symbol, timeframe }, 'Initializing indicator calculation');
-
-    // Fetch historical candles from Coinbase
-    const candles = await this.fetchHistoricalCandles(symbol, timeframe);
-
-    if (candles.length < this.MIN_CANDLES_FOR_MACDV) {
-      // Silently skip sparse symbols (design decision: no warning for low-volume tokens)
-      return;
-    }
-
-    // Cache candles
-    await this.candleCache.addCandles(this.TEST_USER_ID, this.TEST_EXCHANGE_ID, candles);
-
-    // Calculate and cache indicators
-    await this.calculateIndicators(symbol, timeframe, candles);
-
-    logger.info(
-      { symbol, timeframe, candleCount: candles.length },
-      'Indicator initialization complete'
-    );
-  }
-
-  /**
-   * Fetch historical candles from Coinbase REST API (for initial load)
-   */
-  private async fetchHistoricalCandles(
-    symbol: string,
-    timeframe: Timeframe
-  ): Promise<Candle[]> {
-    try {
-      // Calculate time range - fetch enough candles for indicator calculation
-      const now = Date.now();
-      const candlesNeeded = this.MIN_CANDLES_FOR_MACDV + 50; // Extra buffer
-
-      // Calculate start time based on timeframe
-      const timeframeMs = timeframeToMs(timeframe);
-      const start = now - candlesNeeded * timeframeMs;
-
-      logger.debug(
-        { symbol, timeframe, start: new Date(start).toISOString(), candlesNeeded },
-        'Fetching historical candles'
-      );
-
-      const candles = await this.restClient.getCandles(symbol, timeframe, start, now);
-
-      // Sort by timestamp ascending (oldest first)
-      candles.sort((a, b) => a.timestamp - b.timestamp);
-
-      logger.debug(
-        { symbol, timeframe, fetchedCount: candles.length },
-        'Fetched historical candles'
-      );
-
-      return candles;
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      logger.error({ err: message, symbol, timeframe }, 'Failed to fetch historical candles');
-      throw err;
-    }
-  }
-
-  /**
-   * Fetch only recent candles from Coinbase REST API (for incremental updates)
-   * Only fetches the last few candles to append to cache
-   */
-  private async fetchRecentCandles(
-    symbol: string,
-    timeframe: Timeframe,
-    count: number = 3
-  ): Promise<Candle[]> {
-    try {
-      const now = Date.now();
-      const timeframeMs = timeframeToMs(timeframe);
-      // Fetch a few extra to ensure we get the most recent closed candle
-      const start = now - (count + 1) * timeframeMs;
-
-      const candles = await this.restClient.getCandles(symbol, timeframe, start, now);
-
-      // Sort by timestamp ascending (oldest first)
-      candles.sort((a, b) => a.timestamp - b.timestamp);
-
-      return candles;
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      logger.error({ err: message, symbol, timeframe }, 'Failed to fetch recent candles');
-      throw err;
-    }
-  }
-
-  /**
-   * Recalculate indicators for a single config
-   * Incrementally fetches only recent candles and appends to cache
-   */
-  private async recalculateForConfig(config: IndicatorConfig): Promise<void> {
-    const { symbol, timeframe } = config;
-
-    logger.debug({
-      event: 'recalculate_start',
-      symbol,
-      timeframe,
-    }, `Starting recalculation: ${symbol} ${timeframe}`);
-
-    try {
-      // Only fetch the last few candles (not full history)
-      const recentCandles = await this.fetchRecentCandles(symbol, timeframe, 3);
-
-      logger.debug({
-        event: 'recent_candles_fetched',
-        symbol,
-        timeframe,
-        count: recentCandles.length,
-        timestamps: recentCandles.map(c => new Date(c.timestamp).toISOString()),
-      }, `Fetched ${recentCandles.length} recent candles`);
-
-      if (recentCandles.length > 0) {
-        // Append new candles to cache (deduplicates by timestamp)
-        await this.candleCache.addCandles(this.TEST_USER_ID, this.TEST_EXCHANGE_ID, recentCandles);
-      }
-
-      // Get full history from cache for indicator calculation
-      const cachedCandles = await this.candleCache.getRecentCandles(
-        this.TEST_USER_ID,
-        this.TEST_EXCHANGE_ID,
-        symbol,
-        timeframe,
-        200 // Enough for indicator calculation
-      );
-
-      logger.debug({
-        event: 'candles_from_cache',
-        symbol,
-        timeframe,
-        count: cachedCandles.length,
-        oldestTimestamp: cachedCandles.length > 0 ? new Date(cachedCandles[0].timestamp).toISOString() : null,
-        newestTimestamp: cachedCandles.length > 0 ? new Date(cachedCandles[cachedCandles.length - 1].timestamp).toISOString() : null,
-      }, `Retrieved ${cachedCandles.length} candles from cache`);
-
-      if (cachedCandles.length < this.MIN_CANDLES_FOR_MACDV) {
-        logger.warn({
-          event: 'insufficient_candles',
-          symbol,
-          timeframe,
-          count: cachedCandles.length,
-          required: this.MIN_CANDLES_FOR_MACDV,
-        }, `Insufficient candles for ${symbol} ${timeframe}: ${cachedCandles.length} < ${this.MIN_CANDLES_FOR_MACDV}`);
-        return;
-      }
-
-      // Calculate indicators from cached data
-      await this.calculateIndicators(symbol, timeframe, cachedCandles);
-
-    } catch (err) {
-      // If fetch fails, try calculating from existing cache
-      const message = err instanceof Error ? err.message : String(err);
-      logger.warn({
-        event: 'recent_fetch_failed',
-        symbol,
-        timeframe,
-        error: message,
-      }, `Recent candle fetch failed for ${symbol} ${timeframe}, using cached data`);
-
-      const cachedCandles = await this.candleCache.getRecentCandles(
-        this.TEST_USER_ID,
-        this.TEST_EXCHANGE_ID,
-        symbol,
-        timeframe,
-        200
-      );
-
-      if (cachedCandles.length >= this.MIN_CANDLES_FOR_MACDV) {
-        await this.calculateIndicators(symbol, timeframe, cachedCandles);
-      }
-    }
   }
 
   /**
@@ -630,6 +393,7 @@ export class IndicatorCalculationService {
 
   /**
    * Force recalculation for a specific symbol/timeframe
+   * Uses cache-only reads (no REST API calls)
    */
   async forceRecalculate(symbol: string, timeframe: Timeframe): Promise<void> {
     const config = this.configs.find(
@@ -639,8 +403,9 @@ export class IndicatorCalculationService {
     if (!config) {
       // Add to configs if not exists
       this.configs.push({ symbol, timeframe });
+      this.monitoredSymbols.add(symbol);
     }
 
-    await this.initializeConfig({ symbol, timeframe });
+    await this.recalculateFromCache(symbol, timeframe);
   }
 }
