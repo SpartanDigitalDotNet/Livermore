@@ -68,17 +68,17 @@ Transform from REST-heavy, request-driven architecture to cache-first, event-dri
 - REST backfill trigger on reconnection gaps
 
 **Plans:** 3 plans
-- [ ] 05-01-PLAN.md — CoinbaseAdapter skeleton with WebSocket connection and dual channel subscription
-- [ ] 05-02-PLAN.md — Candle processing pipeline (normalize, detect close, cache, emit)
-- [ ] 05-03-PLAN.md — Watchdog timer, sequence tracking, and REST backfill on reconnection
+- [x] 05-01-PLAN.md — CoinbaseAdapter skeleton with WebSocket connection and dual channel subscription
+- [x] 05-02-PLAN.md — Candle processing pipeline (normalize, detect close, cache, emit)
+- [x] 05-03-PLAN.md — Watchdog timer, sequence tracking, and REST backfill on reconnection
 
 **Success Criteria:**
-- [ ] Adapter receives native 5m candles from Coinbase WebSocket
-- [ ] Candles normalized and written to Redis cache
-- [ ] candle:close events emitted on Redis pub/sub
-- [ ] Connection survives idle periods via heartbeat
-- [ ] Silent disconnections detected within 30 seconds
-- [ ] Reconnection triggers backfill if gap > 5 minutes
+- [x] Adapter receives native 5m candles from Coinbase WebSocket
+- [x] Candles normalized and written to Redis cache
+- [x] candle:close events emitted on Redis pub/sub
+- [x] Connection survives idle periods via heartbeat
+- [x] Silent disconnections detected within 30 seconds
+- [x] Reconnection triggers backfill if gap > 5 minutes
 
 ---
 
@@ -202,14 +202,14 @@ Phase 06 (Indicator Refactor)
 | Phase | Name | Status | Plans |
 |-------|------|--------|-------|
 | 04 | Foundation | Complete | 3/3 |
-| 05 | Coinbase Adapter | Planned | 0/3 |
+| 05 | Coinbase Adapter | Complete | 3/3 |
 | 06 | Indicator Refactor | Pending | 0/? |
 | 07 | Startup Backfill | Pending | 0/? |
 | 08 | Reconciliation | Pending | 0/? |
 | 09 | Cleanup | Pending | 0/? |
 
-**Overall:** 17% complete (1/6 phases)
+**Overall:** 33% complete (2/6 phases)
 
 ---
 *Roadmap created: 2026-01-21*
-*Last updated: 2026-01-21 after Phase 05 planning*
+*Last updated: 2026-01-21 after Phase 05 execution*

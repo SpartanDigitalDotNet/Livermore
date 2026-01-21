@@ -10,17 +10,17 @@ Requirements for eliminating 429 errors and data gaps through cache-first, event
 ### Adapter
 
 - [x] **ADPT-01**: Exchange adapter interface abstracts exchange-specific logic from indicator service
-- [ ] **ADPT-02**: Coinbase adapter subscribes to native `candles` WebSocket channel (5m granularity)
-- [ ] **ADPT-03**: Adapter normalizes exchange candles to unified `UnifiedCandle` schema
-- [ ] **ADPT-04**: Adapter emits standardized `candle:close` events when candles finalize
+- [x] **ADPT-02**: Coinbase adapter subscribes to native `candles` WebSocket channel (5m granularity)
+- [x] **ADPT-03**: Adapter normalizes exchange candles to unified `UnifiedCandle` schema
+- [x] **ADPT-04**: Adapter emits standardized `candle:close` events when candles finalize
 
 ### WebSocket
 
-- [ ] **WS-01**: WebSocket connection auto-reconnects with exponential backoff on disconnect
-- [ ] **WS-02**: Heartbeat channel subscription prevents 60-90s idle disconnection
-- [ ] **WS-03**: Watchdog timer detects silent disconnections (no message > 30s = force reconnect)
-- [ ] **WS-04**: Sequence numbers tracked to detect dropped messages
-- [ ] **WS-05**: Reconnection triggers gap detection and REST backfill before resuming
+- [x] **WS-01**: WebSocket connection auto-reconnects with exponential backoff on disconnect
+- [x] **WS-02**: Heartbeat channel subscription prevents 60-90s idle disconnection
+- [x] **WS-03**: Watchdog timer detects silent disconnections (no message > 30s = force reconnect)
+- [x] **WS-04**: Sequence numbers tracked to detect dropped messages
+- [x] **WS-05**: Reconnection triggers gap detection and REST backfill before resuming
 
 ### Cache
 
@@ -86,14 +86,14 @@ Which phases cover which requirements. Updated during roadmap creation.
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | ADPT-01 | Phase 04 | Complete |
-| ADPT-02 | Phase 2 | Pending |
-| ADPT-03 | Phase 2 | Pending |
-| ADPT-04 | Phase 2 | Pending |
-| WS-01 | Phase 2 | Pending |
-| WS-02 | Phase 2 | Pending |
-| WS-03 | Phase 2 | Pending |
-| WS-04 | Phase 2 | Pending |
-| WS-05 | Phase 2 | Pending |
+| ADPT-02 | Phase 05 | Complete |
+| ADPT-03 | Phase 05 | Complete |
+| ADPT-04 | Phase 05 | Complete |
+| WS-01 | Phase 05 | Complete |
+| WS-02 | Phase 05 | Complete |
+| WS-03 | Phase 05 | Complete |
+| WS-04 | Phase 05 | Complete |
+| WS-05 | Phase 05 | Complete |
 | CACHE-01 | Phase 04 | Complete |
 | CACHE-02 | Phase 04 | Complete |
 | CACHE-03 | Phase 3 | Pending |
