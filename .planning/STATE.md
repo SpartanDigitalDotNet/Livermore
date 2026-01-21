@@ -11,11 +11,11 @@ See: .planning/PROJECT.md
 
 **Milestone:** v2.0 Data Pipeline Redesign
 **Phase:** 05-coinbase-adapter (2 of 6)
-**Plan:** 02 of 4 complete
+**Plan:** 03 of 4 complete
 **Status:** In progress
-**Last activity:** 2026-01-21 — Completed 05-02-PLAN.md (Message Processing)
+**Last activity:** 2026-01-21 — Completed 05-03-PLAN.md (Reconnection Logic)
 
-**Progress:** [#####-----] 5/18 plans (28%)
+**Progress:** [######----] 6/18 plans (33%)
 
 ## Milestones
 
@@ -61,7 +61,7 @@ See `.planning/MILESTONES.md` for full history.
 **What:** Add one line to save WebSocket-built candles to cache before emitting event.
 
 **Result (2026-01-21):**
-- Cache writes working ✓ (candles are fresh)
+- Cache writes working (candles are fresh)
 - 429s still occurring at boundaries (35+ per 4h boundary)
 - **Critical finding:** Massive data gaps from dropped/missing ticker messages
 
@@ -81,45 +81,47 @@ Low-liquidity symbols have massive gaps, causing 30+ point MACD-V variance.
 ### Open Items
 
 - v2.0 research completed in `.planning/research/SUMMARY.md` (on hold pending Option A results)
-- Sequence number validation not addressed (Option B scope)
-- node-cron reconciliation not needed if Option A works
+- Sequence number validation now addressed in Phase 05 Plan 03
+- node-cron reconciliation planned for Phase 08
 
 ## Session Continuity
 
 ### Last Session
 
 **Date:** 2026-01-21
-**Activity:** Executed 05-02-PLAN.md - Message Processing
-**Stopped At:** Completed Plan 05-02, ready for Plan 05-03
+**Activity:** Executed 05-03-PLAN.md - Reconnection Logic
+**Stopped At:** Completed Plan 05-03, ready for Plan 05-04
 
 ### Resume Context
 
-Phase 05 (Coinbase Adapter) IN PROGRESS. Plans 05-01 and 05-02 delivered:
+Phase 05 (Coinbase Adapter) IN PROGRESS. Plans 05-01, 05-02, and 05-03 delivered:
 
 1. **05-01:** CoinbaseAdapter class with WebSocket connection and dual channel subscription
 2. **05-02:** Candle processing pipeline with normalization, close detection, cache writes, events
+3. **05-03:** Watchdog timer, sequence tracking, REST backfill on reconnection
 
-**Key artifacts from 05-02:**
-- `packages/coinbase-client/src/adapter/coinbase-adapter.ts` — Full candle processing (404 lines)
-  - Type definitions for Coinbase WebSocket messages
-  - normalizeCandle() for format conversion
-  - handleCandlesMessage() for close detection
-  - onCandleClose() for events and Redis pub/sub
+**Key artifacts from 05-03:**
+- `packages/coinbase-client/src/adapter/coinbase-adapter.ts` — Production-ready adapter (610 lines)
+  - Watchdog timer (30s) with resetWatchdog(), stopWatchdog(), forceReconnect()
+  - Sequence tracking with gap detection (lastSequenceNum, hasDetectedGap)
+  - REST backfill on reconnection with 5-minute threshold
+  - onConnected() for post-connection resubscription and backfill
 
-**Decisions made:**
-- Fire-and-forget async for candle processing (prevents message queue backup)
-- Emit close event on new candle arrival (Coinbase sends finalized data in new candle)
+**Decisions made (05-03):**
+- 30 second watchdog interval (Coinbase heartbeats ~1s, allows network jitter)
+- 5 minute backfill threshold (avoids unnecessary REST calls)
+- Log sequence gaps but don't block processing
 
 **Phase order:**
 1. Phase 04: Foundation (interfaces, base classes) **COMPLETE**
-2. Phase 05: Coinbase Adapter (native candles channel) **IN PROGRESS** (2/4)
+2. Phase 05: Coinbase Adapter (native candles channel) **IN PROGRESS** (3/4)
 3. Phase 06: Indicator Refactor (event-driven, cache-only)
 4. Phase 07: Startup Backfill (parallel with 08)
 5. Phase 08: Reconciliation (parallel with 07)
 6. Phase 09: Cleanup
 
-**Next:** Execute 05-03-PLAN.md (Reconnection Logic)
+**Next:** Execute 05-04-PLAN.md (Service Integration)
 
 ---
 *State initialized: 2026-01-18*
-*Last updated: 2026-01-21 after completing 05-02-PLAN.md*
+*Last updated: 2026-01-21 after completing 05-03-PLAN.md*
