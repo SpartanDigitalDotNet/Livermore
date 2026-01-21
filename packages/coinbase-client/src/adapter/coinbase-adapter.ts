@@ -154,6 +154,9 @@ export class CoinbaseAdapter extends BaseExchangeAdapter {
   /** Flag indicating a sequence gap was detected during this connection */
   private hasDetectedGap = false;
 
+  /** Backfill threshold - only backfill if gap is greater than this (5 minutes) */
+  private readonly BACKFILL_THRESHOLD_MS = 5 * 60 * 1000;
+
   constructor(options: CoinbaseAdapterOptions) {
     super();
     this.auth = new CoinbaseAuth(options.apiKeyId, options.privateKeyPem);
@@ -179,6 +182,12 @@ export class CoinbaseAdapter extends BaseExchangeAdapter {
         this.resetSequenceTracking();
         this.subscribeToHeartbeats();
         this.resetWatchdog();
+
+        // Handle post-connection setup (resubscribe, backfill)
+        this.onConnected().catch(error => {
+          logger.error({ error }, 'Error in post-connection setup');
+        });
+
         this.emit('connected');
         resolve();
       });
@@ -496,5 +505,106 @@ export class CoinbaseAdapter extends BaseExchangeAdapter {
    */
   needsBackfill(): boolean {
     return this.hasDetectedGap;
+  }
+
+  /**
+   * Check for data gaps and backfill from REST API if needed
+   * Called after reconnection to fill any gaps that occurred during disconnect
+   */
+  private async checkAndBackfill(): Promise<void> {
+    if (this.subscribedSymbols.length === 0) {
+      logger.debug('No subscribed symbols - skipping backfill check');
+      return;
+    }
+
+    const now = Date.now();
+
+    for (const symbol of this.subscribedSymbols) {
+      try {
+        // Get latest cached candle for this symbol
+        const latestCached = await this.candleCache.getLatestCandle(
+          this.userId,
+          this.exchangeIdNum,
+          symbol,
+          '5m'
+        );
+
+        const lastTimestamp = latestCached?.timestamp ?? 0;
+        const gapMs = now - lastTimestamp;
+
+        // Only backfill if gap > threshold (5 minutes)
+        if (gapMs > this.BACKFILL_THRESHOLD_MS) {
+          logger.info(
+            { symbol, lastTimestamp: new Date(lastTimestamp).toISOString(), gapMs },
+            'Gap detected - backfilling from REST API'
+          );
+
+          await this.backfillSymbol(symbol, lastTimestamp, now);
+        } else {
+          logger.debug(
+            { symbol, gapMs },
+            'Gap within threshold - no backfill needed'
+          );
+        }
+      } catch (error) {
+        logger.error({ error, symbol }, 'Error checking/backfilling symbol');
+      }
+    }
+  }
+
+  /**
+   * Backfill candles for a single symbol from REST API
+   */
+  private async backfillSymbol(symbol: string, fromTimestamp: number, toTimestamp: number): Promise<void> {
+    try {
+      // Fetch candles from REST API
+      const candles = await this.restClient.getCandles(
+        symbol,
+        '5m',
+        fromTimestamp,
+        toTimestamp
+      );
+
+      logger.info(
+        { symbol, fromTimestamp: new Date(fromTimestamp).toISOString(), candleCount: candles.length },
+        'Fetched candles from REST API for backfill'
+      );
+
+      // Write to cache using versioned writes
+      for (const candle of candles) {
+        const unified: UnifiedCandle = {
+          ...candle,
+          exchange: 'coinbase',
+          // REST candles don't have sequence numbers
+        };
+
+        await this.candleCache.addCandleIfNewer(
+          this.userId,
+          this.exchangeIdNum,
+          unified
+        );
+      }
+
+      logger.info({ symbol, candleCount: candles.length }, 'Backfill complete');
+    } catch (error) {
+      logger.error({ error, symbol }, 'REST backfill failed');
+    }
+  }
+
+  /**
+   * Called after successful connection/reconnection
+   * Resubscribes to channels and checks for backfill needs
+   */
+  private async onConnected(): Promise<void> {
+    // Resubscribe to channels if we had subscriptions
+    if (this.subscribedSymbols.length > 0) {
+      this.subscribe(this.subscribedSymbols, this.subscribedTimeframe);
+
+      // Check for gaps and backfill if needed
+      // Note: Only backfill on REconnection, not initial connection
+      if (this.reconnectAttempts > 0 || this.hasDetectedGap) {
+        await this.checkAndBackfill();
+      }
+    }
   }
 }
