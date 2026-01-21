@@ -1,7 +1,7 @@
 import { CoinbaseWebSocketClient, type CoinbaseWSMessage } from '@livermore/coinbase-client';
-import { getRedisClient, TickerCacheStrategy } from '@livermore/cache';
+import { getRedisClient, TickerCacheStrategy, CandleCacheStrategy } from '@livermore/cache';
 import { logger, getCandleTimestamp } from '@livermore/utils';
-import type { Ticker, Timeframe } from '@livermore/schemas';
+import type { Ticker, Timeframe, Candle } from '@livermore/schemas';
 
 /**
  * Candle state for local aggregation from ticker events
@@ -37,6 +37,7 @@ export interface CandleData {
 export class CoinbaseWebSocketService {
   private wsClient: CoinbaseWebSocketClient;
   private tickerCache: TickerCacheStrategy;
+  private candleCache: CandleCacheStrategy;
   private redis = getRedisClient();
 
   // Temporary: hardcode test user and exchange IDs
@@ -51,6 +52,7 @@ export class CoinbaseWebSocketService {
   constructor(apiKeyId: string, privateKeyPem: string) {
     this.wsClient = new CoinbaseWebSocketClient(apiKeyId, privateKeyPem);
     this.tickerCache = new TickerCacheStrategy(this.redis);
+    this.candleCache = new CandleCacheStrategy(this.redis);
 
     // Register message handler
     this.wsClient.onMessage(this.handleMessage.bind(this));
@@ -90,7 +92,7 @@ export class CoinbaseWebSocketService {
    * Aggregate ticker event into local 1m candle
    * Emits candle close event when minute boundary is crossed
    */
-  private aggregateTickerToCandle(symbol: string, price: number, timestamp: number): void {
+  private async aggregateTickerToCandle(symbol: string, price: number, timestamp: number): Promise<void> {
     const timeframe: Timeframe = '1m';
     const candleTime = getCandleTimestamp(timestamp, timeframe);
 
@@ -100,7 +102,7 @@ export class CoinbaseWebSocketService {
       // Close previous candle if exists and not already closed
       if (existing && !existing.isClosed) {
         existing.isClosed = true;
-        this.emitCandleClose(symbol, timeframe, existing);
+        await this.emitCandleClose(symbol, timeframe, existing);
       }
 
       // Start new candle
@@ -123,12 +125,33 @@ export class CoinbaseWebSocketService {
 
   /**
    * Emit candle close event to all registered callbacks
+   * Also saves the candle to cache so 429 fallbacks have fresh data
    */
-  private emitCandleClose(symbol: string, timeframe: Timeframe, candle: CandleState): void {
+  private async emitCandleClose(symbol: string, timeframe: Timeframe, candle: CandleState): Promise<void> {
     logger.info(
       { symbol, timeframe, timestamp: new Date(candle.timestamp).toISOString(), ohlc: `${candle.open}/${candle.high}/${candle.low}/${candle.close}` },
       'Candle closed'
     );
+
+    // Save candle to cache BEFORE emitting event
+    // This ensures indicator service fallback has fresh data on 429 errors
+    const cacheCandle: Candle = {
+      timestamp: candle.timestamp,
+      open: candle.open,
+      high: candle.high,
+      low: candle.low,
+      close: candle.close,
+      volume: candle.volume,
+      symbol,
+      timeframe,
+    };
+
+    try {
+      await this.candleCache.addCandles(this.TEST_USER_ID, this.TEST_EXCHANGE_ID, [cacheCandle]);
+      logger.debug({ symbol, timeframe, timestamp: new Date(candle.timestamp).toISOString() }, 'WebSocket candle saved to cache');
+    } catch (error) {
+      logger.error({ error, symbol, timeframe }, 'Failed to save WebSocket candle to cache');
+    }
 
     const candleData: CandleData = {
       timestamp: candle.timestamp,
@@ -179,7 +202,7 @@ export class CoinbaseWebSocketService {
         const change24h = price - (price / (1 + changePercent24h / 100));
 
         // Aggregate ticker into 1m candle (event-driven candle building)
-        this.aggregateTickerToCandle(tickerData.product_id, price, timestamp);
+        await this.aggregateTickerToCandle(tickerData.product_id, price, timestamp);
 
         const ticker: Ticker = {
           symbol: tickerData.product_id,
