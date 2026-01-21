@@ -9,7 +9,7 @@ Requirements for eliminating 429 errors and data gaps through cache-first, event
 
 ### Adapter
 
-- [ ] **ADPT-01**: Exchange adapter interface abstracts exchange-specific logic from indicator service
+- [x] **ADPT-01**: Exchange adapter interface abstracts exchange-specific logic from indicator service
 - [ ] **ADPT-02**: Coinbase adapter subscribes to native `candles` WebSocket channel (5m granularity)
 - [ ] **ADPT-03**: Adapter normalizes exchange candles to unified `UnifiedCandle` schema
 - [ ] **ADPT-04**: Adapter emits standardized `candle:close` events when candles finalize
@@ -24,8 +24,8 @@ Requirements for eliminating 429 errors and data gaps through cache-first, event
 
 ### Cache
 
-- [ ] **CACHE-01**: Candles written directly to Redis sorted sets from WebSocket events
-- [ ] **CACHE-02**: Timestamp-based versioning prevents out-of-order writes (only accept if timestamp > existing)
+- [x] **CACHE-01**: Candles written directly to Redis sorted sets from WebSocket events
+- [x] **CACHE-02**: Timestamp-based versioning prevents out-of-order writes (only accept if timestamp > existing)
 - [ ] **CACHE-03**: Cache is single source of truth — indicator service never calls REST API during normal operation
 - [ ] **CACHE-04**: Gap detection query finds missing timestamps in candle sequences
 
@@ -85,7 +85,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| ADPT-01 | Phase 1 | Pending |
+| ADPT-01 | Phase 04 | Complete |
 | ADPT-02 | Phase 2 | Pending |
 | ADPT-03 | Phase 2 | Pending |
 | ADPT-04 | Phase 2 | Pending |
@@ -94,8 +94,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | WS-03 | Phase 2 | Pending |
 | WS-04 | Phase 2 | Pending |
 | WS-05 | Phase 2 | Pending |
-| CACHE-01 | Phase 1 | Pending |
-| CACHE-02 | Phase 1 | Pending |
+| CACHE-01 | Phase 04 | Complete |
+| CACHE-02 | Phase 04 | Complete |
 | CACHE-03 | Phase 3 | Pending |
 | CACHE-04 | Phase 5 | Pending |
 | IND-01 | Phase 3 | Pending |
