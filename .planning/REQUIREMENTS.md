@@ -38,10 +38,10 @@ Requirements for eliminating 429 errors and data gaps through cache-first, event
 
 ### Backfill
 
-- [ ] **BKFL-01**: Startup backfill fetches 60+ historical candles via REST per symbol/timeframe
-- [ ] **BKFL-02**: Backfill uses rate limiting (5 requests/batch, 1s delay) to avoid 429s
-- [ ] **BKFL-03**: Priority order fills shorter timeframes (1m, 5m) before longer ones
-- [ ] **BKFL-04**: Progress tracking logs backfill status during startup
+- [x] **BKFL-01**: Startup backfill fetches 60+ historical candles via REST per symbol/timeframe
+- [x] **BKFL-02**: Backfill uses rate limiting (5 requests/batch, 1s delay) to avoid 429s
+- [x] **BKFL-03**: Priority order fills shorter timeframes (5m, 15m) before longer ones
+- [x] **BKFL-04**: Progress tracking logs backfill status during startup
 
 ### Reconciliation
 
@@ -102,10 +102,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 | IND-02 | Phase 3 | Pending |
 | IND-03 | Phase 3 | Pending |
 | IND-04 | Phase 3 | Pending |
-| BKFL-01 | Phase 4 | Pending |
-| BKFL-02 | Phase 4 | Pending |
-| BKFL-03 | Phase 4 | Pending |
-| BKFL-04 | Phase 4 | Pending |
+| BKFL-01 | Phase 07 | Complete |
+| BKFL-02 | Phase 07 | Complete |
+| BKFL-03 | Phase 07 | Complete |
+| BKFL-04 | Phase 07 | Complete |
 | RECON-01 | Phase 5 | Pending |
 | RECON-02 | Phase 5 | Pending |
 | RECON-03 | Phase 5 | Pending |
