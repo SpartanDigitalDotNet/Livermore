@@ -148,6 +148,12 @@ export class CoinbaseAdapter extends BaseExchangeAdapter {
   /** Watchdog interval - force reconnect if no message received within this time */
   private readonly WATCHDOG_INTERVAL_MS = 30_000; // 30 seconds
 
+  /** Last sequence number received (per connection) */
+  private lastSequenceNum = 0;
+
+  /** Flag indicating a sequence gap was detected during this connection */
+  private hasDetectedGap = false;
+
   constructor(options: CoinbaseAdapterOptions) {
     super();
     this.auth = new CoinbaseAuth(options.apiKeyId, options.privateKeyPem);
@@ -170,6 +176,7 @@ export class CoinbaseAdapter extends BaseExchangeAdapter {
       this.ws.on('open', () => {
         logger.info({ exchangeId: this.exchangeId }, 'Connected to Coinbase WebSocket');
         this.resetReconnectAttempts();
+        this.resetSequenceTracking();
         this.subscribeToHeartbeats();
         this.resetWatchdog();
         this.emit('connected');
@@ -306,10 +313,23 @@ export class CoinbaseAdapter extends BaseExchangeAdapter {
 
   /**
    * Process incoming candle messages
-   * Detects candle close by comparing timestamps
+   * Tracks sequence numbers, detects gaps, and detects candle close by comparing timestamps
    */
   private async handleCandlesMessage(message: CandlesMessage): Promise<void> {
     const sequenceNum = message.sequence_num;
+
+    // Check for sequence gap (more than 1 difference indicates missed messages)
+    // Note: Sequence numbers reset per connection, so only check after first message
+    if (this.lastSequenceNum > 0 && sequenceNum > this.lastSequenceNum + 1) {
+      const gap = sequenceNum - this.lastSequenceNum - 1;
+      logger.warn(
+        { lastSequence: this.lastSequenceNum, newSequence: sequenceNum, gap },
+        'Sequence gap detected - messages may have been dropped'
+      );
+      this.hasDetectedGap = true;
+    }
+
+    this.lastSequenceNum = sequenceNum;
 
     for (const event of message.events) {
       for (const rawCandle of event.candles) {
@@ -459,5 +479,22 @@ export class CoinbaseAdapter extends BaseExchangeAdapter {
 
     // Trigger reconnect via base class
     this.handleReconnect();
+  }
+
+  /**
+   * Reset sequence tracking - call after reconnection
+   * Sequence numbers are per-connection, so reset to 0
+   */
+  private resetSequenceTracking(): void {
+    this.lastSequenceNum = 0;
+    this.hasDetectedGap = false;
+  }
+
+  /**
+   * Check if we need to backfill after reconnection
+   * Returns true if a sequence gap was detected during the last connection
+   */
+  needsBackfill(): boolean {
+    return this.hasDetectedGap;
   }
 }
