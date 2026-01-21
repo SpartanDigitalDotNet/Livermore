@@ -12,9 +12,65 @@ import type { Redis } from 'ioredis';
 import { BaseExchangeAdapter } from './base-adapter';
 import { CoinbaseAuth } from '../rest/auth';
 import { CoinbaseRestClient } from '../rest/client';
-import { CandleCacheStrategy } from '@livermore/cache';
-import type { Timeframe } from '@livermore/schemas';
+import { CandleCacheStrategy, candleCloseChannel } from '@livermore/cache';
+import type { Timeframe, UnifiedCandle } from '@livermore/schemas';
 import { logger } from '@livermore/utils';
+
+/**
+ * Coinbase candle from WebSocket candles channel
+ * Note: All values are strings, timestamps are UNIX seconds
+ */
+interface CoinbaseWebSocketCandle {
+  start: string;      // UNIX timestamp in SECONDS
+  high: string;
+  low: string;
+  open: string;
+  close: string;
+  volume: string;
+  product_id: string;
+}
+
+/**
+ * Candle event from Coinbase WebSocket
+ */
+interface CandleEvent {
+  type: 'snapshot' | 'update';
+  candles: CoinbaseWebSocketCandle[];
+}
+
+/**
+ * Candles channel message from Coinbase WebSocket
+ */
+interface CandlesMessage {
+  channel: 'candles';
+  client_id: string;
+  timestamp: string;
+  sequence_num: number;
+  events: CandleEvent[];
+}
+
+/**
+ * Heartbeats channel message from Coinbase WebSocket
+ */
+interface HeartbeatsMessage {
+  channel: 'heartbeats';
+  client_id: string;
+  timestamp: string;
+  sequence_num: number;
+  events: Array<{
+    current_time: string;
+    heartbeat_counter: string;
+  }>;
+}
+
+/**
+ * All possible WebSocket message types
+ */
+type CoinbaseWSMessage =
+  | CandlesMessage
+  | HeartbeatsMessage
+  | { channel: 'subscriptions'; events: Array<{ subscriptions: Record<string, string[]> }> }
+  | { channel: 'error'; message: string };
 
 /**
  * Configuration options for CoinbaseAdapter
