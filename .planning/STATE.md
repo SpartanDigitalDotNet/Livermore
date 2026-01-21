@@ -5,20 +5,20 @@
 See: .planning/PROJECT.md
 
 **Core value:** Real-time crypto trading analysis and decision support
-**Current focus:** Testing Option A fix for 429/stale data issue
+**Current focus:** v2.0 Data Pipeline Redesign
 
 ## Current Position
 
-**Milestone:** v2.0 Data Pipeline Redesign (planning paused)
-**Status:** Testing minimal fix before full redesign
-**Last activity:** 2026-01-20 — Implemented Option A fix
+**Milestone:** v2.0 Data Pipeline Redesign
+**Status:** Proceeding to requirements and roadmap
+**Last activity:** 2026-01-21 — Option A insufficient, proceeding to v2.0
 
 ## Milestones
 
 | Version | Name | Status | Shipped |
 |---------|------|--------|---------|
 | v1.0 | Fee Analysis Spike | Archived | 2026-01-19 |
-| v2.0 | Data Pipeline Redesign | Planning paused | — |
+| v2.0 | Data Pipeline Redesign | In Progress | — |
 
 See `.planning/MILESTONES.md` for full history.
 
@@ -52,20 +52,27 @@ See `.planning/MILESTONES.md` for full history.
 - Current code has `sequence_num` in types but doesn't validate
 - Not addressed by Option A, would need Option B
 
-### Decision: Option A (Minimal Fix)
+### Decision: Option A (Minimal Fix) → INSUFFICIENT
 
 **What:** Add one line to save WebSocket-built candles to cache before emitting event.
 
-**Why:** Low risk, quick test. If 429s still cause stale data issues, we proceed to Option B (full redesign).
+**Result (2026-01-21):**
+- Cache writes working ✓ (candles are fresh)
+- 429s still occurring at boundaries (35+ per 4h boundary)
+- **Critical finding:** Massive data gaps from dropped/missing ticker messages
 
-**Change made:**
-- `apps/api/src/services/coinbase-websocket.service.ts`: Save candle to cache in `emitCandleClose()`
+**Gap analysis (1m candles):**
+| Symbol | Missing | % Gap |
+|--------|---------|-------|
+| LRDS-USD | 5924 | 93% |
+| SYRUP-USD | 222 | 18% |
+| BONK-USD | 141 | 12% |
+| PENGU-USD | 40 | 4% |
 
-**Next steps:**
-1. Restart server
-2. Monitor logs for 24 hours (especially at timeframe boundaries)
-3. Check if 429 fallbacks now have fresh data
-4. If still problematic → proceed to Option B (v2.0 full redesign)
+**Root cause:** Building candles from ticker messages. No trade = no ticker = no candle.
+Low-liquidity symbols have massive gaps, causing 30+ point MACD-V variance.
+
+**Conclusion:** Option A is insufficient. Proceeding to Option B (v2.0 full redesign).
 
 ### Open Items
 
@@ -77,26 +84,29 @@ See `.planning/MILESTONES.md` for full history.
 
 ### Last Session
 
-**Date:** 2026-01-20
-**Activity:** Investigated 429/stale data issue, implemented Option A fix
-**Stopped At:** Fix committed, ready to restart server and monitor
+**Date:** 2026-01-21
+**Activity:** Option A tested → insufficient. Created v2.0 requirements and roadmap.
+**Stopped At:** Ready to plan Phase 04 (Foundation)
 
 ### Resume Context
 
-**If Option A works (fewer stale data issues in logs):**
-- May not need full v2.0 redesign
-- Consider smaller improvements (sequence validation, heartbeat subscription)
+v2.0 planning complete. Next step is to plan and execute phases.
 
-**If Option A fails (still seeing stale indicators):**
-- Proceed to v2.0 full redesign
-- Research already complete in `.planning/research/`
-- Key change: Subscribe to native WebSocket `candles` channel, remove REST from hot path
-- Run `/gsd:new-milestone` to create requirements and roadmap
+**Key artifacts:**
+- `.planning/REQUIREMENTS.md` — 22 requirements across 6 categories
+- `.planning/ROADMAP.md` — 6 phases (04-09)
+- `.planning/research/SUMMARY.md` — research findings
 
-**Key files to check:**
-- `logs/indicators/indicators-2026-01-21.log` — look for "recent_fetch_failed" entries
-- Compare indicator values after 429 vs after successful fetch
+**Phase order:**
+1. Phase 04: Foundation (interfaces, base classes)
+2. Phase 05: Coinbase Adapter (native candles channel)
+3. Phase 06: Indicator Refactor (event-driven, cache-only)
+4. Phase 07: Startup Backfill (parallel with 08)
+5. Phase 08: Reconciliation (parallel with 07)
+6. Phase 09: Cleanup
+
+**Next command:** `/gsd:plan-phase 04`
 
 ---
 *State initialized: 2026-01-18*
-*Last updated: 2026-01-20 after Option A fix implemented*
+*Last updated: 2026-01-21 after v2.0 roadmap created*
