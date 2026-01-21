@@ -33,6 +33,11 @@ Transform from REST-heavy, request-driven architecture to cache-first, event-dri
 - Base adapter abstract class
 - Versioned cache write operations
 
+**Plans:** 3 plans
+- [ ] 04-01-PLAN.md — Schema definitions (UnifiedCandle, ExchangeAdapterEvents, IExchangeAdapter)
+- [ ] 04-02-PLAN.md — Cache enhancements (candleCloseChannel, versioned writes)
+- [ ] 04-03-PLAN.md — Base adapter abstract class
+
 **Success Criteria:**
 - [ ] Adapter interface defined with connect/disconnect/subscribe methods
 - [ ] UnifiedCandle schema validates candle data from any exchange
@@ -191,7 +196,7 @@ Phase 06 (Indicator Refactor)
 
 | Phase | Name | Status | Plans |
 |-------|------|--------|-------|
-| 04 | Foundation | Pending | 0/? |
+| 04 | Foundation | Planned | 0/3 |
 | 05 | Coinbase Adapter | Pending | 0/? |
 | 06 | Indicator Refactor | Pending | 0/? |
 | 07 | Startup Backfill | Pending | 0/? |
@@ -202,4 +207,4 @@ Phase 06 (Indicator Refactor)
 
 ---
 *Roadmap created: 2026-01-21*
-*Last updated: 2026-01-21*
+*Last updated: 2026-01-21 after Phase 04 planning*
