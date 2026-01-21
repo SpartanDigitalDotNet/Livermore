@@ -11,11 +11,11 @@ See: .planning/PROJECT.md
 
 **Milestone:** v2.0 Data Pipeline Redesign
 **Phase:** 06-indicator-refactor (3 of 6)
-**Plan:** 01 of 3 complete
+**Plan:** 02 of 3 complete
 **Status:** In progress
-**Last activity:** 2026-01-21 — Completed 06-01-PLAN.md (Candle Aggregation)
+**Last activity:** 2026-01-21 — Completed 06-02-PLAN.md (Event-Driven Indicators)
 
-**Progress:** [#######---] 10/12 plans (83%)
+**Progress:** [###########-] 11/12 plans (92%)
 
 ## Milestones
 
@@ -78,6 +78,14 @@ Low-liquidity symbols have massive gaps, causing 30+ point MACD-V variance.
 
 **Conclusion:** Option A is insufficient. Proceeding to Option B (v2.0 full redesign).
 
+### Decisions Made (06-02)
+
+| ID | Decision | Reason |
+|----|----------|--------|
+| IND-PATTERN | Redis psubscribe with wildcard pattern | Scales to any number of symbols |
+| IND-THRESHOLD | 60-candle readiness threshold | TradingView alignment (IND-03) |
+| IND-NO-WARMUP | Defer warmup to Phase 07 | Clear separation of concerns |
+
 ### Open Items
 
 - v2.0 research completed in `.planning/research/SUMMARY.md` (on hold pending Option A results)
@@ -89,37 +97,41 @@ Low-liquidity symbols have massive gaps, causing 30+ point MACD-V variance.
 ### Last Session
 
 **Date:** 2026-01-21
-**Activity:** Executed 06-01-PLAN.md - Candle Aggregation Utility
-**Stopped At:** Completed Plan 06-01, ready for Plan 06-02
+**Activity:** Executed 06-02-PLAN.md - Event-Driven Indicator Refactor
+**Stopped At:** Completed Plan 06-02, ready for Plan 06-03
 
 ### Resume Context
 
-Phase 06 (Indicator Refactor) IN PROGRESS. Plan 06-01 delivered:
+Phase 06 (Indicator Refactor) IN PROGRESS. Plans 06-01 and 06-02 delivered:
 
 1. **06-01:** aggregateCandles() utility for building higher timeframes from 5m candles
+2. **06-02:** Event-driven IndicatorCalculationService with Redis psubscribe, cache-only reads
 
-**Key artifacts from 06-01:**
-- `packages/utils/src/candle/aggregate-candles.ts` — Candle aggregation function (137 lines)
-  - Converts 5m candles to 15m/1h/4h/1d
-  - Standard OHLC rules (first open, max high, min low, last close, sum volume)
-  - Only complete periods included in output
-  - isSynthetic propagation from source candles
+**Key artifacts from 06-02:**
+- `apps/api/src/services/indicator-calculation.service.ts` — Refactored (411 lines)
+  - Redis psubscribe for candle:close events
+  - Cache-only reads (no REST in hot path)
+  - 60-candle readiness gate (REQUIRED_CANDLES)
+  - Dedicated subscriber with proper lifecycle
+  - handleCandleCloseEvent() parses channel and processes
+  - recalculateFromCache() for cache-only indicator calculation
+- `packages/cache/src/keys.ts` — Added candleClosePattern() helper
+- `apps/api/src/server.ts` — Removed WebSocket-indicator callback wiring
 
-**Decisions made (06-01):**
-- Only complete periods (groups with exactly factor candles) included
-- isSynthetic propagates if ANY source candle is synthetic
-- Validate target timeframe must be larger than source
+**Commits:**
+- b368a86: feat(06-02): add candleClosePattern helper to cache keys
+- d95b49d: feat(06-02): refactor IndicatorCalculationService for event-driven operation
 
 **Phase order:**
 1. Phase 04: Foundation (interfaces, base classes) **COMPLETE**
 2. Phase 05: Coinbase Adapter (native candles channel) **COMPLETE** (3/3)
-3. Phase 06: Indicator Refactor (event-driven, cache-only) **IN PROGRESS** (1/3)
+3. Phase 06: Indicator Refactor (event-driven, cache-only) **IN PROGRESS** (2/3)
 4. Phase 07: Startup Backfill (parallel with 08)
 5. Phase 08: Reconciliation (parallel with 07)
 6. Phase 09: Cleanup
 
-**Next:** Execute 06-02-PLAN.md (Event-Driven Indicators)
+**Next:** Execute 06-03-PLAN.md (Higher Timeframe Integration)
 
 ---
 *State initialized: 2026-01-18*
-*Last updated: 2026-01-21 after completing 06-01-PLAN.md*
+*Last updated: 2026-01-21 after completing 06-02-PLAN.md*
