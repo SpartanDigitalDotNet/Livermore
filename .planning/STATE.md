@@ -10,8 +10,12 @@ See: .planning/PROJECT.md
 ## Current Position
 
 **Milestone:** v2.0 Data Pipeline Redesign
-**Status:** Proceeding to requirements and roadmap
-**Last activity:** 2026-01-21 — Option A insufficient, proceeding to v2.0
+**Phase:** 04-foundation (1 of 6)
+**Plan:** 01 of 3 complete
+**Status:** In Progress
+**Last activity:** 2026-01-21 — Completed 04-01-PLAN.md (Exchange Adapter Interfaces)
+
+**Progress:** [##--------] 1/18 plans (6%)
 
 ## Milestones
 
@@ -85,28 +89,30 @@ Low-liquidity symbols have massive gaps, causing 30+ point MACD-V variance.
 ### Last Session
 
 **Date:** 2026-01-21
-**Activity:** Option A tested → insufficient. Created v2.0 requirements and roadmap.
-**Stopped At:** Ready to plan Phase 04 (Foundation)
+**Activity:** Executed 04-01-PLAN.md - Exchange Adapter Interfaces
+**Stopped At:** Completed plan 04-01, ready for 04-02
 
 ### Resume Context
 
-v2.0 planning complete. Next step is to plan and execute phases.
+Phase 04-01 complete. Delivered:
+- UnifiedCandleSchema (extends CandleSchema with exchange, exchangeTimestamp, sequenceNum)
+- ExchangeAdapterEvents (typed event map for 5 events)
+- IExchangeAdapter (interface extending typed EventEmitter)
 
 **Key artifacts:**
-- `.planning/REQUIREMENTS.md` — 22 requirements across 6 categories
-- `.planning/ROADMAP.md` — 6 phases (04-09)
-- `.planning/research/SUMMARY.md` — research findings
+- `.planning/phases/04-foundation/04-01-SUMMARY.md` — execution summary
+- `packages/schemas/src/adapter/exchange-adapter.schema.ts` — new schema file
 
 **Phase order:**
-1. Phase 04: Foundation (interfaces, base classes)
+1. Phase 04: Foundation (interfaces, base classes) **IN PROGRESS**
 2. Phase 05: Coinbase Adapter (native candles channel)
 3. Phase 06: Indicator Refactor (event-driven, cache-only)
 4. Phase 07: Startup Backfill (parallel with 08)
 5. Phase 08: Reconciliation (parallel with 07)
 6. Phase 09: Cleanup
 
-**Next command:** `/gsd:plan-phase 04`
+**Next:** Execute 04-02-PLAN.md (Base Adapter Class)
 
 ---
 *State initialized: 2026-01-18*
-*Last updated: 2026-01-21 after v2.0 roadmap created*
+*Last updated: 2026-01-21 after completing 04-01-PLAN.md*
