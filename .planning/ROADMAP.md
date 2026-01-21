@@ -34,15 +34,15 @@ Transform from REST-heavy, request-driven architecture to cache-first, event-dri
 - Versioned cache write operations
 
 **Plans:** 3 plans
-- [ ] 04-01-PLAN.md — Schema definitions (UnifiedCandle, ExchangeAdapterEvents, IExchangeAdapter)
-- [ ] 04-02-PLAN.md — Cache enhancements (candleCloseChannel, versioned writes)
-- [ ] 04-03-PLAN.md — Base adapter abstract class
+- [x] 04-01-PLAN.md — Schema definitions (UnifiedCandle, ExchangeAdapterEvents, IExchangeAdapter)
+- [x] 04-02-PLAN.md — Cache enhancements (candleCloseChannel, versioned writes)
+- [x] 04-03-PLAN.md — Base adapter abstract class
 
 **Success Criteria:**
-- [ ] Adapter interface defined with connect/disconnect/subscribe methods
-- [ ] UnifiedCandle schema validates candle data from any exchange
-- [ ] Cache writes reject out-of-order timestamps
-- [ ] Event types defined for candle:close channel
+- [x] Adapter interface defined with connect/disconnect/subscribe methods
+- [x] UnifiedCandle schema validates candle data from any exchange
+- [x] Cache writes reject out-of-order timestamps
+- [x] Event types defined for candle:close channel
 
 ---
 
@@ -66,6 +66,11 @@ Transform from REST-heavy, request-driven architecture to cache-first, event-dri
 - Watchdog timer (30s no-message = reconnect)
 - Sequence tracking and gap detection on reconnect
 - REST backfill trigger on reconnection gaps
+
+**Plans:** 3 plans
+- [ ] 05-01-PLAN.md — CoinbaseAdapter skeleton with WebSocket connection and dual channel subscription
+- [ ] 05-02-PLAN.md — Candle processing pipeline (normalize, detect close, cache, emit)
+- [ ] 05-03-PLAN.md — Watchdog timer, sequence tracking, and REST backfill on reconnection
 
 **Success Criteria:**
 - [ ] Adapter receives native 5m candles from Coinbase WebSocket
@@ -197,7 +202,7 @@ Phase 06 (Indicator Refactor)
 | Phase | Name | Status | Plans |
 |-------|------|--------|-------|
 | 04 | Foundation | Complete | 3/3 |
-| 05 | Coinbase Adapter | Pending | 0/? |
+| 05 | Coinbase Adapter | Planned | 0/3 |
 | 06 | Indicator Refactor | Pending | 0/? |
 | 07 | Startup Backfill | Pending | 0/? |
 | 08 | Reconciliation | Pending | 0/? |
@@ -207,4 +212,4 @@ Phase 06 (Indicator Refactor)
 
 ---
 *Roadmap created: 2026-01-21*
-*Last updated: 2026-01-21 after Phase 04 execution*
+*Last updated: 2026-01-21 after Phase 05 planning*
