@@ -10,12 +10,12 @@ See: .planning/PROJECT.md
 ## Current Position
 
 **Milestone:** v2.0 Data Pipeline Redesign
-**Phase:** 05-coinbase-adapter (2 of 6)
-**Plan:** 03 of 4 complete
+**Phase:** 06-indicator-refactor (3 of 6)
+**Plan:** 01 of 3 complete
 **Status:** In progress
-**Last activity:** 2026-01-21 — Completed 05-03-PLAN.md (Reconnection Logic)
+**Last activity:** 2026-01-21 — Completed 06-01-PLAN.md (Candle Aggregation)
 
-**Progress:** [######----] 6/18 plans (33%)
+**Progress:** [#######---] 10/12 plans (83%)
 
 ## Milestones
 
@@ -89,39 +89,37 @@ Low-liquidity symbols have massive gaps, causing 30+ point MACD-V variance.
 ### Last Session
 
 **Date:** 2026-01-21
-**Activity:** Executed 05-03-PLAN.md - Reconnection Logic
-**Stopped At:** Completed Plan 05-03, ready for Plan 05-04
+**Activity:** Executed 06-01-PLAN.md - Candle Aggregation Utility
+**Stopped At:** Completed Plan 06-01, ready for Plan 06-02
 
 ### Resume Context
 
-Phase 05 (Coinbase Adapter) IN PROGRESS. Plans 05-01, 05-02, and 05-03 delivered:
+Phase 06 (Indicator Refactor) IN PROGRESS. Plan 06-01 delivered:
 
-1. **05-01:** CoinbaseAdapter class with WebSocket connection and dual channel subscription
-2. **05-02:** Candle processing pipeline with normalization, close detection, cache writes, events
-3. **05-03:** Watchdog timer, sequence tracking, REST backfill on reconnection
+1. **06-01:** aggregateCandles() utility for building higher timeframes from 5m candles
 
-**Key artifacts from 05-03:**
-- `packages/coinbase-client/src/adapter/coinbase-adapter.ts` — Production-ready adapter (610 lines)
-  - Watchdog timer (30s) with resetWatchdog(), stopWatchdog(), forceReconnect()
-  - Sequence tracking with gap detection (lastSequenceNum, hasDetectedGap)
-  - REST backfill on reconnection with 5-minute threshold
-  - onConnected() for post-connection resubscription and backfill
+**Key artifacts from 06-01:**
+- `packages/utils/src/candle/aggregate-candles.ts` — Candle aggregation function (137 lines)
+  - Converts 5m candles to 15m/1h/4h/1d
+  - Standard OHLC rules (first open, max high, min low, last close, sum volume)
+  - Only complete periods included in output
+  - isSynthetic propagation from source candles
 
-**Decisions made (05-03):**
-- 30 second watchdog interval (Coinbase heartbeats ~1s, allows network jitter)
-- 5 minute backfill threshold (avoids unnecessary REST calls)
-- Log sequence gaps but don't block processing
+**Decisions made (06-01):**
+- Only complete periods (groups with exactly factor candles) included
+- isSynthetic propagates if ANY source candle is synthetic
+- Validate target timeframe must be larger than source
 
 **Phase order:**
 1. Phase 04: Foundation (interfaces, base classes) **COMPLETE**
-2. Phase 05: Coinbase Adapter (native candles channel) **IN PROGRESS** (3/4)
-3. Phase 06: Indicator Refactor (event-driven, cache-only)
+2. Phase 05: Coinbase Adapter (native candles channel) **COMPLETE** (3/3)
+3. Phase 06: Indicator Refactor (event-driven, cache-only) **IN PROGRESS** (1/3)
 4. Phase 07: Startup Backfill (parallel with 08)
 5. Phase 08: Reconciliation (parallel with 07)
 6. Phase 09: Cleanup
 
-**Next:** Execute 05-04-PLAN.md (Service Integration)
+**Next:** Execute 06-02-PLAN.md (Event-Driven Indicators)
 
 ---
 *State initialized: 2026-01-18*
-*Last updated: 2026-01-21 after completing 05-03-PLAN.md*
+*Last updated: 2026-01-21 after completing 06-01-PLAN.md*
