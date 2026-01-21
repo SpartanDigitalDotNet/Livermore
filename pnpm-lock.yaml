@@ -140,12 +140,18 @@ importers:
 
   packages/coinbase-client:
     dependencies:
+      '@livermore/cache':
+        specifier: workspace:*
+        version: link:../cache
       '@livermore/schemas':
         specifier: workspace:*
         version: link:../schemas
       '@livermore/utils':
         specifier: workspace:*
         version: link:../utils
+      ioredis:
+        specifier: 5.9.1
+        version: 5.9.1
       jsonwebtoken:
         specifier: ^9.0.3
         version: 9.0.3

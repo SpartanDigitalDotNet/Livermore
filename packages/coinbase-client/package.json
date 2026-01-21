@@ -20,8 +20,10 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
+    "@livermore/cache": "workspace:*",
     "@livermore/schemas": "workspace:*",
     "@livermore/utils": "workspace:*",
+    "ioredis": "5.9.1",
     "jsonwebtoken": "^9.0.3",
     "ws": "^8.18.0"
   },
