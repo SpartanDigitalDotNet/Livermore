@@ -10,9 +10,9 @@ See: .planning/PROJECT.md
 ## Current Position
 
 **Milestone:** v2.0 Data Pipeline Redesign
-**Phase:** 08-reconciliation (5 of 6) **REPLANNING**
-**Plan:** 0 of ? (architecture decided, creating new plans)
-**Status:** Event-driven approach selected, replanning in progress
+**Phase:** 08-reconciliation (5 of 6) **PLANNED**
+**Plan:** 0 of 3 (event-driven plans created, verified)
+**Status:** Ready for execution
 **Last activity:** 2026-01-23 - Candles channel empirical testing complete
 
 **Progress:** [##########--] 10/12 plans (83%)
@@ -148,8 +148,6 @@ Low-liquidity symbols have massive gaps, causing 30+ point MACD-V variance.
 
 ### Open Items
 
-- Phase 08 requires replanning (original plans used node-cron)
-- Architecture decision needed: How to get higher timeframes without cron or aggregation
 - Low-volume symbol policy: Include or exclude symbols with < 100 candles?
 
 ## Session Continuity
@@ -185,7 +183,7 @@ Phase 07 (Startup Backfill) COMPLETE. Phase 08 original plans REJECTED (used nod
 2. Phase 05: Coinbase Adapter (native candles channel) **COMPLETE** (3/3)
 3. Phase 06: Indicator Refactor (event-driven, cache-only) **COMPLETE** (2/2)
 4. Phase 07: Startup Backfill **COMPLETE** (2/2)
-5. Phase 08: Reconciliation **BLOCKED - REPLANNING NEEDED**
+5. Phase 08: Reconciliation **PLANNED** (3 plans, event-driven)
 6. Phase 09: Cleanup
 
 **Architecture options for Phase 08 (from research):**
@@ -196,7 +194,7 @@ Phase 07 (Startup Backfill) COMPLETE. Phase 08 original plans REJECTED (used nod
 | B | WebSocket 5m + Deferred higher timeframes | Higher TFs become stale until refresh |
 | C | Accept 5m-only indicators | Loses multi-timeframe analysis |
 
-**Next:** User decision on architecture approach, then replan Phase 08
+**Next:** Execute Phase 08 with `/gsd:execute-phase 08`
 
 ---
 *State initialized: 2026-01-18*
