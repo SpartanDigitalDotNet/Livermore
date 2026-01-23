@@ -10,12 +10,12 @@ See: .planning/PROJECT.md
 ## Current Position
 
 **Milestone:** v2.0 Data Pipeline Redesign
-**Phase:** 08-reconciliation (5 of 6) **PLANNED**
-**Plan:** 0 of 3 (event-driven plans created, verified)
-**Status:** Ready for execution
-**Last activity:** 2026-01-23 - Candles channel empirical testing complete
+**Phase:** 08-reconciliation (5 of 6) **IN PROGRESS**
+**Plan:** 1 of 3 (08-01 complete)
+**Status:** Executing Phase 08
+**Last activity:** 2026-01-23 - Completed 08-01-PLAN.md (Boundary Detection and REST Service)
 
-**Progress:** [##########--] 10/12 plans (83%)
+**Progress:** [###########-] 11/12 plans (92%)
 
 ## Milestones
 
@@ -95,6 +95,12 @@ Low-liquidity symbols have massive gaps, causing 30+ point MACD-V variance.
 | BKFL-PRIORITY | 5m, 15m, 1h, 4h, 1d priority order (no 1m) | 5m first since WebSocket provides it, enables indicator calculations sooner |
 | STARTUP-ORDER | Backfill -> Indicators -> WebSocket startup ordering | Ensures indicators have 60+ candles in cache before processing candle:close events |
 
+### Decisions Made (Phase 08)
+
+| ID | Decision | Reason |
+|----|----------|--------|
+| RECON-BOUNDARY-DETECTION | Timestamp modulo operation for boundary detection | Pure, testable, no external dependencies |
+
 ### Candles Channel Research (2026-01-23)
 
 **Method:** Empirical testing with PowerShell harness against live Coinbase WebSocket
@@ -155,24 +161,21 @@ Low-liquidity symbols have massive gaps, causing 30+ point MACD-V variance.
 ### Last Session
 
 **Date:** 2026-01-23
-**Activity:** Candles channel empirical testing and documentation
-**Stopped At:** Phase 08 blocked, awaiting architecture decision
+**Activity:** Executed 08-01-PLAN.md (Boundary Detection and REST Service)
+**Stopped At:** 08-01 complete, ready for 08-02
 
 ### Resume Context
 
-Phase 07 (Startup Backfill) COMPLETE. Phase 08 original plans REJECTED (used node-cron).
+Phase 08 execution in progress.
 
-**What happened:**
-1. Attempted to execute Phase 08 plans (08-01, 08-02)
-2. Plans used node-cron for scheduled reconciliation - **USER REJECTED**
-3. Reverted node-cron commits (`git reset --hard fb969eb`)
-4. Conducted empirical research on Coinbase candles channel
-5. Discovered WebSocket only provides 5m candles, higher timeframes via REST only
+**Completed (08-01):**
+- BoundaryRestService created with event-driven boundary detection
+- Rate limiting pattern (5 req/batch, 1s delay)
+- Exports from @livermore/coinbase-client
 
-**Key artifacts from research:**
-- `scripts/test-candles-channel.ps1` - Test harness
-- `.planning/research/CANDLES-CHANNEL-FINDINGS.md` - Full documentation
-- `candles-test-100-symbols.json` - 100-symbol test results
+**Key artifacts from 08-01:**
+- `packages/coinbase-client/src/reconciliation/` - BoundaryRestService, detectBoundaries, types
+- `.planning/phases/08-reconciliation/08-01-SUMMARY.md` - Execution summary
 
 **Phase 07 artifacts (still valid):**
 - `packages/coinbase-client/src/backfill/` - BackfillConfig, StartupBackfillService
@@ -183,19 +186,11 @@ Phase 07 (Startup Backfill) COMPLETE. Phase 08 original plans REJECTED (used nod
 2. Phase 05: Coinbase Adapter (native candles channel) **COMPLETE** (3/3)
 3. Phase 06: Indicator Refactor (event-driven, cache-only) **COMPLETE** (2/2)
 4. Phase 07: Startup Backfill **COMPLETE** (2/2)
-5. Phase 08: Reconciliation **PLANNED** (3 plans, event-driven)
+5. Phase 08: Reconciliation **IN PROGRESS** (1/3 plans complete)
 6. Phase 09: Cleanup
 
-**Architecture options for Phase 08 (from research):**
-
-| Option | Description | Trade-off |
-|--------|-------------|-----------|
-| A | WebSocket 5m + REST at boundaries (event-triggered) | 12,700 REST calls/day for 100 symbols |
-| B | WebSocket 5m + Deferred higher timeframes | Higher TFs become stale until refresh |
-| C | Accept 5m-only indicators | Loses multi-timeframe analysis |
-
-**Next:** Execute Phase 08 with `/gsd:execute-phase 08`
+**Next:** Execute 08-02-PLAN.md (BoundaryRestService server integration)
 
 ---
 *State initialized: 2026-01-18*
-*Last updated: 2026-01-23 after candles channel research and Phase 08 replanning decision*
+*Last updated: 2026-01-23 after 08-01-PLAN.md execution complete*
