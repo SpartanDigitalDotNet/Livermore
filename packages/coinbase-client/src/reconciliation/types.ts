@@ -50,3 +50,19 @@ export interface TimeframeBoundary {
   /** Whether this timeframe boundary was triggered */
   triggered: boolean;
 }
+
+/**
+ * Information about a detected gap in candle sequence
+ */
+export interface GapInfo {
+  /** Symbol with the gap */
+  symbol: string;
+  /** Timeframe with the gap */
+  timeframe: Timeframe;
+  /** First missing candle timestamp */
+  start: number;
+  /** Last missing candle timestamp */
+  end: number;
+  /** Number of missing candles */
+  count: number;
+}
