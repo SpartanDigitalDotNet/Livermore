@@ -10,10 +10,10 @@ See: .planning/PROJECT.md
 ## Current Position
 
 **Milestone:** v2.0 Data Pipeline Redesign
-**Phase:** 07-startup-backfill (4 of 6) **COMPLETE**
-**Plan:** 02 of 2 complete
-**Status:** Phase complete
-**Last activity:** 2026-01-21 - Completed 07-02-PLAN.md (Server Integration)
+**Phase:** 08-reconciliation (5 of 6) **BLOCKED - REPLANNING NEEDED**
+**Plan:** 0 of ? (original plans used node-cron, rejected)
+**Status:** Research complete, architecture decision needed
+**Last activity:** 2026-01-23 - Candles channel empirical testing complete
 
 **Progress:** [##########--] 10/12 plans (83%)
 
@@ -95,49 +95,90 @@ Low-liquidity symbols have massive gaps, causing 30+ point MACD-V variance.
 | BKFL-PRIORITY | 5m, 15m, 1h, 4h, 1d priority order (no 1m) | 5m first since WebSocket provides it, enables indicator calculations sooner |
 | STARTUP-ORDER | Backfill -> Indicators -> WebSocket startup ordering | Ensures indicators have 60+ candles in cache before processing candle:close events |
 
+### Candles Channel Research (2026-01-23)
+
+**Method:** Empirical testing with PowerShell harness against live Coinbase WebSocket
+
+**Critical findings:**
+| Aspect | Documentation | Reality |
+|--------|---------------|---------|
+| Granularity | "five minutes" | 5m only, skips empty candles |
+| Snapshot size | Not specified | 100 candles max |
+| Higher timeframes | Not mentioned | **NOT AVAILABLE** via WebSocket |
+
+**Test results (100 symbols):**
+- 86/100 symbols received snapshots
+- 72 symbols (84%) had full 100 candles
+- 14 symbols (16%) had < 100 candles (low liquidity)
+- Gaps exist where no trades occurred
+
+**Implication:** Higher timeframes (15m, 1h, 4h, 1d) MUST come from REST API.
+
+**Research files:**
+- `.planning/research/CANDLES-CHANNEL-FINDINGS.md` - Full findings
+- `scripts/test-candles-channel.ps1` - Test harness
+- `candles-test-100-symbols.json` - Raw results
+
+### Hard Constraints (User-Specified)
+
+| Constraint | Reason |
+|------------|--------|
+| **NO cron jobs** | User explicitly rejected node-cron approach |
+| **NO aggregation** | User stated "Don't suggest aggregate to me ever again" |
+| **Zero 429 errors** | Core reliability requirement |
+
 ### Open Items
 
-- v2.0 research completed in `.planning/research/SUMMARY.md` (on hold pending Option A results)
-- Sequence number validation now addressed in Phase 05 Plan 03
-- node-cron reconciliation planned for Phase 08
+- Phase 08 requires replanning (original plans used node-cron)
+- Architecture decision needed: How to get higher timeframes without cron or aggregation
+- Low-volume symbol policy: Include or exclude symbols with < 100 candles?
 
 ## Session Continuity
 
 ### Last Session
 
-**Date:** 2026-01-21
-**Activity:** Completed Phase 07 Plan 02 - Server Integration
-**Stopped At:** Phase 07 COMPLETE, ready for Phase 08
+**Date:** 2026-01-23
+**Activity:** Candles channel empirical testing and documentation
+**Stopped At:** Phase 08 blocked, awaiting architecture decision
 
 ### Resume Context
 
-Phase 07 (Startup Backfill) COMPLETE. 2 of 2 plans delivered:
+Phase 07 (Startup Backfill) COMPLETE. Phase 08 original plans REJECTED (used node-cron).
 
-1. **07-01:** StartupBackfillService with priority-ordered timeframes and rate-limited batch processing
-2. **07-02:** Server integration with correct startup ordering (backfill -> indicators -> WebSocket)
+**What happened:**
+1. Attempted to execute Phase 08 plans (08-01, 08-02)
+2. Plans used node-cron for scheduled reconciliation - **USER REJECTED**
+3. Reverted node-cron commits (`git reset --hard fb969eb`)
+4. Conducted empirical research on Coinbase candles channel
+5. Discovered WebSocket only provides 5m candles, higher timeframes via REST only
 
-**Key artifacts:**
-- `packages/coinbase-client/src/backfill/` - BackfillConfig, StartupBackfillService, TIMEFRAME_PRIORITY
-- `packages/coinbase-client/src/index.ts` - Exports StartupBackfillService
+**Key artifacts from research:**
+- `scripts/test-candles-channel.ps1` - Test harness
+- `.planning/research/CANDLES-CHANNEL-FINDINGS.md` - Full documentation
+- `candles-test-100-symbols.json` - 100-symbol test results
+
+**Phase 07 artifacts (still valid):**
+- `packages/coinbase-client/src/backfill/` - BackfillConfig, StartupBackfillService
 - `apps/api/src/server.ts` - Startup orchestration with backfill step
-
-**Phase 07 Result:**
-- Server startup runs backfill BEFORE starting indicator service
-- All symbols have 60+ candles in cache before indicators start
-- Backfill uses 5m, 15m, 1h, 4h, 1d timeframes (no 1m since WebSocket provides it)
-- Rate limiting: 5 requests/batch, 1s delay between batches
-- Progress logging with completion %, elapsed time, ETA
 
 **Phase order:**
 1. Phase 04: Foundation (interfaces, base classes) **COMPLETE**
 2. Phase 05: Coinbase Adapter (native candles channel) **COMPLETE** (3/3)
 3. Phase 06: Indicator Refactor (event-driven, cache-only) **COMPLETE** (2/2)
 4. Phase 07: Startup Backfill **COMPLETE** (2/2)
-5. Phase 08: Reconciliation (parallel with 07)
+5. Phase 08: Reconciliation **BLOCKED - REPLANNING NEEDED**
 6. Phase 09: Cleanup
 
-**Next:** Execute Phase 08 (Reconciliation)
+**Architecture options for Phase 08 (from research):**
+
+| Option | Description | Trade-off |
+|--------|-------------|-----------|
+| A | WebSocket 5m + REST at boundaries (event-triggered) | 12,700 REST calls/day for 100 symbols |
+| B | WebSocket 5m + Deferred higher timeframes | Higher TFs become stale until refresh |
+| C | Accept 5m-only indicators | Loses multi-timeframe analysis |
+
+**Next:** User decision on architecture approach, then replan Phase 08
 
 ---
 *State initialized: 2026-01-18*
-*Last updated: 2026-01-21 after completing Phase 07 Plan 02*
+*Last updated: 2026-01-23 after candles channel research and Phase 08 replanning decision*
