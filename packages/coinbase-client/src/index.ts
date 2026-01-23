@@ -12,3 +12,7 @@ export * from './adapter';
 // Backfill service
 export { StartupBackfillService, DEFAULT_BACKFILL_CONFIG, TIMEFRAME_PRIORITY } from './backfill';
 export type { BackfillConfig } from './backfill';
+
+// Reconciliation service (event-driven boundary REST fetching)
+export { BoundaryRestService, detectBoundaries, isTimeframeBoundary, DEFAULT_BOUNDARY_CONFIG } from './reconciliation';
+export type { BoundaryRestConfig, TimeframeBoundary } from './reconciliation';
