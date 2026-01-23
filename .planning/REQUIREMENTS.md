@@ -27,7 +27,7 @@ Requirements for eliminating 429 errors and data gaps through cache-first, event
 - [x] **CACHE-01**: Candles written directly to Redis sorted sets from WebSocket events
 - [x] **CACHE-02**: Timestamp-based versioning prevents out-of-order writes (only accept if timestamp > existing)
 - [ ] **CACHE-03**: Cache is single source of truth — indicator service never calls REST API during normal operation
-- [ ] **CACHE-04**: Gap detection query finds missing timestamps in candle sequences
+- [x] **CACHE-04**: Gap detection query finds missing timestamps in candle sequences
 
 ### Indicators
 
@@ -43,12 +43,12 @@ Requirements for eliminating 429 errors and data gaps through cache-first, event
 - [x] **BKFL-03**: Priority order fills shorter timeframes (5m, 15m) before longer ones
 - [x] **BKFL-04**: Progress tracking logs backfill status during startup
 
-### Reconciliation
+### Reconciliation (Event-Driven)
 
-- [ ] **RECON-01**: Background job scans for candle gaps every 5 minutes
-- [ ] **RECON-02**: Hourly full reconciliation compares cached candles to REST API
-- [ ] **RECON-03**: Detected gaps trigger rate-limited REST backfill
-- [ ] **RECON-04**: `node-cron` schedules reconciliation jobs
+- [x] **RECON-01**: Boundary detection identifies when 5m close is also 15m/1h/4h/1d boundary
+- [x] **RECON-02**: Event-driven REST fetching at timeframe boundaries
+- [x] **RECON-03**: Rate-limited batch processing (5 req/batch, 1s delay)
+- [x] **CACHE-04**: Gap detection identifies missing timestamps in candle sequences
 
 ## v2.1 Requirements (Deferred)
 
@@ -97,7 +97,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | CACHE-01 | Phase 04 | Complete |
 | CACHE-02 | Phase 04 | Complete |
 | CACHE-03 | Phase 3 | Pending |
-| CACHE-04 | Phase 5 | Pending |
+| CACHE-04 | Phase 08 | Complete |
 | IND-01 | Phase 3 | Pending |
 | IND-02 | Phase 3 | Pending |
 | IND-03 | Phase 3 | Pending |
@@ -106,16 +106,15 @@ Which phases cover which requirements. Updated during roadmap creation.
 | BKFL-02 | Phase 07 | Complete |
 | BKFL-03 | Phase 07 | Complete |
 | BKFL-04 | Phase 07 | Complete |
-| RECON-01 | Phase 5 | Pending |
-| RECON-02 | Phase 5 | Pending |
-| RECON-03 | Phase 5 | Pending |
-| RECON-04 | Phase 5 | Pending |
+| RECON-01 | Phase 08 | Complete |
+| RECON-02 | Phase 08 | Complete |
+| RECON-03 | Phase 08 | Complete |
 
 **Coverage:**
-- v2.0 requirements: 22 total
-- Mapped to phases: 22
+- v2.0 requirements: 21 total (RECON-04 removed - node-cron rejected)
+- Mapped to phases: 21
 - Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-01-21*
-*Last updated: 2026-01-21 after initial definition*
+*Last updated: 2026-01-23 after Phase 08 completion (event-driven reconciliation)*

@@ -161,18 +161,18 @@ Transform from REST-heavy, request-driven architecture to cache-first, event-dri
 - Server.ts integration
 
 **Plans:** 3 plans
-- [ ] 08-01-PLAN.md — Boundary detector and BoundaryRestService
-- [ ] 08-02-PLAN.md — Gap detection utilities
-- [ ] 08-03-PLAN.md — Server.ts integration
+- [x] 08-01-PLAN.md — Boundary detector and BoundaryRestService
+- [x] 08-02-PLAN.md — Gap detection utilities
+- [x] 08-03-PLAN.md — Server.ts integration
 
 **Success Criteria:**
-- [ ] 5m candle close triggers boundary detection
-- [ ] At 15m boundaries, fetch 15m candles for all symbols
-- [ ] At 1h boundaries, fetch 1h candles for all symbols
-- [ ] At 4h boundaries, fetch 4h candles for all symbols
-- [ ] At 1d boundaries, fetch 1d candles for all symbols
-- [ ] REST calls rate-limited (5 req/batch, 1s delay)
-- [ ] No 429 errors during boundary fetches
+- [x] 5m candle close triggers boundary detection
+- [x] At 15m boundaries, fetch 15m candles for all symbols
+- [x] At 1h boundaries, fetch 1h candles for all symbols
+- [x] At 4h boundaries, fetch 4h candles for all symbols
+- [x] At 1d boundaries, fetch 1d candles for all symbols
+- [x] REST calls rate-limited (5 req/batch, 1s delay)
+- [ ] No 429 errors during boundary fetches (requires runtime verification)
 
 ---
 
@@ -225,11 +225,11 @@ Phase 06 (Indicator Refactor)
 | 05 | Coinbase Adapter | Complete | 3/3 |
 | 06 | Indicator Refactor | Complete | 2/2 |
 | 07 | Startup Backfill | Complete | 2/2 |
-| 08 | Reconciliation | Ready | 0/3 |
+| 08 | Reconciliation | Complete | 3/3 |
 | 09 | Cleanup | Pending | 0/? |
 
-**Overall:** 67% complete (4/6 phases)
+**Overall:** 83% complete (5/6 phases)
 
 ---
 *Roadmap created: 2026-01-21*
-*Last updated: 2026-01-23 after Phase 08 replanning (event-driven approach)*
+*Last updated: 2026-01-23 after Phase 08 execution complete*
