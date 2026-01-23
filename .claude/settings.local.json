@@ -36,7 +36,10 @@
       "Bash(node generate-chart.js:*)",
       "Bash(git add:*)",
       "Bash(git commit -m \"$\\(cat <<''EOF''\ndocs: create roadmap \\(3 phases\\)\n\nPhases:\n1. Data Retrieval: DATA-01, DATA-02, DATA-03\n2. Fee Analysis: SYMBOL-01-04, SIDE-01-02, MONTH-01-04\n3. Output Generation: OUT-01, OUT-02, OUT-03\n\nAll 16 v1 requirements mapped to phases.\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "mcp__coinbase-docs__SearchCoinbaseDeveloper",
+      "Bash(pwsh -ExecutionPolicy Bypass -File scripts/test-candles-channel.ps1 -Duration 15)",
+      "Bash(pwsh -Command:*)"
     ]
   }
 }

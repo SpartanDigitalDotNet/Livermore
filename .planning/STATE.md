@@ -10,9 +10,9 @@ See: .planning/PROJECT.md
 ## Current Position
 
 **Milestone:** v2.0 Data Pipeline Redesign
-**Phase:** 08-reconciliation (5 of 6) **BLOCKED - REPLANNING NEEDED**
-**Plan:** 0 of ? (original plans used node-cron, rejected)
-**Status:** Research complete, architecture decision needed
+**Phase:** 08-reconciliation (5 of 6) **REPLANNING**
+**Plan:** 0 of ? (architecture decided, creating new plans)
+**Status:** Event-driven approach selected, replanning in progress
 **Last activity:** 2026-01-23 - Candles channel empirical testing complete
 
 **Progress:** [##########--] 10/12 plans (83%)
@@ -126,6 +126,25 @@ Low-liquidity symbols have massive gaps, causing 30+ point MACD-V variance.
 | **NO cron jobs** | User explicitly rejected node-cron approach |
 | **NO aggregation** | User stated "Don't suggest aggregate to me ever again" |
 | **Zero 429 errors** | Core reliability requirement |
+
+### Phase 08 Architecture Decision (2026-01-23)
+
+**Selected:** Option A — Event-Driven REST at Timeframe Boundaries
+
+**How it works:**
+1. WebSocket provides 5m candles in real-time
+2. On 5m candle close, detect if it's also a higher timeframe boundary
+3. At boundaries (15m, 1h, 4h, 1d), fire REST calls for those timeframes
+4. Rate limit REST calls to stay under Coinbase limits
+
+**Why this satisfies constraints:**
+- Event-driven (triggered by WebSocket), NOT cron-scheduled
+- No aggregation — each timeframe fetched directly from Coinbase
+- Rate limiting prevents 429 errors
+
+**Expected REST traffic (100 symbols):**
+- ~12,700 calls/day (~8.8 calls/minute average)
+- Well under Coinbase's 30 req/sec limit with batching
 
 ### Open Items
 

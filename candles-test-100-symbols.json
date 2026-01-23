@@ -1,0 +1,2006 @@
+{
+  "endpoint": "wss://advanced-trade-ws.coinbase.com",
+  "test_timestamp": "2026-01-22T08:52:29.7408334-06:00",
+  "authenticated": false,
+  "observations": [
+    "Product LINK-USD : 100 candles, 15m granularity, 13.25 hours of history",
+    "SUFFICIENT: 100 candles meets 100-candle requirement for MACD-V",
+    "Product MANA-USD : 100 candles, 5m granularity, 13.42 hours of history",
+    "SUFFICIENT: 100 candles meets 100-candle requirement for MACD-V",
+    "Product FLOKI-USD : 100 candles, 10m granularity, 22.08 hours of history",
+    "SUFFICIENT: 100 candles meets 100-candle requirement for MACD-V",
+    "Product AVAX-USD : 100 candles, 10m granularity, 13 hours of history",
+    "SUFFICIENT: 100 candles meets 100-candle requirement for MACD-V",
+    "Product LTC-USD : 100 candles, 10m granularity, 13.17 hours of history",
+    "SUFFICIENT: 100 candles meets 100-candle requirement for MACD-V",
+    "Product MLN-USD : 100 candles, 20m granularity, 24.17 hours of history",
+    "SUFFICIENT: 100 candles meets 100-candle requirement for MACD-V",
+    "Product GRT-USD : 100 candles, 5m granularity, 22.33 hours of history",
+    "SUFFICIENT: 100 candles meets 100-candle requirement for MACD-V",
+    "Product SAND-USD : 100 candles, 5m granularity, 13.25 hours of history",
+    "SUFFICIENT: 100 candles meets 100-candle requirement for MACD-V",
+    "Product ALGO-USD : 100 candles, 5m granularity, 14.08 hours of history",
+    "SUFFICIENT: 100 candles meets 100-candle requirement for MACD-V",
+    "Product CTSI-USD : 91 candles, 55m granularity, 37.33 hours of history",
+    "INSUFFICIENT: 91 candles does NOT meet 100-candle requirement",
+    "Product UNI-USD : 100 candles, 10m granularity, 13.33 hours of history",
+    "SUFFICIENT: 100 candles meets 100-candle requirement for MACD-V",
+    "Product BTC-USD : 100 candles, 25m granularity, 13.42 hours of history",
+    "SUFFICIENT: 100 candles meets 100-candle requirement for MACD-V",
+    "Product INJ-USD : 100 candles, 10m granularity, 13.75 hours of history",
+    "SUFFICIENT: 100 candles meets 100-candle requirement for MACD-V",
+    "Product BICO-USD : 36 candles, 60m granularity, 37.25 hours of history",
+    "INSUFFICIENT: 36 candles does NOT meet 100-candle requirement",
+    "Product APT-USD : 100 candles, 15m granularity, 13.42 hours of history",
+    "SUFFICIENT: 100 candles meets 100-candle requirement for MACD-V",
+    "Product LDO-USD : 100 candles, 10m granularity, 20 hours of history",
+    "SUFFICIENT: 100 candles meets 100-candle requirement for MACD-V",
+    "Product BAND-USD : 55 candles, 20m granularity, 34.25 hours of history",
+    "INSUFFICIENT: 55 candles does NOT meet 100-candle requirement",
+    "Product XLM-USD : 100 candles, 5m granularity, 13.33 hours of history",
+    "SUFFICIENT: 100 candles meets 100-candle requirement for MACD-V",
+    "Product ADA-USD : 100 candles, 10m granularity, 13.17 hours of history",
+    "SUFFICIENT: 100 candles meets 100-candle requirement for MACD-V",
+    "Product MINA-USD : 100 candles, 15m granularity, 16.58 hours of history",
+    "SUFFICIENT: 100 candles meets 100-candle requirement for MACD-V",
+    "Product PYTH-USD : 100 candles, 25m granularity, 21.83 hours of history",
+    "SUFFICIENT: 100 candles meets 100-candle requirement for MACD-V",
+    "Product COMP-USD : 100 candles, 30m granularity, 14.92 hours of history",
+    "SUFFICIENT: 100 candles meets 100-candle requirement for MACD-V",
+    "Product FET-USD : 100 candles, 10m granularity, 13.42 hours of history",
+    "SUFFICIENT: 100 candles meets 100-candle requirement for MACD-V",
+    "Product POND-USD : 54 candles, 20m granularity, 42.83 hours of history",
+    "INSUFFICIENT: 54 candles does NOT meet 100-candle requirement",
+    "Product LRC-USD : 100 candles, 5m granularity, 21.08 hours of history",
+    "SUFFICIENT: 100 candles meets 100-candle requirement for MACD-V",
+    "Product ZEC-USD : 100 candles, 5m granularity, 12.92 hours of history",
+    "SUFFICIENT: 100 candles meets 100-candle requirement for MACD-V",
+    "Product FIL-USD : 100 candles, 5m granularity, 13.42 hours of history",
+    "SUFFICIENT: 100 candles meets 100-candle requirement for MACD-V",
+    "Product RAD-USD : 16 candles, 100m granularity, 24.42 hours of history",
+    "INSUFFICIENT: 16 candles does NOT meet 100-candle requirement",
+    "Product ICP-USD : 100 candles, 5m granularity, 13.25 hours of history",
+    "SUFFICIENT: 100 candles meets 100-candle requirement for MACD-V",
+    "Product JTO-USD : 100 candles, 5m granularity, 13.17 hours of history",
+    "SUFFICIENT: 100 candles meets 100-candle requirement for MACD-V",
+    "Product DOT-USD : 100 candles, 5m granularity, 13.42 hours of history",
+    "SUFFICIENT: 100 candles meets 100-candle requirement for MACD-V",
+    "Product PEPE-USD : 100 candles, 5m granularity, 13.5 hours of history",
+    "SUFFICIENT: 100 candles meets 100-candle requirement for MACD-V",
+    "Product QNT-USD : 100 candles, 5m granularity, 10.83 hours of history",
+    "SUFFICIENT: 100 candles meets 100-candle requirement for MACD-V",
+    "Product IMX-USD : 100 candles, 10m granularity, 13.42 hours of history",
+    "SUFFICIENT: 100 candles meets 100-candle requirement for MACD-V",
+    "Product APE-USD : 100 candles, 5m granularity, 20.25 hours of history",
+    "SUFFICIENT: 100 candles meets 100-candle requirement for MACD-V",
+    "Product SEI-USD : 100 candles, 15m granularity, 13.58 hours of history",
+    "SUFFICIENT: 100 candles meets 100-candle requirement for MACD-V",
+    "Product STX-USD : 100 candles, 5m granularity, 13.75 hours of history",
+    "SUFFICIENT: 100 candles meets 100-candle requirement for MACD-V",
+    "Product BLUR-USD : 46 candles, 15m granularity, 31.92 hours of history",
+    "INSUFFICIENT: 46 candles does NOT meet 100-candle requirement",
+    "Product ZRX-USD : 100 candles, 10m granularity, 16.17 hours of history",
+    "SUFFICIENT: 100 candles meets 100-candle requirement for MACD-V",
+    "Product SNX-USD : 100 candles, 5m granularity, 18.08 hours of history",
+    "SUFFICIENT: 100 candles meets 100-candle requirement for MACD-V",
+    "Product YFI-USD : 100 candles, 20m granularity, 26.08 hours of history",
+    "SUFFICIENT: 100 candles meets 100-candle requirement for MACD-V",
+    "Product RLC-USD : 82 candles, 5m granularity, 44.67 hours of history",
+    "INSUFFICIENT: 82 candles does NOT meet 100-candle requirement",
+    "Product SKL-USD : 100 candles, 30m granularity, 37.75 hours of history",
+    "SUFFICIENT: 100 candles meets 100-candle requirement for MACD-V",
+    "Product SUI-USD : 100 candles, 10m granularity, 13.42 hours of history",
+    "SUFFICIENT: 100 candles meets 100-candle requirement for MACD-V",
+    "Product CAKE-USD : 100 candles, 5m granularity, 13.5 hours of history",
+    "SUFFICIENT: 100 candles meets 100-candle requirement for MACD-V",
+    "Product SHIB-USD : 100 candles, 10m granularity, 13.25 hours of history",
+    "SUFFICIENT: 100 candles meets 100-candle requirement for MACD-V",
+    "Product CRV-USD : 100 candles, 10m granularity, 13.75 hours of history",
+    "SUFFICIENT: 100 candles meets 100-candle requirement for MACD-V",
+    "Product KNC-USD : 73 candles, 90m granularity, 62.83 hours of history",
+    "INSUFFICIENT: 73 candles does NOT meet 100-candle requirement",
+    "Product BONK-USD : 100 candles, 5m granularity, 13.5 hours of history",
+    "SUFFICIENT: 100 candles meets 100-candle requirement for MACD-V",
+    "Product OGN-USD : 100 candles, 5m granularity, 24.17 hours of history",
+    "SUFFICIENT: 100 candles meets 100-candle requirement for MACD-V",
+    "Product BAL-USD : 68 candles, 15m granularity, 34.33 hours of history",
+    "INSUFFICIENT: 68 candles does NOT meet 100-candle requirement",
+    "Product ETC-USD : 100 candles, 5m granularity, 17 hours of history",
+    "SUFFICIENT: 100 candles meets 100-candle requirement for MACD-V",
+    "Product NEAR-USD : 100 candles, 5m granularity, 13.42 hours of history",
+    "SUFFICIENT: 100 candles meets 100-candle requirement for MACD-V",
+    "Product OP-USD : 100 candles, 5m granularity, 18.08 hours of history",
+    "SUFFICIENT: 100 candles meets 100-candle requirement for MACD-V",
+    "Product SUSHI-USD : 100 candles, 15m granularity, 18.42 hours of history",
+    "SUFFICIENT: 100 candles meets 100-candle requirement for MACD-V",
+    "Product API3-USD : 100 candles, 5m granularity, 24.08 hours of history",
+    "SUFFICIENT: 100 candles meets 100-candle requirement for MACD-V",
+    "Product DOGE-USD : 100 candles, 15m granularity, 13.42 hours of history",
+    "SUFFICIENT: 100 candles meets 100-candle requirement for MACD-V",
+    "Product XRP-USD : 100 candles, 5m granularity, 13.42 hours of history",
+    "SUFFICIENT: 100 candles meets 100-candle requirement for MACD-V",
+    "Product ATOM-USD : 100 candles, 5m granularity, 13.33 hours of history",
+    "SUFFICIENT: 100 candles meets 100-candle requirement for MACD-V",
+    "Product CVC-USD : 100 candles, 5m granularity, 39.42 hours of history",
+    "SUFFICIENT: 100 candles meets 100-candle requirement for MACD-V",
+    "Product AAVE-USD : 100 candles, 5m granularity, 13.33 hours of history",
+    "SUFFICIENT: 100 candles meets 100-candle requirement for MACD-V",
+    "Product CHZ-USD : 100 candles, 10m granularity, 15.25 hours of history",
+    "SUFFICIENT: 100 candles meets 100-candle requirement for MACD-V",
+    "Product TIA-USD : 100 candles, 20m granularity, 13.17 hours of history",
+    "SUFFICIENT: 100 candles meets 100-candle requirement for MACD-V",
+    "Product BAT-USD : 100 candles, 15m granularity, 13.67 hours of history",
+    "SUFFICIENT: 100 candles meets 100-candle requirement for MACD-V",
+    "Product RENDER-USD : 100 candles, 15m granularity, 13.33 hours of history",
+    "SUFFICIENT: 100 candles meets 100-candle requirement for MACD-V",
+    "Product ETH-USD : 100 candles, 20m granularity, 13.33 hours of history",
+    "SUFFICIENT: 100 candles meets 100-candle requirement for MACD-V",
+    "Product SOL-USD : 100 candles, 5m granularity, 13.33 hours of history",
+    "SUFFICIENT: 100 candles meets 100-candle requirement for MACD-V",
+    "Product AXS-USD : 100 candles, 5m granularity, 13.42 hours of history",
+    "SUFFICIENT: 100 candles meets 100-candle requirement for MACD-V",
+    "Product EGLD-USD : 100 candles, 20m granularity, 22.5 hours of history",
+    "SUFFICIENT: 100 candles meets 100-candle requirement for MACD-V",
+    "Product VET-USD : 100 candles, 10m granularity, 14.25 hours of history",
+    "SUFFICIENT: 100 candles meets 100-candle requirement for MACD-V",
+    "Product ANKR-USD : 100 candles, 10m granularity, 17.75 hours of history",
+    "SUFFICIENT: 100 candles meets 100-candle requirement for MACD-V",
+    "Product HBAR-USD : 100 candles, 15m granularity, 13.42 hours of history",
+    "SUFFICIENT: 100 candles meets 100-candle requirement for MACD-V",
+    "Product DASH-USD : 100 candles, 10m granularity, 13.42 hours of history",
+    "SUFFICIENT: 100 candles meets 100-candle requirement for MACD-V",
+    "Product 1INCH-USD : 100 candles, 15m granularity, 36.08 hours of history",
+    "SUFFICIENT: 100 candles meets 100-candle requirement for MACD-V",
+    "Product COTI-USD : 100 candles, 10m granularity, 28.42 hours of history",
+    "SUFFICIENT: 100 candles meets 100-candle requirement for MACD-V",
+    "Product ARB-USD : 100 candles, 5m granularity, 13.42 hours of history",
+    "SUFFICIENT: 100 candles meets 100-candle requirement for MACD-V",
+    "Product STORJ-USD : 100 candles, 15m granularity, 36.58 hours of history",
+    "SUFFICIENT: 100 candles meets 100-candle requirement for MACD-V",
+    "Product WIF-USD : 100 candles, 5m granularity, 17.5 hours of history",
+    "SUFFICIENT: 100 candles meets 100-candle requirement for MACD-V",
+    "Product MASK-USD : 84 candles, 5m granularity, 40.17 hours of history",
+    "INSUFFICIENT: 84 candles does NOT meet 100-candle requirement",
+    "Product UMA-USD : 50 candles, 95m granularity, 32.83 hours of history",
+    "INSUFFICIENT: 50 candles does NOT meet 100-candle requirement",
+    "Product XTZ-USD : 100 candles, 5m granularity, 17.08 hours of history",
+    "SUFFICIENT: 100 candles meets 100-candle requirement for MACD-V",
+    "Product ENS-USD : 100 candles, 5m granularity, 18.67 hours of history",
+    "SUFFICIENT: 100 candles meets 100-candle requirement for MACD-V",
+    "Product DNT-USD : 34 candles, 50m granularity, 32.58 hours of history",
+    "INSUFFICIENT: 34 candles does NOT meet 100-candle requirement",
+    "Product NMR-USD : 100 candles, 10m granularity, 25.42 hours of history",
+    "SUFFICIENT: 100 candles meets 100-candle requirement for MACD-V",
+    "Product RPL-USD : 100 candles, 25m granularity, 32.67 hours of history",
+    "SUFFICIENT: 100 candles meets 100-candle requirement for MACD-V",
+    "Product BNT-USD : 40 candles, 15m granularity, 40.75 hours of history",
+    "INSUFFICIENT: 40 candles does NOT meet 100-candle requirement"
+  ],
+  "channel": "candles",
+  "updates": [
+    {
+      "timestamp": "2026-01-22T08:52:33.7839057-06:00",
+      "event": {
+        "type": "update",
+        "candles": [
+          {
+            "start": "1769093400",
+            "high": "358.5",
+            "low": "355.79",
+            "open": "356.22",
+            "close": "358.16",
+            "volume": "202.20420079",
+            "product_id": "ZEC-USD"
+          }
+        ]
+      }
+    },
+    {
+      "timestamp": "2026-01-22T08:52:33.7877267-06:00",
+      "event": {
+        "type": "update",
+        "candles": [
+          {
+            "start": "1769093400",
+            "high": "4.841",
+            "low": "4.826",
+            "open": "4.826",
+            "close": "4.841",
+            "volume": "127.295758",
+            "product_id": "UNI-USD"
+          }
+        ]
+      }
+    },
+    {
+      "timestamp": "2026-01-22T08:52:33.7899151-06:00",
+      "event": {
+        "type": "update",
+        "candles": [
+          {
+            "start": "1769093400",
+            "high": "1.4941",
+            "low": "1.4868",
+            "open": "1.4883",
+            "close": "1.4941",
+            "volume": "68961.6",
+            "product_id": "SUI-USD"
+          }
+        ]
+      }
+    },
+    {
+      "timestamp": "2026-01-22T08:52:33.7930099-06:00",
+      "event": {
+        "type": "update",
+        "candles": [
+          {
+            "start": "1769093400",
+            "high": "0.3604",
+            "low": "0.3587",
+            "open": "0.3588",
+            "close": "0.3604",
+            "volume": "19653.4",
+            "product_id": "CRV-USD"
+          }
+        ]
+      }
+    },
+    {
+      "timestamp": "2026-01-22T08:52:33.7963353-06:00",
+      "event": {
+        "type": "update",
+        "candles": [
+          {
+            "start": "1769093400",
+            "high": "0.127462",
+            "low": "0.127377",
+            "open": "0.127451",
+            "close": "0.127419",
+            "volume": "911.73935",
+            "product_id": "ZRX-USD"
+          }
+        ]
+      }
+    },
+    {
+      "timestamp": "2026-01-22T08:52:33.7995302-06:00",
+      "event": {
+        "type": "update",
+        "candles": [
+          {
+            "start": "1769093400",
+            "high": "23.86",
+            "low": "23.81",
+            "open": "23.81",
+            "close": "23.86",
+            "volume": "13.943",
+            "product_id": "COMP-USD"
+          }
+        ]
+      }
+    },
+    {
+      "timestamp": "2026-01-22T08:52:33.8012503-06:00",
+      "event": {
+        "type": "update",
+        "candles": [
+          {
+            "start": "1769093400",
+            "high": "3.623",
+            "low": "3.605",
+            "open": "3.606",
+            "close": "3.623",
+            "volume": "7924.7925",
+            "product_id": "ICP-USD"
+          }
+        ]
+      }
+    },
+    {
+      "timestamp": "2026-01-22T08:52:33.8024258-06:00",
+      "event": {
+        "type": "update",
+        "candles": [
+          {
+            "start": "1769093400",
+            "high": "0.521",
+            "low": "0.521",
+            "open": "0.521",
+            "close": "0.521",
+            "volume": "639.05",
+            "product_id": "LDO-USD"
+          }
+        ]
+      }
+    },
+    {
+      "timestamp": "2026-01-22T08:52:33.8037699-06:00",
+      "event": {
+        "type": "update",
+        "candles": [
+          {
+            "start": "1769093400",
+            "high": "0.3322",
+            "low": "0.3313",
+            "open": "0.3314",
+            "close": "0.3321",
+            "volume": "22041.4",
+            "product_id": "JTO-USD"
+          }
+        ]
+      }
+    },
+    {
+      "timestamp": "2026-01-22T08:52:33.8048564-06:00",
+      "event": {
+        "type": "update",
+        "candles": [
+          {
+            "start": "1769093400",
+            "high": "1.326",
+            "low": "1.32",
+            "open": "1.321",
+            "close": "1.325",
+            "volume": "9511.819",
+            "product_id": "FIL-USD"
+          }
+        ]
+      }
+    }
+  ],
+  "errors": [],
+  "connection_status": "connected",
+  "product_ids": [
+    "BTC-USD",
+    "ETH-USD",
+    "SOL-USD",
+    "XRP-USD",
+    "DOGE-USD",
+    "ADA-USD",
+    "AVAX-USD",
+    "SHIB-USD",
+    "DOT-USD",
+    "LINK-USD",
+    "MATIC-USD",
+    "UNI-USD",
+    "ATOM-USD",
+    "LTC-USD",
+    "ETC-USD",
+    "XLM-USD",
+    "ALGO-USD",
+    "VET-USD",
+    "FIL-USD",
+    "AAVE-USD",
+    "GRT-USD",
+    "XTZ-USD",
+    "SAND-USD",
+    "MANA-USD",
+    "AXS-USD",
+    "THETA-USD",
+    "HBAR-USD",
+    "EGLD-USD",
+    "XMR-USD",
+    "EOS-USD",
+    "CAKE-USD",
+    "MKR-USD",
+    "SNX-USD",
+    "COMP-USD",
+    "ZEC-USD",
+    "DASH-USD",
+    "CHZ-USD",
+    "ENJ-USD",
+    "BAT-USD",
+    "YFI-USD",
+    "SUSHI-USD",
+    "CRV-USD",
+    "1INCH-USD",
+    "LRC-USD",
+    "ANKR-USD",
+    "SKL-USD",
+    "STORJ-USD",
+    "COTI-USD",
+    "FET-USD",
+    "CTSI-USD",
+    "RLC-USD",
+    "NMR-USD",
+    "OGN-USD",
+    "BAND-USD",
+    "KEEP-USD",
+    "NU-USD",
+    "MLN-USD",
+    "BNT-USD",
+    "UMA-USD",
+    "BAL-USD",
+    "REN-USD",
+    "KNC-USD",
+    "ZRX-USD",
+    "LOOM-USD",
+    "CVC-USD",
+    "DNT-USD",
+    "MINA-USD",
+    "QNT-USD",
+    "IMX-USD",
+    "APE-USD",
+    "LDO-USD",
+    "OP-USD",
+    "ARB-USD",
+    "SUI-USD",
+    "SEI-USD",
+    "TIA-USD",
+    "PYTH-USD",
+    "JTO-USD",
+    "BONK-USD",
+    "WIF-USD",
+    "PEPE-USD",
+    "FLOKI-USD",
+    "RENDER-USD",
+    "INJ-USD",
+    "FTM-USD",
+    "NEAR-USD",
+    "ICP-USD",
+    "RUNE-USD",
+    "STX-USD",
+    "APT-USD",
+    "BLUR-USD",
+    "MASK-USD",
+    "ENS-USD",
+    "RPL-USD",
+    "SSV-USD",
+    "BICO-USD",
+    "API3-USD",
+    "POND-USD",
+    "CLV-USD",
+    "RAD-USD"
+  ],
+  "snapshots": {
+    "LINK-USD": {
+      "candle_count": 100,
+      "sample_candle": {
+        "start": "1769093400",
+        "high": "12.268",
+        "low": "12.22",
+        "open": "12.23",
+        "close": "12.268",
+        "volume": "5919.55",
+        "product_id": "LINK-USD"
+      },
+      "oldest_timestamp": "1769045700",
+      "granularity_minutes": 15,
+      "time_span_hours": 13.25,
+      "oldest_datetime": "2026-01-22T01:35:00.0000000",
+      "newest_datetime": "2026-01-22T14:50:00.0000000",
+      "newest_timestamp": "1769093400"
+    },
+    "MANA-USD": {
+      "candle_count": 100,
+      "sample_candle": {
+        "start": "1769093400",
+        "high": "0.1598",
+        "low": "0.1592",
+        "open": "0.1593",
+        "close": "0.1598",
+        "volume": "695.92",
+        "product_id": "MANA-USD"
+      },
+      "oldest_timestamp": "1769045100",
+      "granularity_minutes": 5,
+      "time_span_hours": 13.42,
+      "oldest_datetime": "2026-01-22T01:25:00.0000000",
+      "newest_datetime": "2026-01-22T14:50:00.0000000",
+      "newest_timestamp": "1769093400"
+    },
+    "FLOKI-USD": {
+      "candle_count": 100,
+      "sample_candle": {
+        "start": "1769093100",
+        "high": "0.000043",
+        "low": "0.0000428",
+        "open": "0.000043",
+        "close": "0.0000428",
+        "volume": "4904366",
+        "product_id": "FLOKI-USD"
+      },
+      "oldest_timestamp": "1769013600",
+      "granularity_minutes": 10,
+      "time_span_hours": 22.08,
+      "oldest_datetime": "2026-01-21T16:40:00.0000000",
+      "newest_datetime": "2026-01-22T14:45:00.0000000",
+      "newest_timestamp": "1769093100"
+    },
+    "AVAX-USD": {
+      "candle_count": 100,
+      "sample_candle": {
+        "start": "1769093400",
+        "high": "12.17",
+        "low": "12.13",
+        "open": "12.13",
+        "close": "12.17",
+        "volume": "143.77875413",
+        "product_id": "AVAX-USD"
+      },
+      "oldest_timestamp": "1769046600",
+      "granularity_minutes": 10,
+      "time_span_hours": 13.0,
+      "oldest_datetime": "2026-01-22T01:50:00.0000000",
+      "newest_datetime": "2026-01-22T14:50:00.0000000",
+      "newest_timestamp": "1769093400"
+    },
+    "LTC-USD": {
+      "candle_count": 100,
+      "sample_candle": {
+        "start": "1769093400",
+        "high": "67.84",
+        "low": "67.66",
+        "open": "67.7",
+        "close": "67.84",
+        "volume": "205.84496111",
+        "product_id": "LTC-USD"
+      },
+      "oldest_timestamp": "1769046000",
+      "granularity_minutes": 10,
+      "time_span_hours": 13.17,
+      "oldest_datetime": "2026-01-22T01:40:00.0000000",
+      "newest_datetime": "2026-01-22T14:50:00.0000000",
+      "newest_timestamp": "1769093400"
+    },
+    "MLN-USD": {
+      "candle_count": 100,
+      "sample_candle": {
+        "start": "1769093100",
+        "high": "4.56",
+        "low": "4.55",
+        "open": "4.56",
+        "close": "4.55",
+        "volume": "143.638",
+        "product_id": "MLN-USD"
+      },
+      "oldest_timestamp": "1769006100",
+      "granularity_minutes": 20,
+      "time_span_hours": 24.17,
+      "oldest_datetime": "2026-01-21T14:35:00.0000000",
+      "newest_datetime": "2026-01-22T14:45:00.0000000",
+      "newest_timestamp": "1769093100"
+    },
+    "GRT-USD": {
+      "candle_count": 100,
+      "sample_candle": {
+        "start": "1769093400",
+        "high": "0.0359",
+        "low": "0.0359",
+        "open": "0.0359",
+        "close": "0.0359",
+        "volume": "1080",
+        "product_id": "GRT-USD"
+      },
+      "oldest_timestamp": "1769013000",
+      "granularity_minutes": 5,
+      "time_span_hours": 22.33,
+      "oldest_datetime": "2026-01-21T16:30:00.0000000",
+      "newest_datetime": "2026-01-22T14:50:00.0000000",
+      "newest_timestamp": "1769093400"
+    },
+    "SAND-USD": {
+      "candle_count": 100,
+      "sample_candle": {
+        "start": "1769093400",
+        "high": "0.1555",
+        "low": "0.1548",
+        "open": "0.1552",
+        "close": "0.1552",
+        "volume": "38616.35",
+        "product_id": "SAND-USD"
+      },
+      "oldest_timestamp": "1769045700",
+      "granularity_minutes": 5,
+      "time_span_hours": 13.25,
+      "oldest_datetime": "2026-01-22T01:35:00.0000000",
+      "newest_datetime": "2026-01-22T14:50:00.0000000",
+      "newest_timestamp": "1769093400"
+    },
+    "ALGO-USD": {
+      "candle_count": 100,
+      "sample_candle": {
+        "start": "1769093400",
+        "high": "0.1165",
+        "low": "0.116",
+        "open": "0.1161",
+        "close": "0.1164",
+        "volume": "74613.8",
+        "product_id": "ALGO-USD"
+      },
+      "oldest_timestamp": "1769042700",
+      "granularity_minutes": 5,
+      "time_span_hours": 14.08,
+      "oldest_datetime": "2026-01-22T00:45:00.0000000",
+      "newest_datetime": "2026-01-22T14:50:00.0000000",
+      "newest_timestamp": "1769093400"
+    },
+    "CTSI-USD": {
+      "candle_count": 91,
+      "sample_candle": {
+        "start": "1769092200",
+        "high": "0.0339",
+        "low": "0.0338",
+        "open": "0.0339",
+        "close": "0.0338",
+        "volume": "2087.1",
+        "product_id": "CTSI-USD"
+      },
+      "oldest_timestamp": "1768957800",
+      "granularity_minutes": 55,
+      "time_span_hours": 37.33,
+      "oldest_datetime": "2026-01-21T01:10:00.0000000",
+      "newest_datetime": "2026-01-22T14:30:00.0000000",
+      "newest_timestamp": "1769092200"
+    },
+    "UNI-USD": {
+      "candle_count": 100,
+      "sample_candle": {
+        "start": "1769093400",
+        "high": "4.839",
+        "low": "4.826",
+        "open": "4.826",
+        "close": "4.835",
+        "volume": "94.848459",
+        "product_id": "UNI-USD"
+      },
+      "oldest_timestamp": "1769045400",
+      "granularity_minutes": 10,
+      "time_span_hours": 13.33,
+      "oldest_datetime": "2026-01-22T01:30:00.0000000",
+      "newest_datetime": "2026-01-22T14:50:00.0000000",
+      "newest_timestamp": "1769093400"
+    },
+    "BTC-USD": {
+      "candle_count": 100,
+      "sample_candle": {
+        "start": "1769093400",
+        "high": "89315.84",
+        "low": "88950.75",
+        "open": "89004",
+        "close": "89314.6",
+        "volume": "59.98539773",
+        "product_id": "BTC-USD"
+      },
+      "oldest_timestamp": "1769045100",
+      "granularity_minutes": 25,
+      "time_span_hours": 13.42,
+      "oldest_datetime": "2026-01-22T01:25:00.0000000",
+      "newest_datetime": "2026-01-22T14:50:00.0000000",
+      "newest_timestamp": "1769093400"
+    },
+    "INJ-USD": {
+      "candle_count": 100,
+      "sample_candle": {
+        "start": "1769093400",
+        "high": "4.544",
+        "low": "4.531",
+        "open": "4.531",
+        "close": "4.544",
+        "volume": "135.73",
+        "product_id": "INJ-USD"
+      },
+      "oldest_timestamp": "1769043900",
+      "granularity_minutes": 10,
+      "time_span_hours": 13.75,
+      "oldest_datetime": "2026-01-22T01:05:00.0000000",
+      "newest_datetime": "2026-01-22T14:50:00.0000000",
+      "newest_timestamp": "1769093400"
+    },
+    "BICO-USD": {
+      "candle_count": 36,
+      "sample_candle": {
+        "start": "1769092500",
+        "high": "0.0402",
+        "low": "0.04",
+        "open": "0.04",
+        "close": "0.0401",
+        "volume": "17610.43",
+        "product_id": "BICO-USD"
+      },
+      "oldest_timestamp": "1768958400",
+      "granularity_minutes": 60,
+      "time_span_hours": 37.25,
+      "oldest_datetime": "2026-01-21T01:20:00.0000000",
+      "newest_datetime": "2026-01-22T14:35:00.0000000",
+      "newest_timestamp": "1769092500"
+    },
+    "APT-USD": {
+      "candle_count": 100,
+      "sample_candle": {
+        "start": "1769093400",
+        "high": "1.5334",
+        "low": "1.5264",
+        "open": "1.527",
+        "close": "1.5334",
+        "volume": "2956.432",
+        "product_id": "APT-USD"
+      },
+      "oldest_timestamp": "1769045100",
+      "granularity_minutes": 15,
+      "time_span_hours": 13.42,
+      "oldest_datetime": "2026-01-22T01:25:00.0000000",
+      "newest_datetime": "2026-01-22T14:50:00.0000000",
+      "newest_timestamp": "1769093400"
+    },
+    "LDO-USD": {
+      "candle_count": 100,
+      "sample_candle": {
+        "start": "1769093400",
+        "high": "0.521",
+        "low": "0.521",
+        "open": "0.521",
+        "close": "0.521",
+        "volume": "3.79",
+        "product_id": "LDO-USD"
+      },
+      "oldest_timestamp": "1769021400",
+      "granularity_minutes": 10,
+      "time_span_hours": 20.0,
+      "oldest_datetime": "2026-01-21T18:50:00.0000000",
+      "newest_datetime": "2026-01-22T14:50:00.0000000",
+      "newest_timestamp": "1769093400"
+    },
+    "BAND-USD": {
+      "candle_count": 55,
+      "sample_candle": {
+        "start": "1769093400",
+        "high": "0.304",
+        "low": "0.304",
+        "open": "0.304",
+        "close": "0.304",
+        "volume": "318.93",
+        "product_id": "BAND-USD"
+      },
+      "oldest_timestamp": "1768970100",
+      "granularity_minutes": 20,
+      "time_span_hours": 34.25,
+      "oldest_datetime": "2026-01-21T04:35:00.0000000",
+      "newest_datetime": "2026-01-22T14:50:00.0000000",
+      "newest_timestamp": "1769093400"
+    },
+    "XLM-USD": {
+      "candle_count": 100,
+      "sample_candle": {
+        "start": "1769093400",
+        "high": "0.211037",
+        "low": "0.21044",
+        "open": "0.210502",
+        "close": "0.210939",
+        "volume": "37354.62492508",
+        "product_id": "XLM-USD"
+      },
+      "oldest_timestamp": "1769045400",
+      "granularity_minutes": 5,
+      "time_span_hours": 13.33,
+      "oldest_datetime": "2026-01-22T01:30:00.0000000",
+      "newest_datetime": "2026-01-22T14:50:00.0000000",
+      "newest_timestamp": "1769093400"
+    },
+    "ADA-USD": {
+      "candle_count": 100,
+      "sample_candle": {
+        "start": "1769093400",
+        "high": "0.3586",
+        "low": "0.3567",
+        "open": "0.357",
+        "close": "0.3586",
+        "volume": "62642.03475721",
+        "product_id": "ADA-USD"
+      },
+      "oldest_timestamp": "1769046000",
+      "granularity_minutes": 10,
+      "time_span_hours": 13.17,
+      "oldest_datetime": "2026-01-22T01:40:00.0000000",
+      "newest_datetime": "2026-01-22T14:50:00.0000000",
+      "newest_timestamp": "1769093400"
+    },
+    "MINA-USD": {
+      "candle_count": 100,
+      "sample_candle": {
+        "start": "1769093100",
+        "high": "0.088",
+        "low": "0.088",
+        "open": "0.088",
+        "close": "0.088",
+        "volume": "5749.438",
+        "product_id": "MINA-USD"
+      },
+      "oldest_timestamp": "1769033400",
+      "granularity_minutes": 15,
+      "time_span_hours": 16.58,
+      "oldest_datetime": "2026-01-21T22:10:00.0000000",
+      "newest_datetime": "2026-01-22T14:45:00.0000000",
+      "newest_timestamp": "1769093100"
+    },
+    "PYTH-USD": {
+      "candle_count": 100,
+      "sample_candle": {
+        "start": "1769093100",
+        "high": "0.0569",
+        "low": "0.0568",
+        "open": "0.0569",
+        "close": "0.0569",
+        "volume": "19087.5",
+        "product_id": "PYTH-USD"
+      },
+      "oldest_timestamp": "1769014500",
+      "granularity_minutes": 25,
+      "time_span_hours": 21.83,
+      "oldest_datetime": "2026-01-21T16:55:00.0000000",
+      "newest_datetime": "2026-01-22T14:45:00.0000000",
+      "newest_timestamp": "1769093100"
+    },
+    "COMP-USD": {
+      "candle_count": 100,
+      "sample_candle": {
+        "start": "1769093100",
+        "high": "23.82",
+        "low": "23.8",
+        "open": "23.82",
+        "close": "23.8",
+        "volume": "9.093",
+        "product_id": "COMP-USD"
+      },
+      "oldest_timestamp": "1769039400",
+      "granularity_minutes": 30,
+      "time_span_hours": 14.92,
+      "oldest_datetime": "2026-01-21T23:50:00.0000000",
+      "newest_datetime": "2026-01-22T14:45:00.0000000",
+      "newest_timestamp": "1769093100"
+    },
+    "FET-USD": {
+      "candle_count": 100,
+      "sample_candle": {
+        "start": "1769093400",
+        "high": "0.2353",
+        "low": "0.2345",
+        "open": "0.2345",
+        "close": "0.2353",
+        "volume": "109.1",
+        "product_id": "FET-USD"
+      },
+      "oldest_timestamp": "1769045100",
+      "granularity_minutes": 10,
+      "time_span_hours": 13.42,
+      "oldest_datetime": "2026-01-22T01:25:00.0000000",
+      "newest_datetime": "2026-01-22T14:50:00.0000000",
+      "newest_timestamp": "1769093400"
+    },
+    "POND-USD": {
+      "candle_count": 54,
+      "sample_candle": {
+        "start": "1769092800",
+        "high": "0.0036",
+        "low": "0.00359",
+        "open": "0.00359",
+        "close": "0.0036",
+        "volume": "9587",
+        "product_id": "POND-USD"
+      },
+      "oldest_timestamp": "1768938600",
+      "granularity_minutes": 20,
+      "time_span_hours": 42.83,
+      "oldest_datetime": "2026-01-20T19:50:00.0000000",
+      "newest_datetime": "2026-01-22T14:40:00.0000000",
+      "newest_timestamp": "1769092800"
+    },
+    "LRC-USD": {
+      "candle_count": 100,
+      "sample_candle": {
+        "start": "1769093100",
+        "high": "0.0486",
+        "low": "0.0485",
+        "open": "0.0486",
+        "close": "0.0485",
+        "volume": "80938.690713",
+        "product_id": "LRC-USD"
+      },
+      "oldest_timestamp": "1769017200",
+      "granularity_minutes": 5,
+      "time_span_hours": 21.08,
+      "oldest_datetime": "2026-01-21T17:40:00.0000000",
+      "newest_datetime": "2026-01-22T14:45:00.0000000",
+      "newest_timestamp": "1769093100"
+    },
+    "ZEC-USD": {
+      "candle_count": 100,
+      "sample_candle": {
+        "start": "1769093400",
+        "high": "357.94",
+        "low": "355.79",
+        "open": "356.22",
+        "close": "357.84",
+        "volume": "185.41776751",
+        "product_id": "ZEC-USD"
+      },
+      "oldest_timestamp": "1769046900",
+      "granularity_minutes": 5,
+      "time_span_hours": 12.92,
+      "oldest_datetime": "2026-01-22T01:55:00.0000000",
+      "newest_datetime": "2026-01-22T14:50:00.0000000",
+      "newest_timestamp": "1769093400"
+    },
+    "FIL-USD": {
+      "candle_count": 100,
+      "sample_candle": {
+        "start": "1769093400",
+        "high": "1.326",
+        "low": "1.32",
+        "open": "1.321",
+        "close": "1.326",
+        "volume": "9411.819",
+        "product_id": "FIL-USD"
+      },
+      "oldest_timestamp": "1769045100",
+      "granularity_minutes": 5,
+      "time_span_hours": 13.42,
+      "oldest_datetime": "2026-01-22T01:25:00.0000000",
+      "newest_datetime": "2026-01-22T14:50:00.0000000",
+      "newest_timestamp": "1769093400"
+    },
+    "RAD-USD": {
+      "candle_count": 16,
+      "sample_candle": {
+        "start": "1769048400",
+        "high": "0.3",
+        "low": "0.29",
+        "open": "0.29",
+        "close": "0.3",
+        "volume": "9970.31",
+        "product_id": "RAD-USD"
+      },
+      "oldest_timestamp": "1768960500",
+      "granularity_minutes": 100,
+      "time_span_hours": 24.42,
+      "oldest_datetime": "2026-01-21T01:55:00.0000000",
+      "newest_datetime": "2026-01-22T02:20:00.0000000",
+      "newest_timestamp": "1769048400"
+    },
+    "ICP-USD": {
+      "candle_count": 100,
+      "sample_candle": {
+        "start": "1769093400",
+        "high": "3.623",
+        "low": "3.605",
+        "open": "3.606",
+        "close": "3.62",
+        "volume": "7716.2858",
+        "product_id": "ICP-USD"
+      },
+      "oldest_timestamp": "1769045700",
+      "granularity_minutes": 5,
+      "time_span_hours": 13.25,
+      "oldest_datetime": "2026-01-22T01:35:00.0000000",
+      "newest_datetime": "2026-01-22T14:50:00.0000000",
+      "newest_timestamp": "1769093400"
+    },
+    "JTO-USD": {
+      "candle_count": 100,
+      "sample_candle": {
+        "start": "1769093400",
+        "high": "0.3321",
+        "low": "0.3313",
+        "open": "0.3314",
+        "close": "0.3318",
+        "volume": "15210.7",
+        "product_id": "JTO-USD"
+      },
+      "oldest_timestamp": "1769046000",
+      "granularity_minutes": 5,
+      "time_span_hours": 13.17,
+      "oldest_datetime": "2026-01-22T01:40:00.0000000",
+      "newest_datetime": "2026-01-22T14:50:00.0000000",
+      "newest_timestamp": "1769093400"
+    },
+    "DOT-USD": {
+      "candle_count": 100,
+      "sample_candle": {
+        "start": "1769093400",
+        "high": "1.923",
+        "low": "1.915",
+        "open": "1.917",
+        "close": "1.922",
+        "volume": "5955.06271852",
+        "product_id": "DOT-USD"
+      },
+      "oldest_timestamp": "1769045100",
+      "granularity_minutes": 5,
+      "time_span_hours": 13.42,
+      "oldest_datetime": "2026-01-22T01:25:00.0000000",
+      "newest_datetime": "2026-01-22T14:50:00.0000000",
+      "newest_timestamp": "1769093400"
+    },
+    "PEPE-USD": {
+      "candle_count": 100,
+      "sample_candle": {
+        "start": "1769093400",
+        "high": "0.00000487",
+        "low": "0.00000485",
+        "open": "0.00000486",
+        "close": "0.00000487",
+        "volume": "102197356513",
+        "product_id": "PEPE-USD"
+      },
+      "oldest_timestamp": "1769044800",
+      "granularity_minutes": 5,
+      "time_span_hours": 13.5,
+      "oldest_datetime": "2026-01-22T01:20:00.0000000",
+      "newest_datetime": "2026-01-22T14:50:00.0000000",
+      "newest_timestamp": "1769093400"
+    },
+    "QNT-USD": {
+      "candle_count": 100,
+      "sample_candle": {
+        "start": "1769093400",
+        "high": "80.28",
+        "low": "80.14",
+        "open": "80.28",
+        "close": "80.24",
+        "volume": "20.944",
+        "product_id": "QNT-USD"
+      },
+      "oldest_timestamp": "1769054400",
+      "granularity_minutes": 5,
+      "time_span_hours": 10.83,
+      "oldest_datetime": "2026-01-22T04:00:00.0000000",
+      "newest_datetime": "2026-01-22T14:50:00.0000000",
+      "newest_timestamp": "1769093400"
+    },
+    "IMX-USD": {
+      "candle_count": 100,
+      "sample_candle": {
+        "start": "1769093400",
+        "high": "0.2456",
+        "low": "0.2447",
+        "open": "0.2447",
+        "close": "0.2456",
+        "volume": "4209.08",
+        "product_id": "IMX-USD"
+      },
+      "oldest_timestamp": "1769045100",
+      "granularity_minutes": 10,
+      "time_span_hours": 13.42,
+      "oldest_datetime": "2026-01-22T01:25:00.0000000",
+      "newest_datetime": "2026-01-22T14:50:00.0000000",
+      "newest_timestamp": "1769093400"
+    },
+    "APE-USD": {
+      "candle_count": 100,
+      "sample_candle": {
+        "start": "1769093400",
+        "high": "0.188",
+        "low": "0.188",
+        "open": "0.188",
+        "close": "0.188",
+        "volume": "293.8",
+        "product_id": "APE-USD"
+      },
+      "oldest_timestamp": "1769020500",
+      "granularity_minutes": 5,
+      "time_span_hours": 20.25,
+      "oldest_datetime": "2026-01-21T18:35:00.0000000",
+      "newest_datetime": "2026-01-22T14:50:00.0000000",
+      "newest_timestamp": "1769093400"
+    },
+    "SEI-USD": {
+      "candle_count": 100,
+      "sample_candle": {
+        "start": "1769093400",
+        "high": "0.10673",
+        "low": "0.10641",
+        "open": "0.10641",
+        "close": "0.10673",
+        "volume": "17353.6",
+        "product_id": "SEI-USD"
+      },
+      "oldest_timestamp": "1769044500",
+      "granularity_minutes": 15,
+      "time_span_hours": 13.58,
+      "oldest_datetime": "2026-01-22T01:15:00.0000000",
+      "newest_datetime": "2026-01-22T14:50:00.0000000",
+      "newest_timestamp": "1769093400"
+    },
+    "STX-USD": {
+      "candle_count": 100,
+      "sample_candle": {
+        "start": "1769093400",
+        "high": "0.3128",
+        "low": "0.3115",
+        "open": "0.3118",
+        "close": "0.3127",
+        "volume": "25046.5",
+        "product_id": "STX-USD"
+      },
+      "oldest_timestamp": "1769043900",
+      "granularity_minutes": 5,
+      "time_span_hours": 13.75,
+      "oldest_datetime": "2026-01-22T01:05:00.0000000",
+      "newest_datetime": "2026-01-22T14:50:00.0000000",
+      "newest_timestamp": "1769093400"
+    },
+    "BLUR-USD": {
+      "candle_count": 46,
+      "sample_candle": {
+        "start": "1769083500",
+        "high": "0.0324",
+        "low": "0.0324",
+        "open": "0.0324",
+        "close": "0.0324",
+        "volume": "1399.4",
+        "product_id": "BLUR-USD"
+      },
+      "oldest_timestamp": "1768968600",
+      "granularity_minutes": 15,
+      "time_span_hours": 31.92,
+      "oldest_datetime": "2026-01-21T04:10:00.0000000",
+      "newest_datetime": "2026-01-22T12:05:00.0000000",
+      "newest_timestamp": "1769083500"
+    },
+    "ZRX-USD": {
+      "candle_count": 100,
+      "sample_candle": {
+        "start": "1769093400",
+        "high": "0.127462",
+        "low": "0.127451",
+        "open": "0.127451",
+        "close": "0.127462",
+        "volume": "583.41202",
+        "product_id": "ZRX-USD"
+      },
+      "oldest_timestamp": "1769035200",
+      "granularity_minutes": 10,
+      "time_span_hours": 16.17,
+      "oldest_datetime": "2026-01-21T22:40:00.0000000",
+      "newest_datetime": "2026-01-22T14:50:00.0000000",
+      "newest_timestamp": "1769093400"
+    },
+    "SNX-USD": {
+      "candle_count": 100,
+      "sample_candle": {
+        "start": "1769093400",
+        "high": "0.416",
+        "low": "0.416",
+        "open": "0.416",
+        "close": "0.416",
+        "volume": "1373.658",
+        "product_id": "SNX-USD"
+      },
+      "oldest_timestamp": "1769028300",
+      "granularity_minutes": 5,
+      "time_span_hours": 18.08,
+      "oldest_datetime": "2026-01-21T20:45:00.0000000",
+      "newest_datetime": "2026-01-22T14:50:00.0000000",
+      "newest_timestamp": "1769093400"
+    },
+    "YFI-USD": {
+      "candle_count": 100,
+      "sample_candle": {
+        "start": "1769093100",
+        "high": "3343.23",
+        "low": "3343.23",
+        "open": "3343.23",
+        "close": "3343.23",
+        "volume": "0.000896",
+        "product_id": "YFI-USD"
+      },
+      "oldest_timestamp": "1768999200",
+      "granularity_minutes": 20,
+      "time_span_hours": 26.08,
+      "oldest_datetime": "2026-01-21T12:40:00.0000000",
+      "newest_datetime": "2026-01-22T14:45:00.0000000",
+      "newest_timestamp": "1769093100"
+    },
+    "RLC-USD": {
+      "candle_count": 82,
+      "sample_candle": {
+        "start": "1769093400",
+        "high": "0.5977",
+        "low": "0.5968",
+        "open": "0.5968",
+        "close": "0.5977",
+        "volume": "2487.86",
+        "product_id": "RLC-USD"
+      },
+      "oldest_timestamp": "1768932600",
+      "granularity_minutes": 5,
+      "time_span_hours": 44.67,
+      "oldest_datetime": "2026-01-20T18:10:00.0000000",
+      "newest_datetime": "2026-01-22T14:50:00.0000000",
+      "newest_timestamp": "1769093400"
+    },
+    "SKL-USD": {
+      "candle_count": 100,
+      "sample_candle": {
+        "start": "1769092200",
+        "high": "0.0099",
+        "low": "0.0098",
+        "open": "0.0098",
+        "close": "0.0099",
+        "volume": "316849.2",
+        "product_id": "SKL-USD"
+      },
+      "oldest_timestamp": "1768956300",
+      "granularity_minutes": 30,
+      "time_span_hours": 37.75,
+      "oldest_datetime": "2026-01-21T00:45:00.0000000",
+      "newest_datetime": "2026-01-22T14:30:00.0000000",
+      "newest_timestamp": "1769092200"
+    },
+    "SUI-USD": {
+      "candle_count": 100,
+      "sample_candle": {
+        "start": "1769093400",
+        "high": "1.4935",
+        "low": "1.4868",
+        "open": "1.4883",
+        "close": "1.4928",
+        "volume": "68480.8",
+        "product_id": "SUI-USD"
+      },
+      "oldest_timestamp": "1769045100",
+      "granularity_minutes": 10,
+      "time_span_hours": 13.42,
+      "oldest_datetime": "2026-01-22T01:25:00.0000000",
+      "newest_datetime": "2026-01-22T14:50:00.0000000",
+      "newest_timestamp": "1769093400"
+    },
+    "CAKE-USD": {
+      "candle_count": 100,
+      "sample_candle": {
+        "start": "1769093400",
+        "high": "1.942",
+        "low": "1.938",
+        "open": "1.938",
+        "close": "1.942",
+        "volume": "16.84",
+        "product_id": "CAKE-USD"
+      },
+      "oldest_timestamp": "1769044800",
+      "granularity_minutes": 5,
+      "time_span_hours": 13.5,
+      "oldest_datetime": "2026-01-22T01:20:00.0000000",
+      "newest_datetime": "2026-01-22T14:50:00.0000000",
+      "newest_timestamp": "1769093400"
+    },
+    "SHIB-USD": {
+      "candle_count": 100,
+      "sample_candle": {
+        "start": "1769093400",
+        "high": "0.00000778",
+        "low": "0.00000777",
+        "open": "0.00000777",
+        "close": "0.00000778",
+        "volume": "188665939",
+        "product_id": "SHIB-USD"
+      },
+      "oldest_timestamp": "1769045700",
+      "granularity_minutes": 10,
+      "time_span_hours": 13.25,
+      "oldest_datetime": "2026-01-22T01:35:00.0000000",
+      "newest_datetime": "2026-01-22T14:50:00.0000000",
+      "newest_timestamp": "1769093400"
+    },
+    "CRV-USD": {
+      "candle_count": 100,
+      "sample_candle": {
+        "start": "1769093400",
+        "high": "0.3603",
+        "low": "0.3587",
+        "open": "0.3588",
+        "close": "0.3603",
+        "volume": "17494.86",
+        "product_id": "CRV-USD"
+      },
+      "oldest_timestamp": "1769043900",
+      "granularity_minutes": 10,
+      "time_span_hours": 13.75,
+      "oldest_datetime": "2026-01-22T01:05:00.0000000",
+      "newest_datetime": "2026-01-22T14:50:00.0000000",
+      "newest_timestamp": "1769093400"
+    },
+    "KNC-USD": {
+      "candle_count": 73,
+      "sample_candle": {
+        "start": "1769091600",
+        "high": "0.2129",
+        "low": "0.2121",
+        "open": "0.2129",
+        "close": "0.2121",
+        "volume": "3301.3",
+        "product_id": "KNC-USD"
+      },
+      "oldest_timestamp": "1768865400",
+      "granularity_minutes": 90,
+      "time_span_hours": 62.83,
+      "oldest_datetime": "2026-01-19T23:30:00.0000000",
+      "newest_datetime": "2026-01-22T14:20:00.0000000",
+      "newest_timestamp": "1769091600"
+    },
+    "BONK-USD": {
+      "candle_count": 100,
+      "sample_candle": {
+        "start": "1769093400",
+        "high": "0.00000891",
+        "low": "0.00000887",
+        "open": "0.00000887",
+        "close": "0.00000891",
+        "volume": "2545062647",
+        "product_id": "BONK-USD"
+      },
+      "oldest_timestamp": "1769044800",
+      "granularity_minutes": 5,
+      "time_span_hours": 13.5,
+      "oldest_datetime": "2026-01-22T01:20:00.0000000",
+      "newest_datetime": "2026-01-22T14:50:00.0000000",
+      "newest_timestamp": "1769093400"
+    },
+    "OGN-USD": {
+      "candle_count": 100,
+      "sample_candle": {
+        "start": "1769093100",
+        "high": "0.0299",
+        "low": "0.02979",
+        "open": "0.02989",
+        "close": "0.02981",
+        "volume": "54106.55",
+        "product_id": "OGN-USD"
+      },
+      "oldest_timestamp": "1769006100",
+      "granularity_minutes": 5,
+      "time_span_hours": 24.17,
+      "oldest_datetime": "2026-01-21T14:35:00.0000000",
+      "newest_datetime": "2026-01-22T14:45:00.0000000",
+      "newest_timestamp": "1769093100"
+    },
+    "BAL-USD": {
+      "candle_count": 68,
+      "sample_candle": {
+        "start": "1769093400",
+        "high": "0.5014",
+        "low": "0.5014",
+        "open": "0.5014",
+        "close": "0.5014",
+        "volume": "0.163",
+        "product_id": "BAL-USD"
+      },
+      "oldest_timestamp": "1768969800",
+      "granularity_minutes": 15,
+      "time_span_hours": 34.33,
+      "oldest_datetime": "2026-01-21T04:30:00.0000000",
+      "newest_datetime": "2026-01-22T14:50:00.0000000",
+      "newest_timestamp": "1769093400"
+    },
+    "ETC-USD": {
+      "candle_count": 100,
+      "sample_candle": {
+        "start": "1769093400",
+        "high": "11.48",
+        "low": "11.47",
+        "open": "11.47",
+        "close": "11.48",
+        "volume": "35.63226",
+        "product_id": "ETC-USD"
+      },
+      "oldest_timestamp": "1769032200",
+      "granularity_minutes": 5,
+      "time_span_hours": 17.0,
+      "oldest_datetime": "2026-01-21T21:50:00.0000000",
+      "newest_datetime": "2026-01-22T14:50:00.0000000",
+      "newest_timestamp": "1769093400"
+    },
+    "NEAR-USD": {
+      "candle_count": 100,
+      "sample_candle": {
+        "start": "1769093400",
+        "high": "1.51",
+        "low": "1.504",
+        "open": "1.505",
+        "close": "1.51",
+        "volume": "11373.057",
+        "product_id": "NEAR-USD"
+      },
+      "oldest_timestamp": "1769045100",
+      "granularity_minutes": 5,
+      "time_span_hours": 13.42,
+      "oldest_datetime": "2026-01-22T01:25:00.0000000",
+      "newest_datetime": "2026-01-22T14:50:00.0000000",
+      "newest_timestamp": "1769093400"
+    },
+    "OP-USD": {
+      "candle_count": 100,
+      "sample_candle": {
+        "start": "1769093400",
+        "high": "0.306",
+        "low": "0.306",
+        "open": "0.306",
+        "close": "0.306",
+        "volume": "2735.96",
+        "product_id": "OP-USD"
+      },
+      "oldest_timestamp": "1769028300",
+      "granularity_minutes": 5,
+      "time_span_hours": 18.08,
+      "oldest_datetime": "2026-01-21T20:45:00.0000000",
+      "newest_datetime": "2026-01-22T14:50:00.0000000",
+      "newest_timestamp": "1769093400"
+    },
+    "SUSHI-USD": {
+      "candle_count": 100,
+      "sample_candle": {
+        "start": "1769093400",
+        "high": "0.3016",
+        "low": "0.3016",
+        "open": "0.3016",
+        "close": "0.3016",
+        "volume": "852.9",
+        "product_id": "SUSHI-USD"
+      },
+      "oldest_timestamp": "1769027100",
+      "granularity_minutes": 15,
+      "time_span_hours": 18.42,
+      "oldest_datetime": "2026-01-21T20:25:00.0000000",
+      "newest_datetime": "2026-01-22T14:50:00.0000000",
+      "newest_timestamp": "1769093400"
+    },
+    "API3-USD": {
+      "candle_count": 100,
+      "sample_candle": {
+        "start": "1769093400",
+        "high": "0.394",
+        "low": "0.394",
+        "open": "0.394",
+        "close": "0.394",
+        "volume": "280.61",
+        "product_id": "API3-USD"
+      },
+      "oldest_timestamp": "1769006700",
+      "granularity_minutes": 5,
+      "time_span_hours": 24.08,
+      "oldest_datetime": "2026-01-21T14:45:00.0000000",
+      "newest_datetime": "2026-01-22T14:50:00.0000000",
+      "newest_timestamp": "1769093400"
+    },
+    "DOGE-USD": {
+      "candle_count": 100,
+      "sample_candle": {
+        "start": "1769093400",
+        "high": "0.12436",
+        "low": "0.12388",
+        "open": "0.12396",
+        "close": "0.12436",
+        "volume": "762351.1",
+        "product_id": "DOGE-USD"
+      },
+      "oldest_timestamp": "1769045100",
+      "granularity_minutes": 15,
+      "time_span_hours": 13.42,
+      "oldest_datetime": "2026-01-22T01:25:00.0000000",
+      "newest_datetime": "2026-01-22T14:50:00.0000000",
+      "newest_timestamp": "1769093400"
+    },
+    "XRP-USD": {
+      "candle_count": 100,
+      "sample_candle": {
+        "start": "1769093400",
+        "high": "1.92",
+        "low": "1.9134",
+        "open": "1.9142",
+        "close": "1.92",
+        "volume": "144102.464354",
+        "product_id": "XRP-USD"
+      },
+      "oldest_timestamp": "1769045100",
+      "granularity_minutes": 5,
+      "time_span_hours": 13.42,
+      "oldest_datetime": "2026-01-22T01:25:00.0000000",
+      "newest_datetime": "2026-01-22T14:50:00.0000000",
+      "newest_timestamp": "1769093400"
+    },
+    "ATOM-USD": {
+      "candle_count": 100,
+      "sample_candle": {
+        "start": "1769093400",
+        "high": "2.348",
+        "low": "2.34",
+        "open": "2.34",
+        "close": "2.348",
+        "volume": "1691.42",
+        "product_id": "ATOM-USD"
+      },
+      "oldest_timestamp": "1769045400",
+      "granularity_minutes": 5,
+      "time_span_hours": 13.33,
+      "oldest_datetime": "2026-01-22T01:30:00.0000000",
+      "newest_datetime": "2026-01-22T14:50:00.0000000",
+      "newest_timestamp": "1769093400"
+    },
+    "CVC-USD": {
+      "candle_count": 100,
+      "sample_candle": {
+        "start": "1769093400",
+        "high": "0.0436",
+        "low": "0.0436",
+        "open": "0.0436",
+        "close": "0.0436",
+        "volume": "0.8",
+        "product_id": "CVC-USD"
+      },
+      "oldest_timestamp": "1768951500",
+      "granularity_minutes": 5,
+      "time_span_hours": 39.42,
+      "oldest_datetime": "2026-01-20T23:25:00.0000000",
+      "newest_datetime": "2026-01-22T14:50:00.0000000",
+      "newest_timestamp": "1769093400"
+    },
+    "AAVE-USD": {
+      "candle_count": 100,
+      "sample_candle": {
+        "start": "1769093400",
+        "high": "157.15",
+        "low": "156.67",
+        "open": "156.77",
+        "close": "157.05",
+        "volume": "27.344",
+        "product_id": "AAVE-USD"
+      },
+      "oldest_timestamp": "1769045400",
+      "granularity_minutes": 5,
+      "time_span_hours": 13.33,
+      "oldest_datetime": "2026-01-22T01:30:00.0000000",
+      "newest_datetime": "2026-01-22T14:50:00.0000000",
+      "newest_timestamp": "1769093400"
+    },
+    "CHZ-USD": {
+      "candle_count": 100,
+      "sample_candle": {
+        "start": "1769093100",
+        "high": "0.0513",
+        "low": "0.0513",
+        "open": "0.0513",
+        "close": "0.0513",
+        "volume": "21.5",
+        "product_id": "CHZ-USD"
+      },
+      "oldest_timestamp": "1769038200",
+      "granularity_minutes": 10,
+      "time_span_hours": 15.25,
+      "oldest_datetime": "2026-01-21T23:30:00.0000000",
+      "newest_datetime": "2026-01-22T14:45:00.0000000",
+      "newest_timestamp": "1769093100"
+    },
+    "TIA-USD": {
+      "candle_count": 100,
+      "sample_candle": {
+        "start": "1769093400",
+        "high": "0.4589",
+        "low": "0.4571",
+        "open": "0.4574",
+        "close": "0.4589",
+        "volume": "2567.42",
+        "product_id": "TIA-USD"
+      },
+      "oldest_timestamp": "1769046000",
+      "granularity_minutes": 20,
+      "time_span_hours": 13.17,
+      "oldest_datetime": "2026-01-22T01:40:00.0000000",
+      "newest_datetime": "2026-01-22T14:50:00.0000000",
+      "newest_timestamp": "1769093400"
+    },
+    "BAT-USD": {
+      "candle_count": 100,
+      "sample_candle": {
+        "start": "1769093400",
+        "high": "0.18365",
+        "low": "0.18293",
+        "open": "0.18304",
+        "close": "0.18365",
+        "volume": "31.47",
+        "product_id": "BAT-USD"
+      },
+      "oldest_timestamp": "1769044200",
+      "granularity_minutes": 15,
+      "time_span_hours": 13.67,
+      "oldest_datetime": "2026-01-22T01:10:00.0000000",
+      "newest_datetime": "2026-01-22T14:50:00.0000000",
+      "newest_timestamp": "1769093400"
+    },
+    "RENDER-USD": {
+      "candle_count": 100,
+      "sample_candle": {
+        "start": "1769093400",
+        "high": "1.997",
+        "low": "1.978",
+        "open": "1.984",
+        "close": "1.997",
+        "volume": "9879.5",
+        "product_id": "RENDER-USD"
+      },
+      "oldest_timestamp": "1769045400",
+      "granularity_minutes": 15,
+      "time_span_hours": 13.33,
+      "oldest_datetime": "2026-01-22T01:30:00.0000000",
+      "newest_datetime": "2026-01-22T14:50:00.0000000",
+      "newest_timestamp": "1769093400"
+    },
+    "ETH-USD": {
+      "candle_count": 100,
+      "sample_candle": {
+        "start": "1769093400",
+        "high": "2947.89",
+        "low": "2931.84",
+        "open": "2936.14",
+        "close": "2947.89",
+        "volume": "619.58638224",
+        "product_id": "ETH-USD"
+      },
+      "oldest_timestamp": "1769045400",
+      "granularity_minutes": 20,
+      "time_span_hours": 13.33,
+      "oldest_datetime": "2026-01-22T01:30:00.0000000",
+      "newest_datetime": "2026-01-22T14:50:00.0000000",
+      "newest_timestamp": "1769093400"
+    },
+    "SOL-USD": {
+      "candle_count": 100,
+      "sample_candle": {
+        "start": "1769093400",
+        "high": "128.15",
+        "low": "127.71",
+        "open": "127.8",
+        "close": "128.15",
+        "volume": "4406.73434538",
+        "product_id": "SOL-USD"
+      },
+      "oldest_timestamp": "1769045400",
+      "granularity_minutes": 5,
+      "time_span_hours": 13.33,
+      "oldest_datetime": "2026-01-22T01:30:00.0000000",
+      "newest_datetime": "2026-01-22T14:50:00.0000000",
+      "newest_timestamp": "1769093400"
+    },
+    "AXS-USD": {
+      "candle_count": 100,
+      "sample_candle": {
+        "start": "1769093400",
+        "high": "2.46",
+        "low": "2.444",
+        "open": "2.444",
+        "close": "2.45",
+        "volume": "21374.371",
+        "product_id": "AXS-USD"
+      },
+      "oldest_timestamp": "1769045100",
+      "granularity_minutes": 5,
+      "time_span_hours": 13.42,
+      "oldest_datetime": "2026-01-22T01:25:00.0000000",
+      "newest_datetime": "2026-01-22T14:50:00.0000000",
+      "newest_timestamp": "1769093400"
+    },
+    "EGLD-USD": {
+      "candle_count": 100,
+      "sample_candle": {
+        "start": "1769093400",
+        "high": "5.88",
+        "low": "5.87",
+        "open": "5.87",
+        "close": "5.88",
+        "volume": "21.81",
+        "product_id": "EGLD-USD"
+      },
+      "oldest_timestamp": "1769012400",
+      "granularity_minutes": 20,
+      "time_span_hours": 22.5,
+      "oldest_datetime": "2026-01-21T16:20:00.0000000",
+      "newest_datetime": "2026-01-22T14:50:00.0000000",
+      "newest_timestamp": "1769093400"
+    },
+    "VET-USD": {
+      "candle_count": 100,
+      "sample_candle": {
+        "start": "1769093400",
+        "high": "0.01018",
+        "low": "0.01018",
+        "open": "0.01018",
+        "close": "0.01018",
+        "volume": "983",
+        "product_id": "VET-USD"
+      },
+      "oldest_timestamp": "1769042100",
+      "granularity_minutes": 10,
+      "time_span_hours": 14.25,
+      "oldest_datetime": "2026-01-22T00:35:00.0000000",
+      "newest_datetime": "2026-01-22T14:50:00.0000000",
+      "newest_timestamp": "1769093400"
+    },
+    "ANKR-USD": {
+      "candle_count": 100,
+      "sample_candle": {
+        "start": "1769093400",
+        "high": "0.00634",
+        "low": "0.00633",
+        "open": "0.00633",
+        "close": "0.00633",
+        "volume": "8000",
+        "product_id": "ANKR-USD"
+      },
+      "oldest_timestamp": "1769029500",
+      "granularity_minutes": 10,
+      "time_span_hours": 17.75,
+      "oldest_datetime": "2026-01-21T21:05:00.0000000",
+      "newest_datetime": "2026-01-22T14:50:00.0000000",
+      "newest_timestamp": "1769093400"
+    },
+    "HBAR-USD": {
+      "candle_count": 100,
+      "sample_candle": {
+        "start": "1769093400",
+        "high": "0.10783",
+        "low": "0.10735",
+        "open": "0.10743",
+        "close": "0.10783",
+        "volume": "281071.1",
+        "product_id": "HBAR-USD"
+      },
+      "oldest_timestamp": "1769045100",
+      "granularity_minutes": 15,
+      "time_span_hours": 13.42,
+      "oldest_datetime": "2026-01-22T01:25:00.0000000",
+      "newest_datetime": "2026-01-22T14:50:00.0000000",
+      "newest_timestamp": "1769093400"
+    },
+    "DASH-USD": {
+      "candle_count": 100,
+      "sample_candle": {
+        "start": "1769093400",
+        "high": "65.15",
+        "low": "64.87",
+        "open": "64.9",
+        "close": "65.09",
+        "volume": "347.6257222",
+        "product_id": "DASH-USD"
+      },
+      "oldest_timestamp": "1769045100",
+      "granularity_minutes": 10,
+      "time_span_hours": 13.42,
+      "oldest_datetime": "2026-01-22T01:25:00.0000000",
+      "newest_datetime": "2026-01-22T14:50:00.0000000",
+      "newest_timestamp": "1769093400"
+    },
+    "1INCH-USD": {
+      "candle_count": 100,
+      "sample_candle": {
+        "start": "1769092200",
+        "high": "0.142",
+        "low": "0.141",
+        "open": "0.142",
+        "close": "0.141",
+        "volume": "5057.3",
+        "product_id": "1INCH-USD"
+      },
+      "oldest_timestamp": "1768962300",
+      "granularity_minutes": 15,
+      "time_span_hours": 36.08,
+      "oldest_datetime": "2026-01-21T02:25:00.0000000",
+      "newest_datetime": "2026-01-22T14:30:00.0000000",
+      "newest_timestamp": "1769092200"
+    },
+    "COTI-USD": {
+      "candle_count": 100,
+      "sample_candle": {
+        "start": "1769092500",
+        "high": "0.0191",
+        "low": "0.019",
+        "open": "0.019",
+        "close": "0.0191",
+        "volume": "41454",
+        "product_id": "COTI-USD"
+      },
+      "oldest_timestamp": "1768990200",
+      "granularity_minutes": 10,
+      "time_span_hours": 28.42,
+      "oldest_datetime": "2026-01-21T10:10:00.0000000",
+      "newest_datetime": "2026-01-22T14:35:00.0000000",
+      "newest_timestamp": "1769092500"
+    },
+    "ARB-USD": {
+      "candle_count": 100,
+      "sample_candle": {
+        "start": "1769093400",
+        "high": "0.1773",
+        "low": "0.1767",
+        "open": "0.1767",
+        "close": "0.1772",
+        "volume": "36977.91",
+        "product_id": "ARB-USD"
+      },
+      "oldest_timestamp": "1769045100",
+      "granularity_minutes": 5,
+      "time_span_hours": 13.42,
+      "oldest_datetime": "2026-01-22T01:25:00.0000000",
+      "newest_datetime": "2026-01-22T14:50:00.0000000",
+      "newest_timestamp": "1769093400"
+    },
+    "STORJ-USD": {
+      "candle_count": 100,
+      "sample_candle": {
+        "start": "1769093100",
+        "high": "0.1281",
+        "low": "0.128",
+        "open": "0.128",
+        "close": "0.128",
+        "volume": "649.18",
+        "product_id": "STORJ-USD"
+      },
+      "oldest_timestamp": "1768961400",
+      "granularity_minutes": 15,
+      "time_span_hours": 36.58,
+      "oldest_datetime": "2026-01-21T02:10:00.0000000",
+      "newest_datetime": "2026-01-22T14:45:00.0000000",
+      "newest_timestamp": "1769093100"
+    },
+    "WIF-USD": {
+      "candle_count": 100,
+      "sample_candle": {
+        "start": "1769093100",
+        "high": "0.331",
+        "low": "0.33",
+        "open": "0.331",
+        "close": "0.33",
+        "volume": "10707.93",
+        "product_id": "WIF-USD"
+      },
+      "oldest_timestamp": "1769030100",
+      "granularity_minutes": 5,
+      "time_span_hours": 17.5,
+      "oldest_datetime": "2026-01-21T21:15:00.0000000",
+      "newest_datetime": "2026-01-22T14:45:00.0000000",
+      "newest_timestamp": "1769093100"
+    },
+    "MASK-USD": {
+      "candle_count": 84,
+      "sample_candle": {
+        "start": "1769092500",
+        "high": "0.61",
+        "low": "0.61",
+        "open": "0.61",
+        "close": "0.61",
+        "volume": "623.44",
+        "product_id": "MASK-USD"
+      },
+      "oldest_timestamp": "1768947900",
+      "granularity_minutes": 5,
+      "time_span_hours": 40.17,
+      "oldest_datetime": "2026-01-20T22:25:00.0000000",
+      "newest_datetime": "2026-01-22T14:35:00.0000000",
+      "newest_timestamp": "1769092500"
+    },
+    "UMA-USD": {
+      "candle_count": 50,
+      "sample_candle": {
+        "start": "1769092800",
+        "high": "0.698",
+        "low": "0.698",
+        "open": "0.698",
+        "close": "0.698",
+        "volume": "516.2",
+        "product_id": "UMA-USD"
+      },
+      "oldest_timestamp": "1768974600",
+      "granularity_minutes": 95,
+      "time_span_hours": 32.83,
+      "oldest_datetime": "2026-01-21T05:50:00.0000000",
+      "newest_datetime": "2026-01-22T14:40:00.0000000",
+      "newest_timestamp": "1769092800"
+    },
+    "XTZ-USD": {
+      "candle_count": 100,
+      "sample_candle": {
+        "start": "1769093100",
+        "high": "0.576",
+        "low": "0.573",
+        "open": "0.576",
+        "close": "0.574",
+        "volume": "574.39",
+        "product_id": "XTZ-USD"
+      },
+      "oldest_timestamp": "1769031600",
+      "granularity_minutes": 5,
+      "time_span_hours": 17.08,
+      "oldest_datetime": "2026-01-21T21:40:00.0000000",
+      "newest_datetime": "2026-01-22T14:45:00.0000000",
+      "newest_timestamp": "1769093100"
+    },
+    "ENS-USD": {
+      "candle_count": 100,
+      "sample_candle": {
+        "start": "1769093100",
+        "high": "8.9",
+        "low": "8.87",
+        "open": "8.89",
+        "close": "8.87",
+        "volume": "245.965",
+        "product_id": "ENS-USD"
+      },
+      "oldest_timestamp": "1769025900",
+      "granularity_minutes": 5,
+      "time_span_hours": 18.67,
+      "oldest_datetime": "2026-01-21T20:05:00.0000000",
+      "newest_datetime": "2026-01-22T14:45:00.0000000",
+      "newest_timestamp": "1769093100"
+    },
+    "DNT-USD": {
+      "candle_count": 34,
+      "sample_candle": {
+        "start": "1769088900",
+        "high": "0.0124",
+        "low": "0.0123",
+        "open": "0.0124",
+        "close": "0.0123",
+        "volume": "50673.4",
+        "product_id": "DNT-USD"
+      },
+      "oldest_timestamp": "1768971600",
+      "granularity_minutes": 50,
+      "time_span_hours": 32.58,
+      "oldest_datetime": "2026-01-21T05:00:00.0000000",
+      "newest_datetime": "2026-01-22T13:35:00.0000000",
+      "newest_timestamp": "1769088900"
+    },
+    "NMR-USD": {
+      "candle_count": 100,
+      "sample_candle": {
+        "start": "1769093100",
+        "high": "9.4",
+        "low": "9.37",
+        "open": "9.4",
+        "close": "9.37",
+        "volume": "18.1",
+        "product_id": "NMR-USD"
+      },
+      "oldest_timestamp": "1769001600",
+      "granularity_minutes": 10,
+      "time_span_hours": 25.42,
+      "oldest_datetime": "2026-01-21T13:20:00.0000000",
+      "newest_datetime": "2026-01-22T14:45:00.0000000",
+      "newest_timestamp": "1769093100"
+    },
+    "RPL-USD": {
+      "candle_count": 100,
+      "sample_candle": {
+        "start": "1769093100",
+        "high": "2",
+        "low": "1.99",
+        "open": "2",
+        "close": "1.99",
+        "volume": "543.178",
+        "product_id": "RPL-USD"
+      },
+      "oldest_timestamp": "1768975500",
+      "granularity_minutes": 25,
+      "time_span_hours": 32.67,
+      "oldest_datetime": "2026-01-21T06:05:00.0000000",
+      "newest_datetime": "2026-01-22T14:45:00.0000000",
+      "newest_timestamp": "1769093100"
+    },
+    "BNT-USD": {
+      "candle_count": 40,
+      "sample_candle": {
+        "start": "1769085900",
+        "high": "0.3996",
+        "low": "0.3994",
+        "open": "0.3996",
+        "close": "0.3994",
+        "volume": "20",
+        "product_id": "BNT-USD"
+      },
+      "oldest_timestamp": "1768939200",
+      "granularity_minutes": 15,
+      "time_span_hours": 40.75,
+      "oldest_datetime": "2026-01-20T20:00:00.0000000",
+      "newest_datetime": "2026-01-22T12:45:00.0000000",
+      "newest_timestamp": "1769085900"
+    }
+  }
+}

@@ -1,0 +1,36 @@
+{
+  "connection_status": "connected",
+  "errors": [],
+  "updates": [],
+  "endpoint": "wss://advanced-trade-ws.coinbase.com",
+  "channel": "candles",
+  "observations": [
+    "Product BTC-USD : 100 candles, 5m granularity, 15.92 hours of history",
+    "SUFFICIENT: 100 candles meets 100-candle requirement for MACD-V"
+  ],
+  "test_timestamp": "2026-01-22T08:44:35.6340793-06:00",
+  "authenticated": false,
+  "product_ids": [
+    "BTC-USD"
+  ],
+  "snapshots": {
+    "BTC-USD": {
+      "candle_count": 100,
+      "sample_candle": {
+        "start": "1769092800",
+        "high": "89640.19",
+        "low": "89256.02",
+        "open": "89516.21",
+        "close": "89365.99",
+        "volume": "80.26022939",
+        "product_id": "BTC-USD"
+      },
+      "time_span_hours": 15.92,
+      "oldest_datetime": "2026-01-21T22:45:00.0000000",
+      "granularity_minutes": 5,
+      "oldest_timestamp": "1769035500",
+      "newest_datetime": "2026-01-22T14:40:00.0000000",
+      "newest_timestamp": "1769092800"
+    }
+  }
+}
