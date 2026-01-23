@@ -11,8 +11,8 @@ Transform from REST-heavy, request-driven architecture to cache-first, event-dri
 ```
 [Coinbase WebSocket] → [Exchange Adapter] → [Redis Cache] → [Indicator Service] → [Alerts]
                               ↓                    ↑
-                        candle:close         [Reconciliation Job]
-                           events              (gap filling)
+                        candle:close         [BoundaryRestService]
+                           events          (event-driven higher TF)
 ```
 
 ## Phases
@@ -140,31 +140,39 @@ Transform from REST-heavy, request-driven architecture to cache-first, event-dri
 ---
 
 ### Phase 08: Reconciliation
-**Goal:** Background jobs to detect and fill data gaps
+**Goal:** Event-driven higher timeframe fetching at candle boundaries
+
+**Architecture:** Option A — Event-Driven REST at Timeframe Boundaries
+- WebSocket provides 5m candles in real-time
+- On 5m candle close, detect if it's also a higher timeframe boundary
+- At boundaries (15m, 1h, 4h, 1d), fire rate-limited REST calls
+- NO cron jobs — purely event-driven (triggered by WebSocket)
 
 **Requirements:**
-- CACHE-04: Gap detection query
-- RECON-01: 5-minute gap scan
-- RECON-02: Hourly full reconciliation
-- RECON-03: Gap-triggered backfill
-- RECON-04: node-cron scheduling
+- CACHE-04: Gap detection query (for future use)
+- RECON-01: Boundary detection (is 5m close also 15m/1h/4h/1d boundary?)
+- RECON-02: Event-driven REST fetching at boundaries
+- RECON-03: Rate-limited batch processing (5 req/batch, 1s delay)
 
 **Deliverables:**
-- Gap detection query (find missing timestamps in sorted set)
-- 5-minute cron job: scan for gaps, queue backfill
-- Hourly cron job: validate cached candles against REST
-- Rate-limited backfill for detected gaps
-- `node-cron` integration
+- Boundary detector (pure function)
+- BoundaryRestService (subscribes to 5m candle:close, fetches higher TFs at boundaries)
+- Gap detector utilities (for future gap-filling)
+- Server.ts integration
 
-**Plans:** 2 plans
-- [ ] 08-01-PLAN.md — ReconciliationService with gap detection and cron jobs
-- [ ] 08-02-PLAN.md — Server.ts integration (start reconciliation after other services)
+**Plans:** 3 plans
+- [ ] 08-01-PLAN.md — Boundary detector and BoundaryRestService
+- [ ] 08-02-PLAN.md — Gap detection utilities
+- [ ] 08-03-PLAN.md — Server.ts integration
 
 **Success Criteria:**
-- [ ] Gaps detected within 5 minutes of occurrence
-- [ ] Gaps filled via REST backfill automatically
-- [ ] Hourly validation catches cache-REST mismatches
-- [ ] Reconciliation doesn't interfere with normal operations
+- [ ] 5m candle close triggers boundary detection
+- [ ] At 15m boundaries, fetch 15m candles for all symbols
+- [ ] At 1h boundaries, fetch 1h candles for all symbols
+- [ ] At 4h boundaries, fetch 4h candles for all symbols
+- [ ] At 1d boundaries, fetch 1d candles for all symbols
+- [ ] REST calls rate-limited (5 req/batch, 1s delay)
+- [ ] No 429 errors during boundary fetches
 
 ---
 
@@ -217,11 +225,11 @@ Phase 06 (Indicator Refactor)
 | 05 | Coinbase Adapter | Complete | 3/3 |
 | 06 | Indicator Refactor | Complete | 2/2 |
 | 07 | Startup Backfill | Complete | 2/2 |
-| 08 | Reconciliation | Ready | 0/2 |
+| 08 | Reconciliation | Ready | 0/3 |
 | 09 | Cleanup | Pending | 0/? |
 
 **Overall:** 67% complete (4/6 phases)
 
 ---
 *Roadmap created: 2026-01-21*
-*Last updated: 2026-01-21 after Phase 08 planning*
+*Last updated: 2026-01-23 after Phase 08 replanning (event-driven approach)*
