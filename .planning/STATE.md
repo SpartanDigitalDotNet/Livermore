@@ -10,12 +10,12 @@ See: .planning/PROJECT.md
 ## Current Position
 
 **Milestone:** v2.0 Data Pipeline Redesign
-**Phase:** 08-reconciliation (5 of 6) **IN PROGRESS**
-**Plan:** 2 of 3 (08-02 complete)
-**Status:** Executing Phase 08
-**Last activity:** 2026-01-23 - Completed 08-02-PLAN.md (Gap Detection)
+**Phase:** 08-reconciliation (5 of 6) **COMPLETE**
+**Plan:** 3 of 3 (all complete)
+**Status:** Phase 08 complete, ready for Phase 09 (Cleanup)
+**Last activity:** 2026-01-23 - Completed 08-03-PLAN.md (BoundaryRestService Server Integration)
 
-**Progress:** [###########-] 11/12 plans (92%)
+**Progress:** [############] 14/14 plans (100% of Phases 04-08)
 
 ## Milestones
 
@@ -101,6 +101,8 @@ Low-liquidity symbols have massive gaps, causing 30+ point MACD-V variance.
 |----|----------|--------|
 | RECON-BOUNDARY-DETECTION | Timestamp modulo operation for boundary detection | Pure, testable, no external dependencies |
 | GAP-PURE-FUNCTIONS | Gap detection as pure functions rather than service class | Enables flexible composition and easy testing |
+| RECON-SUBSCRIBER-CONNECTION | redis.duplicate() for separate subscriber connection | ioredis requires separate connection for psubscribe |
+| RECON-STARTUP-ORDER | BoundaryRestService starts after indicators, before WebSocket | Must be subscribed before events arrive |
 
 ### Candles Channel Research (2026-01-23)
 
@@ -162,45 +164,45 @@ Low-liquidity symbols have massive gaps, causing 30+ point MACD-V variance.
 ### Last Session
 
 **Date:** 2026-01-23
-**Activity:** Executed 08-02-PLAN.md (Gap Detection)
-**Stopped At:** 08-02 complete, ready for 08-03
+**Activity:** Executed 08-03-PLAN.md (BoundaryRestService Server Integration)
+**Stopped At:** Phase 08 complete, ready for Phase 09
 
 ### Resume Context
 
-Phase 08 execution in progress.
+Phase 08 (Reconciliation) is now complete. All event-driven boundary detection and higher timeframe fetching is integrated.
 
-**Completed (08-02):**
+**Phase 08 Deliverables:**
+
+**08-01 - Boundary Detection and REST Service:**
+- BoundaryRestService with event-driven boundary detection
+- detectBoundaries(), isTimeframeBoundary() functions
+- Rate limiting pattern (5 req/batch, 1s delay)
+
+**08-02 - Gap Detection:**
 - Gap detection utilities with pure functions
 - detectGaps, detectGapsForSymbol, getTimestampsOnly
-- GapInfo type for gap metadata
 
-**Completed (08-01):**
-- BoundaryRestService created with event-driven boundary detection
-- Rate limiting pattern (5 req/batch, 1s delay)
-- Exports from @livermore/coinbase-client
+**08-03 - Server Integration:**
+- BoundaryRestService integrated into server startup
+- Separate Redis subscriber connection for psubscribe
+- Startup order: Backfill -> Indicators -> BoundaryRestService -> WebSocket
+- Graceful shutdown handling
 
-**Key artifacts from 08-02:**
-- `packages/coinbase-client/src/reconciliation/gap-detector.ts` - Gap detection functions
-- `.planning/phases/08-reconciliation/08-02-SUMMARY.md` - Execution summary
-
-**Key artifacts from 08-01:**
-- `packages/coinbase-client/src/reconciliation/` - BoundaryRestService, detectBoundaries, types
-- `.planning/phases/08-reconciliation/08-01-SUMMARY.md` - Execution summary
-
-**Phase 07 artifacts (still valid):**
-- `packages/coinbase-client/src/backfill/` - BackfillConfig, StartupBackfillService
-- `apps/api/src/server.ts` - Startup orchestration with backfill step
+**Key artifacts:**
+- `packages/coinbase-client/src/reconciliation/` - Full reconciliation module
+- `apps/api/src/server.ts` - Server with BoundaryRestService integration
+- `.planning/phases/08-reconciliation/*-SUMMARY.md` - Execution summaries
 
 **Phase order:**
 1. Phase 04: Foundation (interfaces, base classes) **COMPLETE**
 2. Phase 05: Coinbase Adapter (native candles channel) **COMPLETE** (3/3)
-3. Phase 06: Indicator Refactor (event-driven, cache-only) **COMPLETE** (2/2)
+3. Phase 06: Indicator Refactor (event-driven, cache-only) **COMPLETE** (3/3)
 4. Phase 07: Startup Backfill **COMPLETE** (2/2)
-5. Phase 08: Reconciliation **IN PROGRESS** (2/3 plans complete)
-6. Phase 09: Cleanup
+5. Phase 08: Reconciliation **COMPLETE** (3/3)
+6. Phase 09: Cleanup (not yet planned)
 
-**Next:** Execute 08-03-PLAN.md (Final integration and testing)
+**Next:** Phase 09 planning and execution (Cleanup)
 
 ---
 *State initialized: 2026-01-18*
-*Last updated: 2026-01-23 after 08-02-PLAN.md execution complete*
+*Last updated: 2026-01-23 after 08-03-PLAN.md execution complete*
