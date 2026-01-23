@@ -6,7 +6,7 @@ import { logger, validateEnv } from '@livermore/utils';
 import { getDbClient } from '@livermore/database';
 import { getRedisClient } from '@livermore/cache';
 import { createContext } from '@livermore/trpc-config';
-import { CoinbaseRestClient, StartupBackfillService } from '@livermore/coinbase-client';
+import { CoinbaseRestClient, StartupBackfillService, BoundaryRestService, DEFAULT_BOUNDARY_CONFIG } from '@livermore/coinbase-client';
 import { CoinbaseWebSocketService } from './services/coinbase-websocket.service';
 import { IndicatorCalculationService } from './services/indicator-calculation.service';
 import { AlertEvaluationService } from './services/alert-evaluation.service';
@@ -165,6 +165,8 @@ async function start() {
 
   // Initialize Redis connection
   const redis = getRedisClient();
+  // Create separate Redis subscriber connection (required for psubscribe - cannot share with main client)
+  const subscriberRedis = redis.duplicate();
   logger.info('Redis connection established');
 
   // Initialize Discord notification service
@@ -242,7 +244,23 @@ async function start() {
   await indicatorService.start(indicatorConfigs);
   logger.info('Indicator Calculation Service started (subscribed to Redis candle:close events)');
 
-  // Step 3: Start Coinbase WebSocket data ingestion (starts emitting candle:close events)
+  // Step 3: Start BoundaryRestService (event-driven higher timeframe fetching)
+  // Subscribes to 5m candle:close events and fetches higher timeframes at boundaries
+  const boundaryRestService = new BoundaryRestService(
+    config.Coinbase_ApiKeyId,
+    config.Coinbase_EcPrivateKeyPem,
+    redis,
+    subscriberRedis,
+    {
+      userId: DEFAULT_BOUNDARY_CONFIG.userId,
+      exchangeId: DEFAULT_BOUNDARY_CONFIG.exchangeId,
+      higherTimeframes: ['15m', '1h', '4h', '1d'],
+    }
+  );
+  await boundaryRestService.start(monitoredSymbols);
+  logger.info('BoundaryRestService started (subscribed to 5m candle:close events)');
+
+  // Step 4: Start Coinbase WebSocket data ingestion (starts emitting candle:close events)
   const coinbaseWsService = new CoinbaseWebSocketService(
     config.Coinbase_ApiKeyId,
     config.Coinbase_EcPrivateKeyPem
@@ -281,8 +299,12 @@ async function start() {
 
     // Stop services in reverse order
     await alertService.stop();
-    await indicatorService.stop();
     coinbaseWsService.stop();
+    await boundaryRestService.stop();
+    await indicatorService.stop();
+
+    // Close subscriber Redis connection
+    await subscriberRedis.quit();
 
     // Send shutdown notification
     if (discordService.isEnabled()) {
