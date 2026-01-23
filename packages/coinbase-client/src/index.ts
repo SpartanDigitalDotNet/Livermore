@@ -15,4 +15,5 @@ export type { BackfillConfig } from './backfill';
 
 // Reconciliation service (event-driven boundary REST fetching)
 export { BoundaryRestService, detectBoundaries, isTimeframeBoundary, DEFAULT_BOUNDARY_CONFIG } from './reconciliation';
-export type { BoundaryRestConfig, TimeframeBoundary } from './reconciliation';
+export { detectGaps, detectGapsForSymbol, getTimestampsOnly } from './reconciliation';
+export type { BoundaryRestConfig, TimeframeBoundary, GapInfo } from './reconciliation';
