@@ -39,7 +39,8 @@
       "Bash(git commit:*)",
       "mcp__coinbase-docs__SearchCoinbaseDeveloper",
       "Bash(pwsh -ExecutionPolicy Bypass -File scripts/test-candles-channel.ps1 -Duration 15)",
-      "Bash(pwsh -Command:*)"
+      "Bash(pwsh -Command:*)",
+      "Bash(node -e:*)"
     ]
   }
 }

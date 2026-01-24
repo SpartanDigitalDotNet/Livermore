@@ -110,10 +110,11 @@ export class IndicatorCalculationService {
    * Parses the channel to extract symbol and timeframe, then recalculates from cache
    */
   private async handleCandleCloseEvent(channel: string, message: string): Promise<void> {
-    // Parse channel to extract symbol: "channel:candle:close:1:1:BTC-USD:5m"
+    // Parse channel: "channel:candle:close:1:1:BTC-USD:5m"
+    // Indices:        0       1      2     3 4 5        6
     const parts = channel.split(':');
-    const symbol = parts[4];
-    const timeframe = parts[5] as Timeframe;
+    const symbol = parts[5];
+    const timeframe = parts[6] as Timeframe;
 
     // Only process monitored symbols
     if (!this.monitoredSymbols.has(symbol)) {
