@@ -6,8 +6,7 @@ import { logger, validateEnv } from '@livermore/utils';
 import { getDbClient } from '@livermore/database';
 import { getRedisClient } from '@livermore/cache';
 import { createContext } from '@livermore/trpc-config';
-import { CoinbaseRestClient, StartupBackfillService, BoundaryRestService, DEFAULT_BOUNDARY_CONFIG } from '@livermore/coinbase-client';
-import { CoinbaseWebSocketService } from './services/coinbase-websocket.service';
+import { CoinbaseRestClient, StartupBackfillService, BoundaryRestService, DEFAULT_BOUNDARY_CONFIG, CoinbaseAdapter } from '@livermore/coinbase-client';
 import { IndicatorCalculationService } from './services/indicator-calculation.service';
 import { AlertEvaluationService } from './services/alert-evaluation.service';
 import { getDiscordService } from './services/discord-notification.service';
@@ -260,14 +259,17 @@ async function start() {
   await boundaryRestService.start(monitoredSymbols);
   logger.info('BoundaryRestService started (subscribed to 5m candle:close events)');
 
-  // Step 4: Start Coinbase WebSocket data ingestion (starts emitting candle:close events)
-  const coinbaseWsService = new CoinbaseWebSocketService(
-    config.Coinbase_ApiKeyId,
-    config.Coinbase_EcPrivateKeyPem
-  );
-
-  await coinbaseWsService.start(monitoredSymbols);
-  logger.info('Coinbase WebSocket service started');
+  // Step 4: Start Coinbase Adapter (native 5m candles channel, starts emitting candle:close events)
+  const coinbaseAdapter = new CoinbaseAdapter({
+    apiKeyId: config.Coinbase_ApiKeyId,
+    privateKeyPem: config.Coinbase_EcPrivateKeyPem,
+    redis,
+    userId: 1,  // Matches DEFAULT_BOUNDARY_CONFIG.userId
+    exchangeId: 1,  // Matches DEFAULT_BOUNDARY_CONFIG.exchangeId
+  });
+  await coinbaseAdapter.connect();
+  coinbaseAdapter.subscribe(monitoredSymbols, '5m');
+  logger.info('Coinbase Adapter started (5m candles)');
 
   // Start Alert Evaluation Service
   const alertService = new AlertEvaluationService();
@@ -299,7 +301,7 @@ async function start() {
 
     // Stop services in reverse order
     await alertService.stop();
-    coinbaseWsService.stop();
+    coinbaseAdapter.disconnect();
     await boundaryRestService.stop();
     await indicatorService.stop();
 
