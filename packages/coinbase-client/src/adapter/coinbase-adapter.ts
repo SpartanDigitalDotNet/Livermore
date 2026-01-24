@@ -13,8 +13,21 @@ import { BaseExchangeAdapter } from './base-adapter';
 import { CoinbaseAuth } from '../rest/auth';
 import { CoinbaseRestClient } from '../rest/client';
 import { CandleCacheStrategy, candleCloseChannel, TickerCacheStrategy } from '@livermore/cache';
-import type { Timeframe, UnifiedCandle, Ticker } from '@livermore/schemas';
-import { logger } from '@livermore/utils';
+import type { Timeframe, UnifiedCandle, Ticker, Candle } from '@livermore/schemas';
+import { logger, getCandleTimestamp } from '@livermore/utils';
+
+/**
+ * State for locally-aggregated 1m candles built from ticker data
+ */
+interface CandleState {
+  timestamp: number;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+  isClosed: boolean;
+}
 
 /**
  * Coinbase candle from WebSocket candles channel
@@ -187,6 +200,9 @@ export class CoinbaseAdapter extends BaseExchangeAdapter {
 
   /** Backfill threshold - only backfill if gap is greater than this (5 minutes) */
   private readonly BACKFILL_THRESHOLD_MS = 5 * 60 * 1000;
+
+  /** 1m candle state aggregated from ticker data (per symbol) */
+  private oneMinuteCandles = new Map<string, CandleState>();
 
   constructor(options: CoinbaseAdapterOptions) {
     super();
@@ -494,10 +510,89 @@ export class CoinbaseAdapter extends BaseExchangeAdapter {
 
           // Publish update via Redis pub/sub (AlertEvaluationService subscribes to this)
           await this.tickerCache.publishUpdate(this.userId, this.exchangeIdNum, ticker);
+
+          // Aggregate ticker into 1m candle (event-driven candle building)
+          await this.aggregateTickerTo1mCandle(tickerData.product_id, price, timestamp);
         } catch (error) {
           logger.error({ error, symbol: ticker.symbol }, 'Failed to cache/publish ticker');
         }
       }
+    }
+  }
+
+  /**
+   * Aggregate ticker event into local 1m candle
+   * Emits candle close event when minute boundary is crossed
+   */
+  private async aggregateTickerTo1mCandle(symbol: string, price: number, timestamp: number): Promise<void> {
+    const timeframe: Timeframe = '1m';
+    const candleTime = getCandleTimestamp(timestamp, timeframe);
+
+    const existing = this.oneMinuteCandles.get(symbol);
+
+    if (!existing || candleTime > existing.timestamp) {
+      // Close previous candle if exists and not already closed
+      if (existing && !existing.isClosed) {
+        existing.isClosed = true;
+        await this.emit1mCandleClose(symbol, existing);
+      }
+
+      // Start new candle
+      this.oneMinuteCandles.set(symbol, {
+        timestamp: candleTime,
+        open: price,
+        high: price,
+        low: price,
+        close: price,
+        volume: 0, // Volume not available from ticker
+        isClosed: false,
+      });
+    } else {
+      // Update existing candle
+      existing.high = Math.max(existing.high, price);
+      existing.low = Math.min(existing.low, price);
+      existing.close = price;
+    }
+  }
+
+  /**
+   * Emit 1m candle close - saves to cache and publishes candle:close event
+   */
+  private async emit1mCandleClose(symbol: string, state: CandleState): Promise<void> {
+    const timeframe: Timeframe = '1m';
+
+    logger.info({
+      event: '1m_candle_close',
+      symbol,
+      timestamp: new Date(state.timestamp).toISOString(),
+      ohlc: `${state.open}/${state.high}/${state.low}/${state.close}`,
+    }, `1m candle closed: ${symbol}`);
+
+    // Create candle for cache
+    const candle: Candle = {
+      timestamp: state.timestamp,
+      open: state.open,
+      high: state.high,
+      low: state.low,
+      close: state.close,
+      volume: state.volume,
+      symbol,
+      timeframe,
+    };
+
+    try {
+      // Save to cache
+      await this.candleCache.addCandles(this.userId, this.exchangeIdNum, [candle]);
+
+      // Publish candle:close event (triggers indicator recalculation)
+      const unified: UnifiedCandle = {
+        ...candle,
+        exchange: 'coinbase',
+      };
+      const channel = candleCloseChannel(this.userId, this.exchangeIdNum, symbol, timeframe);
+      await this.redis.publish(channel, JSON.stringify(unified));
+    } catch (error) {
+      logger.error({ error, symbol, timeframe }, 'Failed to emit 1m candle close');
     }
   }
 
