@@ -26,15 +26,15 @@ Requirements for eliminating 429 errors and data gaps through cache-first, event
 
 - [x] **CACHE-01**: Candles written directly to Redis sorted sets from WebSocket events
 - [x] **CACHE-02**: Timestamp-based versioning prevents out-of-order writes (only accept if timestamp > existing)
-- [ ] **CACHE-03**: Cache is single source of truth — indicator service never calls REST API during normal operation
+- [x] **CACHE-03**: Cache is single source of truth — indicator service never calls REST API during normal operation
 - [x] **CACHE-04**: Gap detection query finds missing timestamps in candle sequences
 
 ### Indicators
 
-- [ ] **IND-01**: Indicator service subscribes to `candle:close` events (no timer-based polling)
-- [ ] **IND-02**: Indicator calculations read exclusively from Redis cache
-- [ ] **IND-03**: Readiness check ensures 60+ candles before calculating (MACD-V minimum)
-- [ ] **IND-04**: Higher timeframes (15m, 1h, 4h, 1d) read from cache (populated by Phase 07 backfill)
+- [x] **IND-01**: Indicator service subscribes to `candle:close` events (no timer-based polling)
+- [x] **IND-02**: Indicator calculations read exclusively from Redis cache
+- [x] **IND-03**: Readiness check ensures 60+ candles before calculating (MACD-V minimum)
+- [x] **IND-04**: Higher timeframes (15m, 1h, 4h, 1d) read from cache (populated by Phase 07 backfill)
 
 ### Backfill
 
@@ -96,12 +96,12 @@ Which phases cover which requirements. Updated during roadmap creation.
 | WS-05 | Phase 05 | Complete |
 | CACHE-01 | Phase 04 | Complete |
 | CACHE-02 | Phase 04 | Complete |
-| CACHE-03 | Phase 3 | Pending |
+| CACHE-03 | Phase 06 | Complete |
 | CACHE-04 | Phase 08 | Complete |
-| IND-01 | Phase 3 | Pending |
-| IND-02 | Phase 3 | Pending |
-| IND-03 | Phase 3 | Pending |
-| IND-04 | Phase 3 | Pending |
+| IND-01 | Phase 06 | Complete |
+| IND-02 | Phase 06 | Complete |
+| IND-03 | Phase 06 | Complete |
+| IND-04 | Phase 06, 07, 08 | Complete |
 | BKFL-01 | Phase 07 | Complete |
 | BKFL-02 | Phase 07 | Complete |
 | BKFL-03 | Phase 07 | Complete |
@@ -117,4 +117,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ---
 *Requirements defined: 2026-01-21*
-*Last updated: 2026-01-23 after Phase 08 completion (event-driven reconciliation)*
+*Last updated: 2026-01-24 after v2.0 completion (all requirements complete)*
