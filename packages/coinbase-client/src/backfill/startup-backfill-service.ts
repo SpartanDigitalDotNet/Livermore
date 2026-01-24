@@ -118,8 +118,8 @@ export class StartupBackfillService {
     // Fetch candles from REST API (no start/end = most recent)
     const candles = await this.restClient.getCandles(symbol, timeframe);
 
-    // Slice result to candleCount most recent candles
-    const toCache = candles.slice(-this.config.candleCount);
+    // Take first N candles (Coinbase returns newest-first)
+    const toCache = candles.slice(0, this.config.candleCount);
 
     // Write to cache
     await this.candleCache.addCandles(
