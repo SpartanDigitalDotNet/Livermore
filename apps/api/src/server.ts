@@ -193,7 +193,7 @@ async function start() {
   // Step 1: Backfill cache with historical candles (MUST complete before indicators)
   // This ensures indicator service has 60+ candles per symbol/timeframe
   logger.info('Starting cache backfill...');
-  const backfillTimeframes: Timeframe[] = ['5m', '15m', '1h', '4h', '1d'];
+  const backfillTimeframes: Timeframe[] = ['1m', '5m', '15m', '1h', '4h', '1d'];
   const backfillService = new StartupBackfillService(
     config.Coinbase_ApiKeyId,
     config.Coinbase_EcPrivateKeyPem,
