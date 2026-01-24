@@ -45,8 +45,28 @@ async function check() {
   // Check for indicators
   const indicatorKeys = await redis.keys('indicator*');
   console.log('\nIndicator keys:', indicatorKeys.length);
-  if (indicatorKeys.length > 0) {
-    indicatorKeys.slice(0, 10).forEach(k => console.log('  ', k));
+
+  // Check BTC-USD 1h candles to verify data
+  const btcKey = 'candles:1:1:BTC-USD:1h';
+  const btcCandles = await redis.zrange(btcKey, -5, -1, 'WITHSCORES');
+  console.log('\nBTC-USD 1h last 5 candles:');
+  for (let i = 0; i < btcCandles.length; i += 2) {
+    const candle = JSON.parse(btcCandles[i]);
+    const score = btcCandles[i + 1];
+    console.log(`  ${new Date(candle.timestamp).toISOString()} | O:${candle.open} H:${candle.high} L:${candle.low} C:${candle.close}`);
+  }
+
+  // Check when BTC-USD 1h was last updated
+  const btcCount = await redis.zcard(btcKey);
+  console.log(`\nBTC-USD 1h total candles: ${btcCount}`);
+
+  // Get the latest candle timestamp
+  const latest = await redis.zrange(btcKey, -1, -1, 'WITHSCORES');
+  if (latest.length >= 2) {
+    const latestCandle = JSON.parse(latest[0]);
+    const now = Date.now();
+    const age = (now - latestCandle.timestamp) / 1000 / 60;
+    console.log(`Latest candle age: ${age.toFixed(1)} minutes`);
   }
 
   await redis.quit();
