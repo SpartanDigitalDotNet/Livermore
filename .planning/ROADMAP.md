@@ -199,6 +199,30 @@ Transform from REST-heavy, request-driven architecture to cache-first, event-dri
 
 ---
 
+### Phase 10: Ticker Publisher
+**Goal:** Add ticker price publishing to CoinbaseAdapter for alert notifications
+
+**Problem:** Milestone audit identified that alert notifications show "$0.00" because CoinbaseAdapter doesn't publish ticker events like the legacy service did.
+
+**Requirements:**
+- TICK-01: CoinbaseAdapter publishes ticker prices to Redis pub/sub
+- TICK-02: AlertEvaluationService receives current prices for notifications
+
+**Deliverables:**
+- Ticker channel subscription in CoinbaseAdapter
+- Redis pub/sub for ticker prices
+- AlertEvaluationService receives prices
+
+**Plans:** 1 plan
+- [ ] 10-01-PLAN.md — Add ticker subscription and publishing to CoinbaseAdapter
+
+**Success Criteria:**
+- [ ] Alert notifications show actual current price (not $0.00)
+- [ ] Ticker prices available for all monitored symbols
+- [ ] No additional REST calls (ticker from WebSocket)
+
+---
+
 ## Dependency Graph
 
 ```
@@ -213,6 +237,8 @@ Phase 06 (Indicator Refactor)
     └── Phase 08 (Reconciliation) ───┤
                                       ↓
                               Phase 09 (Cleanup)
+                                      ↓
+                              Phase 10 (Ticker Publisher)
 ```
 
 - Phase 04 blocks all others (interfaces required first)
@@ -220,6 +246,7 @@ Phase 06 (Indicator Refactor)
 - Phase 06 blocks Phases 07 & 08 (indicator service must be event-driven first)
 - Phases 07 & 08 can run in parallel after Phase 06
 - Phase 09 requires Phases 07 & 08 complete
+- Phase 10 depends on Phase 09 (CoinbaseAdapter must be in use)
 
 ## Progress
 
@@ -231,9 +258,10 @@ Phase 06 (Indicator Refactor)
 | 07 | Startup Backfill | Complete | 2/2 |
 | 08 | Reconciliation | Complete | 3/3 |
 | 09 | Cleanup | Complete | 2/2 |
+| 10 | Ticker Publisher | Not Started | 0/1 |
 
-**Overall:** 100% complete (6/6 phases)
+**Overall:** 86% complete (6/7 phases)
 
 ---
 *Roadmap created: 2026-01-21*
-*Last updated: 2026-01-24 after v2.0 completion (Phase 09 finalized)*
+*Last updated: 2026-01-24 after Phase 10 planning*
