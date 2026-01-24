@@ -10,12 +10,12 @@ See: .planning/PROJECT.md
 ## Current Position
 
 **Milestone:** v2.0 Data Pipeline Redesign
-**Phase:** 09-cleanup (6 of 6) **COMPLETE**
-**Plan:** 2 of 2 (all complete)
-**Status:** v2.0 implementation complete, entering 24-hour observation period
-**Last activity:** 2026-01-24 - Completed 09-02-PLAN.md (Documentation Finalization)
+**Phase:** 10-ticker-publisher (7 of 7) **COMPLETE**
+**Plan:** 1 of 1 (complete)
+**Status:** v2.0 Data Pipeline Redesign fully complete
+**Last activity:** 2026-01-24 - Completed 10-01-PLAN.md (Ticker Publisher)
 
-**Progress:** [################] 16/16 plans (100% of Phases 04-09)
+**Progress:** [#################] 17/17 plans (All phases complete)
 
 ## Milestones
 
@@ -110,6 +110,20 @@ Low-liquidity symbols have massive gaps, causing 30+ point MACD-V variance.
 |----|----------|--------|
 | CLEANUP-PRESERVE-LEGACY | Deprecate but preserve CoinbaseWebSocketService for rollback | Safety net if issues discovered with CoinbaseAdapter in production |
 
+### Decisions Made (Phase 10)
+
+| ID | Decision | Reason |
+|----|----------|--------|
+| TICKER-SUBSCRIBE-AFTER-CANDLES | Subscribe to ticker after candles subscription | Symbols already known at that point |
+| TICKER-UPDATES-ONLY | Process only 'update' events, ignore 'snapshot' | Efficiency - consistent with legacy service |
+| TICKER-FIRE-FORGET | Use .catch() pattern for async ticker handling | Non-blocking WebSocket message loop |
+
+### Roadmap Evolution
+
+| Date | Change | Reason |
+|------|--------|--------|
+| 2026-01-24 | Phase 10 added: Ticker Publisher | Milestone audit identified alerts showing $0.00 (missing ticker pub/sub) |
+
 ### Candles Channel Research (2026-01-23)
 
 **Method:** Empirical testing with PowerShell harness against live Coinbase WebSocket
@@ -170,23 +184,20 @@ Low-liquidity symbols have massive gaps, causing 30+ point MACD-V variance.
 ### Last Session
 
 **Date:** 2026-01-24
-**Activity:** Executed 09-02-PLAN.md (Documentation Finalization)
-**Stopped At:** v2.0 complete, entering observation period
+**Activity:** Executed 10-01-PLAN.md (Ticker Publisher)
+**Stopped At:** v2.0 fully complete including ticker publisher
 
 ### Resume Context
 
-**v2.0 Data Pipeline Redesign is COMPLETE.**
+**v2.0 Data Pipeline Redesign is FULLY COMPLETE.**
 
-**Phase 09 Deliverables:**
+**Phase 10 Deliverables:**
 
-**09-01 - Server Migration:**
-- Replaced CoinbaseWebSocketService with CoinbaseAdapter in server.ts
-- CoinbaseAdapter uses native 5m candles channel
-- Legacy service deprecated but preserved for rollback
-
-**09-02 - Documentation Finalization:**
-- REQUIREMENTS.md updated with completion status
-- All v2.0 requirements marked complete
+**10-01 - Ticker Publisher:**
+- Added ticker channel subscription to CoinbaseAdapter
+- Ticker messages transformed and published to Redis pub/sub
+- AlertEvaluationService now receives real-time ticker prices
+- Fixes "$0.00" price display issue in alert notifications
 
 **Phase completion summary:**
 1. Phase 04: Foundation (interfaces, base classes) **COMPLETE**
@@ -195,32 +206,34 @@ Low-liquidity symbols have massive gaps, causing 30+ point MACD-V variance.
 4. Phase 07: Startup Backfill **COMPLETE** (2/2)
 5. Phase 08: Reconciliation **COMPLETE** (3/3)
 6. Phase 09: Cleanup **COMPLETE** (2/2)
+7. Phase 10: Ticker Publisher **COMPLETE** (1/1)
 
 **v2.0 Architecture:**
 ```
 WebSocket Layer (CoinbaseAdapter)
     |
-    | Native 5m candles from Coinbase candles channel
+    | Native 5m candles + ticker from Coinbase channels
     v
 +-------------------+
 |   Redis Cache     |<-- Backfill Service (startup)
 +-------------------+<-- BoundaryRestService (15m/1h/4h/1d at boundaries)
     |
-    | candle:close events
+    | candle:close events + ticker pub/sub
     v
 Indicator Service (cache-only reads)
     |
     v
-Alert Evaluation
+Alert Evaluation (receives ticker prices)
 ```
 
 **Key improvements over v1.0:**
 - No data gaps from low-liquidity symbols (native 5m candles, not ticker-built 1m)
 - Zero REST calls in indicator hot path (eliminates 429 errors during calculation)
 - Event-driven higher timeframe fetching (no cron, no aggregation)
+- Real-time ticker prices for alert notifications (fixes $0.00 display)
 
-**Next:** 24-hour observation period to verify zero 429 errors
+**Next:** Production observation and testing
 
 ---
 *State initialized: 2026-01-18*
-*Last updated: 2026-01-24 after 09-02-PLAN.md execution complete (v2.0 documentation finalized)*
+*Last updated: 2026-01-24 after 10-01-PLAN.md execution complete (ticker publisher implemented)*
