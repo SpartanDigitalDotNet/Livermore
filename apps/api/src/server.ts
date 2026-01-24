@@ -243,6 +243,16 @@ async function start() {
   await indicatorService.start(indicatorConfigs);
   logger.info('Indicator Calculation Service started (subscribed to Redis candle:close events)');
 
+  // Step 2.5: Warmup - force initial indicator calculations from cached candles
+  // Without this, indicators show N/A until the first real-time candle:close event
+  logger.info('Warming up indicators from cached candles...');
+  let warmupCount = 0;
+  for (const config of indicatorConfigs) {
+    await indicatorService.forceRecalculate(config.symbol, config.timeframe);
+    warmupCount++;
+  }
+  logger.info({ warmupCount }, 'Indicator warmup complete');
+
   // Step 3: Start BoundaryRestService (event-driven higher timeframe fetching)
   // Subscribes to 5m candle:close events and fetches higher timeframes at boundaries
   const boundaryRestService = new BoundaryRestService(
