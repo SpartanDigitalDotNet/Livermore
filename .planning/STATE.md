@@ -10,19 +10,19 @@ See: .planning/PROJECT.md
 ## Current Position
 
 **Milestone:** v2.0 Data Pipeline Redesign
-**Phase:** 08-reconciliation (5 of 6) **COMPLETE**
-**Plan:** 3 of 3 (all complete)
-**Status:** Phase 08 complete, ready for Phase 09 (Cleanup)
-**Last activity:** 2026-01-23 - Completed 08-03-PLAN.md (BoundaryRestService Server Integration)
+**Phase:** 09-cleanup (6 of 6) **COMPLETE**
+**Plan:** 1 of 2 (cleanup plan 1 complete)
+**Status:** v2.0 COMPLETE - Service switchover done
+**Last activity:** 2026-01-23 - Completed 09-01-PLAN.md (Service Switchover)
 
-**Progress:** [############] 14/14 plans (100% of Phases 04-08)
+**Progress:** [################] 15/16 plans (v2.0 core complete)
 
 ## Milestones
 
 | Version | Name | Status | Shipped |
 |---------|------|--------|---------|
 | v1.0 | Fee Analysis Spike | Archived | 2026-01-19 |
-| v2.0 | Data Pipeline Redesign | In Progress | - |
+| v2.0 | Data Pipeline Redesign | Complete | 2026-01-23 |
 
 See `.planning/MILESTONES.md` for full history.
 
@@ -104,6 +104,12 @@ Low-liquidity symbols have massive gaps, causing 30+ point MACD-V variance.
 | RECON-SUBSCRIBER-CONNECTION | redis.duplicate() for separate subscriber connection | ioredis requires separate connection for psubscribe |
 | RECON-STARTUP-ORDER | BoundaryRestService starts after indicators, before WebSocket | Must be subscribed before events arrive |
 
+### Decisions Made (Phase 09)
+
+| ID | Decision | Reason |
+|----|----------|--------|
+| CLEANUP-PRESERVE-LEGACY | Deprecate but preserve CoinbaseWebSocketService for rollback | Safety net if issues discovered with CoinbaseAdapter in production |
+
 ### Candles Channel Research (2026-01-23)
 
 **Method:** Empirical testing with PowerShell harness against live Coinbase WebSocket
@@ -164,45 +170,51 @@ Low-liquidity symbols have massive gaps, causing 30+ point MACD-V variance.
 ### Last Session
 
 **Date:** 2026-01-23
-**Activity:** Executed 08-03-PLAN.md (BoundaryRestService Server Integration)
-**Stopped At:** Phase 08 complete, ready for Phase 09
+**Activity:** Executed 09-01-PLAN.md (Service Switchover)
+**Stopped At:** v2.0 core complete
 
 ### Resume Context
 
-Phase 08 (Reconciliation) is now complete. All event-driven boundary detection and higher timeframe fetching is integrated.
+**v2.0 Data Pipeline Redesign is COMPLETE.**
 
-**Phase 08 Deliverables:**
+Phase 09-01 completed the service switchover:
+- Server now uses CoinbaseAdapter (native 5m WebSocket candles)
+- Legacy CoinbaseWebSocketService deprecated but preserved for rollback
+- Zero REST calls in indicator hot path confirmed
 
-**08-01 - Boundary Detection and REST Service:**
-- BoundaryRestService with event-driven boundary detection
-- detectBoundaries(), isTimeframeBoundary() functions
-- Rate limiting pattern (5 req/batch, 1s delay)
-
-**08-02 - Gap Detection:**
-- Gap detection utilities with pure functions
-- detectGaps, detectGapsForSymbol, getTimestampsOnly
-
-**08-03 - Server Integration:**
-- BoundaryRestService integrated into server startup
-- Separate Redis subscriber connection for psubscribe
-- Startup order: Backfill -> Indicators -> BoundaryRestService -> WebSocket
-- Graceful shutdown handling
-
-**Key artifacts:**
-- `packages/coinbase-client/src/reconciliation/` - Full reconciliation module
-- `apps/api/src/server.ts` - Server with BoundaryRestService integration
-- `.planning/phases/08-reconciliation/*-SUMMARY.md` - Execution summaries
-
-**Phase order:**
+**Phase completion summary:**
 1. Phase 04: Foundation (interfaces, base classes) **COMPLETE**
 2. Phase 05: Coinbase Adapter (native candles channel) **COMPLETE** (3/3)
 3. Phase 06: Indicator Refactor (event-driven, cache-only) **COMPLETE** (3/3)
 4. Phase 07: Startup Backfill **COMPLETE** (2/2)
 5. Phase 08: Reconciliation **COMPLETE** (3/3)
-6. Phase 09: Cleanup (not yet planned)
+6. Phase 09: Cleanup **COMPLETE** (1/2 - core switchover done)
 
-**Next:** Phase 09 planning and execution (Cleanup)
+**v2.0 Architecture:**
+```
+WebSocket Layer (CoinbaseAdapter)
+    |
+    | Native 5m candles from Coinbase candles channel
+    v
++-------------------+
+|   Redis Cache     |<-- Backfill Service (startup)
++-------------------+<-- BoundaryRestService (15m/1h/4h/1d at boundaries)
+    |
+    | candle:close events
+    v
+Indicator Service (cache-only reads)
+    |
+    v
+Alert Evaluation
+```
+
+**Key improvements over v1.0:**
+- No data gaps from low-liquidity symbols (native 5m candles, not ticker-built 1m)
+- Zero REST calls in indicator hot path (eliminates 429 errors during calculation)
+- Event-driven higher timeframe fetching (no cron, no aggregation)
+
+**Remaining:** 09-02-PLAN.md (optional cleanup tasks)
 
 ---
 *State initialized: 2026-01-18*
-*Last updated: 2026-01-23 after 08-03-PLAN.md execution complete*
+*Last updated: 2026-01-23 after 09-01-PLAN.md execution complete (v2.0 SHIPPED)*
