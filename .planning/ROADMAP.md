@@ -214,12 +214,12 @@ Transform from REST-heavy, request-driven architecture to cache-first, event-dri
 - AlertEvaluationService receives prices
 
 **Plans:** 1 plan
-- [ ] 10-01-PLAN.md — Add ticker subscription and publishing to CoinbaseAdapter
+- [x] 10-01-PLAN.md — Add ticker subscription and publishing to CoinbaseAdapter
 
 **Success Criteria:**
-- [ ] Alert notifications show actual current price (not $0.00)
-- [ ] Ticker prices available for all monitored symbols
-- [ ] No additional REST calls (ticker from WebSocket)
+- [x] Alert notifications show actual current price (not $0.00)
+- [x] Ticker prices available for all monitored symbols
+- [x] No additional REST calls (ticker from WebSocket)
 
 ---
 
@@ -258,10 +258,10 @@ Phase 06 (Indicator Refactor)
 | 07 | Startup Backfill | Complete | 2/2 |
 | 08 | Reconciliation | Complete | 3/3 |
 | 09 | Cleanup | Complete | 2/2 |
-| 10 | Ticker Publisher | Not Started | 0/1 |
+| 10 | Ticker Publisher | Complete | 1/1 |
 
-**Overall:** 86% complete (6/7 phases)
+**Overall:** 100% complete (7/7 phases)
 
 ---
 *Roadmap created: 2026-01-21*
-*Last updated: 2026-01-24 after Phase 10 planning*
+*Last updated: 2026-01-24 after Phase 10 complete (v2.0 fully done)*
