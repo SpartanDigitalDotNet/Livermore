@@ -34,6 +34,14 @@ export class BoundaryRestService {
   private symbols: string[] = [];
   private isRunning = false;
 
+  // Track boundaries that have already been triggered to prevent duplicate fetches
+  // Key format: `${timestamp}-${timeframe}` (e.g., "1706140800000-15m")
+  private triggeredBoundaries = new Set<string>();
+  private readonly BOUNDARY_CLEANUP_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
+
+  // Only process candles from the last 10 minutes (ignore historical snapshot candles)
+  private readonly MAX_CANDLE_AGE_MS = 10 * 60 * 1000; // 10 minutes
+
   constructor(
     apiKeyId: string,
     privateKeyPem: string,
@@ -89,6 +97,8 @@ export class BoundaryRestService {
    *
    * Detects boundary alignment and triggers REST fetches for higher timeframes.
    * Only processes one candle close per boundary (first received triggers fetch).
+   * Uses deduplication to prevent multiple symbols at the same boundary from
+   * all triggering separate fetches.
    */
   private async handleCandleClose(
     _pattern: string,
@@ -100,6 +110,27 @@ export class BoundaryRestService {
     try {
       const candle = JSON.parse(message) as UnifiedCandle;
       const timestamp = candle.timestamp;
+      const now = Date.now();
+
+      // Log received candle close event
+      logger.info({
+        event: 'boundary_candle_received',
+        symbol: candle.symbol,
+        timestamp: new Date(timestamp).toISOString(),
+        ageMs: now - timestamp,
+      }, `Received candle:close for ${candle.symbol}`);
+
+      // Skip historical candles from WebSocket snapshot (only process recent candles)
+      const candleAge = now - timestamp;
+      if (candleAge > this.MAX_CANDLE_AGE_MS) {
+        logger.info({
+          event: 'boundary_candle_skipped_age',
+          symbol: candle.symbol,
+          ageMs: candleAge,
+          maxAgeMs: this.MAX_CANDLE_AGE_MS,
+        }, `Skipping candle:close (too old)`);
+        return; // Historical candle from snapshot, ignore for boundary triggers
+      }
 
       // Detect which higher timeframe boundaries this 5m close aligns with
       const boundaries = detectBoundaries(timestamp, this.config.higherTimeframes);
@@ -109,17 +140,54 @@ export class BoundaryRestService {
         return; // No boundaries triggered, nothing to do
       }
 
+      // Filter out boundaries we've already triggered (deduplication)
+      const newBoundaries = triggeredBoundaries.filter(b => {
+        const key = `${timestamp}-${b.timeframe}`;
+        if (this.triggeredBoundaries.has(key)) {
+          logger.debug({
+            event: 'boundary_dedup_skip',
+            symbol: candle.symbol,
+            timestamp: new Date(timestamp).toISOString(),
+            timeframe: b.timeframe,
+            key,
+          }, 'Skipping duplicate boundary trigger');
+          return false; // Already triggered, skip
+        }
+        this.triggeredBoundaries.add(key);
+        return true;
+      });
+
+      if (newBoundaries.length === 0) {
+        return; // All boundaries already triggered by another symbol
+      }
+
+      // Cleanup old boundary keys periodically (keep last 5 minutes)
+      this.cleanupOldBoundaries(timestamp);
+
       logger.info({
         event: 'boundary_triggered',
         timestamp: new Date(timestamp).toISOString(),
-        timeframes: triggeredBoundaries.map(b => b.timeframe),
+        timeframes: newBoundaries.map(b => b.timeframe),
         triggerSymbol: candle.symbol,
-      }, `Boundary triggered for ${triggeredBoundaries.length} timeframe(s)`);
+      }, `Boundary triggered for ${newBoundaries.length} timeframe(s)`);
 
       // Fetch higher timeframe candles for ALL symbols at this boundary
-      await this.fetchHigherTimeframes(triggeredBoundaries.map(b => b.timeframe));
+      await this.fetchHigherTimeframes(newBoundaries.map(b => b.timeframe));
     } catch (error) {
       logger.error({ error }, 'Error handling candle close in BoundaryRestService');
+    }
+  }
+
+  /**
+   * Remove boundary keys older than cleanup interval to prevent memory leak
+   */
+  private cleanupOldBoundaries(currentTimestamp: number): void {
+    const cutoff = currentTimestamp - this.BOUNDARY_CLEANUP_INTERVAL_MS;
+    for (const key of this.triggeredBoundaries) {
+      const [timestampStr] = key.split('-');
+      if (Number.parseInt(timestampStr, 10) < cutoff) {
+        this.triggeredBoundaries.delete(key);
+      }
     }
   }
 

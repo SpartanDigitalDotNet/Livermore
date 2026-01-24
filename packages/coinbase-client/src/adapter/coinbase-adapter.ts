@@ -377,7 +377,11 @@ export class CoinbaseAdapter extends BaseExchangeAdapter {
 
   /**
    * Process incoming candle messages
-   * Tracks sequence numbers, detects gaps, and detects candle close by comparing timestamps
+   * Tracks sequence numbers, detects gaps, and detects candle close by comparing timestamps.
+   *
+   * IMPORTANT: Only emits candle:close for 'update' events (real-time), not for 'snapshot'.
+   * The snapshot contains ~100 historical candles per symbol which would flood the
+   * BoundaryRestService with hundreds of boundary triggers.
    */
   private async handleCandlesMessage(message: CandlesMessage): Promise<void> {
     const sequenceNum = message.sequence_num;
@@ -396,13 +400,17 @@ export class CoinbaseAdapter extends BaseExchangeAdapter {
     this.lastSequenceNum = sequenceNum;
 
     for (const event of message.events) {
+      // Track whether this is a real-time update vs historical snapshot
+      const isRealTimeUpdate = event.type === 'update';
+
       for (const rawCandle of event.candles) {
         const candle = this.normalizeCandle(rawCandle, sequenceNum);
         const symbol = candle.symbol;
         const previousTimestamp = this.lastCandleTimestamps.get(symbol);
 
         // Detect candle close: timestamp changed means previous candle closed
-        if (previousTimestamp !== undefined && previousTimestamp !== candle.timestamp) {
+        // ONLY emit for real-time updates, NOT for snapshot data
+        if (isRealTimeUpdate && previousTimestamp !== undefined && previousTimestamp !== candle.timestamp) {
           // Previous candle just closed - emit close event for it
           // Note: We emit for the NEW candle (which contains the finalized OHLCV)
           // because Coinbase sends the new candle when the old one closes
@@ -431,8 +439,8 @@ export class CoinbaseAdapter extends BaseExchangeAdapter {
    * Writes to cache, publishes to Redis, emits event
    */
   private async onCandleClose(candle: UnifiedCandle): Promise<void> {
-    logger.debug(
-      { symbol: candle.symbol, timestamp: new Date(candle.timestamp).toISOString() },
+    logger.info(
+      { symbol: candle.symbol, timestamp: new Date(candle.timestamp).toISOString(), event: 'candle_close_emitted' },
       'Candle closed'
     );
 
