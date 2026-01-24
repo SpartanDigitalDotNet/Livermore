@@ -8,16 +8,10 @@ A real-time cryptocurrency trading analysis platform that monitors exchange data
 
 Data accuracy and timely alerts — indicators must calculate on complete, accurate candle data, and signals must fire reliably without missing conditions or producing false positives from stale data.
 
-## Current Milestone: v2.0 Data Pipeline Redesign
+## Current State
 
-**Goal:** Eliminate 429 errors by redesigning the data pipeline to be event-driven and cache-first, with architecture supporting multiple exchanges.
-
-**Target features:**
-- Exchange adapter pattern (exchange-agnostic indicator service)
-- Cache as single source of truth for candle data
-- WebSocket-driven candle updates (no timer-based polling)
-- Background reconciliation for gap detection and self-healing
-- Zero REST API calls during normal operation (startup backfill only)
+**Last shipped:** v2.0 Data Pipeline Redesign (2026-01-24)
+**Current focus:** Production observation and next milestone planning
 
 ## Requirements
 
@@ -27,61 +21,60 @@ Data accuracy and timely alerts — indicators must calculate on complete, accur
 - ✓ Transaction summary endpoint (current fee tier, 30-day volume) — v1.0
 - ✓ CoinbaseOrder interface with fee fields — v1.0
 - ✓ WebSocket ticker subscription for real-time price updates — existing
-- ✓ 1m candle building from ticker data — existing
-- ✓ MACDV calculation across all timeframes (1m, 5m, 15m, 1h, 4h, 1d) — existing
+- ✓ MACDV calculation across all timeframes (5m, 15m, 1h, 4h, 1d) — existing
 - ✓ Redis cache for candle and indicator storage — existing
 - ✓ Alert system for signal notifications — existing
+- ✓ Exchange adapter abstraction layer — v2.0
+- ✓ Unified candle cache schema (exchange-agnostic) — v2.0
+- ✓ WebSocket candles channel subscription (Coinbase 5m native candles) — v2.0
+- ✓ Cache-first indicator calculation (no REST during normal operation) — v2.0
+- ✓ Event-driven reconciliation at timeframe boundaries — v2.0
+- ✓ Startup backfill with 60-candle minimum per symbol/timeframe — v2.0
+- ✓ Ticker pub/sub for alert price display — v2.0
 
-### Active
+### Next Milestone Goals
 
-- [ ] Exchange adapter abstraction layer
-- [ ] Unified candle cache schema (exchange-agnostic)
-- [ ] WebSocket candles channel subscription (Coinbase 5m native candles)
-- [ ] Cache-first indicator calculation (no REST during normal operation)
-- [ ] Background reconciliation job for gap detection
-- [ ] Startup backfill with 60-candle minimum per symbol/timeframe
-- [ ] Event-driven architecture (candle close → indicator calc → alert)
+- Multi-exchange support (Binance.us, Binance.com adapters)
+- Observability improvements (connection health metrics, circuit breaker)
+- Additional indicators for confluence stacking
 
 ### Out of Scope
 
-- Binance.us adapter implementation — architecture ready, implementation deferred
-- Binance.com adapter implementation — architecture ready, implementation deferred
-- Additional indicators (SMA, RSI) — confluence stacking is future milestone
-- Liquidity detection — out of scope for v2.0
-- Real-time chat/notifications beyond existing alerts — not needed
-- Fee analysis integration — v1.0 spike was standalone
+- Full Order Book (Level2) — not needed for MACD-V calculation
+- Trade Execution — monitoring only
+- CCXT Library — performance overhead unnecessary
+- Cross-Region Replication — single-region sufficient
 
 ## Context
 
-**Problem being solved:**
-Current architecture hits Coinbase REST API on every candle recalculation, causing 429 (rate limit) errors at timeframe boundaries. At 4h boundary with 25 symbols: 125+ REST calls in burst.
-
-**Root causes identified:**
-1. WebSocket-built candles not saved to Redis cache
-2. Indicator service always calls REST API for candles
-3. Not using WebSocket `candles` channel for native 5m data
-4. Batching (5 req/batch, 1s delay) insufficient for burst prevention
-
-**Target architecture (Pattern D: Hybrid with Reconciliation):**
+**Current architecture (v2.0):**
 ```
-Per Exchange:
-  [Exchange WebSocket] → [Exchange Adapter] → writes to unified cache
-                                            → emits candle event
-
-Shared:
-  [Indicator Service] ← subscribes to candle events
-                     ← reads from unified cache for history
-
-Background:
-  [Reconciliation Job] → periodic REST checks per exchange
-                       → fills gaps in cache
+WebSocket Layer (CoinbaseAdapter)
+    │
+    │ Native 5m candles + ticker from Coinbase channels
+    ▼
+┌─────────────────┐
+│   Redis Cache   │◄── Backfill Service (startup)
+└─────────────────┘◄── BoundaryRestService (15m/1h/4h/1d at boundaries)
+    │
+    │ candle:close events + ticker pub/sub
+    ▼
+Indicator Service (cache-only reads)
+    │
+    ▼
+Alert Evaluation (receives ticker prices)
 ```
 
-**Multi-exchange considerations:**
-- Coinbase: symbols from account holdings (≥$2 value)
-- Binance (future): static symbol list or top-100 active
-- Each exchange adapter responsible for its own auth, rate limits, data format
-- Unified cache schema normalizes data for indicator service
+**What v2.0 solved:**
+- 17,309 429 errors from REST-heavy architecture → eliminated
+- 93% data gaps from ticker-built candles → native 5m candles
+- $0.00 price in alert notifications → ticker pub/sub
+
+**Multi-exchange readiness:**
+- `IExchangeAdapter` interface defined
+- `BaseExchangeAdapter` abstract class with reconnection logic
+- `UnifiedCandle` schema normalizes exchange data
+- Binance adapters can be added without modifying indicator service
 
 ## Constraints
 
@@ -95,11 +88,12 @@ Background:
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| Pattern D: Hybrid with Reconciliation | Data accuracy (#1) + Reliability (#2) priorities | — Pending |
-| Exchange adapter abstraction | Multi-exchange support planned (Binance.us, Binance.com) | — Pending |
-| Incremental transition | Verify each layer before removing REST safety net | — Pending |
-| Cache as source of truth | Indicator service should never know about exchange APIs | — Pending |
-| WebSocket candles channel | Coinbase provides native 5m candles via WebSocket | — Pending |
+| Event-driven architecture | No cron jobs, no polling — WebSocket events trigger all processing | ✓ Shipped v2.0 |
+| Cache as source of truth | Indicator service never calls REST API during normal operation | ✓ Shipped v2.0 |
+| Native 5m candles | Eliminates data gaps from ticker-built candles | ✓ Shipped v2.0 |
+| Boundary-triggered REST | Higher timeframes fetched at 5m boundaries (no cron) | ✓ Shipped v2.0 |
+| Exchange adapter pattern | Multi-exchange support without indicator changes | ✓ Shipped v2.0 |
+| Preserve legacy service | Deprecated but kept for rollback during observation | ✓ Shipped v2.0 |
 
 ---
-*Last updated: 2026-01-19 after v2.0 milestone initialization*
+*Last updated: 2026-01-24 after v2.0 milestone shipped*

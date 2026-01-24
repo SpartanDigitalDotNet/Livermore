@@ -9,20 +9,19 @@ See: .planning/PROJECT.md
 
 ## Current Position
 
-**Milestone:** v2.0 Data Pipeline Redesign
-**Phase:** 10-ticker-publisher (7 of 7) **COMPLETE**
-**Plan:** 1 of 1 (complete)
-**Status:** v2.0 Data Pipeline Redesign fully complete
-**Last activity:** 2026-01-24 - Completed 10-01-PLAN.md (Ticker Publisher)
+**Milestone:** v2.0 Data Pipeline Redesign **SHIPPED**
+**Phase:** Complete (7/7 phases)
+**Status:** Ready for next milestone
+**Last activity:** 2026-01-24 - Shipped v2.0
 
-**Progress:** [#################] 17/17 plans (All phases complete)
+**Progress:** ✅ v2.0 complete — run `/gsd:new-milestone` to start next
 
 ## Milestones
 
 | Version | Name | Status | Shipped |
 |---------|------|--------|---------|
 | v1.0 | Fee Analysis Spike | Archived | 2026-01-19 |
-| v2.0 | Data Pipeline Redesign | Complete | 2026-01-23 |
+| v2.0 | Data Pipeline Redesign | Shipped | 2026-01-24 |
 
 See `.planning/MILESTONES.md` for full history.
 

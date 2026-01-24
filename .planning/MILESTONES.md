@@ -1,5 +1,32 @@
 # Project Milestones: Livermore
 
+## v2.0 Data Pipeline Redesign (Shipped: 2026-01-24)
+
+**Delivered:** Cache-first, event-driven data pipeline eliminating 429 errors and data gaps through native WebSocket candles and intelligent boundary-triggered REST fetching.
+
+**Phases completed:** 04-10 (17 plans total)
+
+**Key accomplishments:**
+
+- Exchange adapter pattern with `IExchangeAdapter` interface and `CoinbaseAdapter` implementation
+- Native 5m WebSocket candles replacing ticker-built 1m candles (eliminates 93% data gaps)
+- Cache as single source of truth — zero REST calls in indicator hot path
+- Event-driven higher timeframe fetching at boundaries (no cron jobs)
+- Startup backfill with rate limiting (5 req/batch, 1s delay)
+- Ticker pub/sub for alert price display
+
+**Stats:**
+
+- 17 plans across 7 phases
+- ~1,500 lines of TypeScript
+- 3 days from start to ship (2026-01-21 → 2026-01-24)
+
+**Git range:** `f1de50e` → `235c9ff`
+
+**What's next:** Multi-exchange support (Binance.us, Binance.com) or observability improvements
+
+---
+
 ## v1.0 Coinbase Fee Analysis Spike (Shipped: 2026-01-19)
 
 **Delivered:** One-shot analysis tool to understand Coinbase trading fee structure by examining historical transaction data.
