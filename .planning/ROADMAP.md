@@ -187,13 +187,13 @@ Transform from REST-heavy, request-driven architecture to cache-first, event-dri
 - Documentation updates
 
 **Plans:** 2 plans
-- [ ] 09-01-PLAN.md — Server migration to CoinbaseAdapter
-- [ ] 09-02-PLAN.md — Documentation finalization
+- [x] 09-01-PLAN.md — Server migration to CoinbaseAdapter
+- [x] 09-02-PLAN.md — Documentation finalization
 
 **Success Criteria:**
-- [ ] Old WebSocket service removed or marked deprecated
-- [ ] No REST calls in indicator recalculation path
-- [ ] Server starts cleanly with new architecture
+- [x] Old WebSocket service removed or marked deprecated
+- [x] No REST calls in indicator recalculation path
+- [x] Server starts cleanly with new architecture
 - [ ] All tests pass
 - [ ] Zero 429 errors in 24-hour observation
 
@@ -230,10 +230,10 @@ Phase 06 (Indicator Refactor)
 | 06 | Indicator Refactor | Complete | 2/2 |
 | 07 | Startup Backfill | Complete | 2/2 |
 | 08 | Reconciliation | Complete | 3/3 |
-| 09 | Cleanup | Planned | 0/2 |
+| 09 | Cleanup | Complete | 2/2 |
 
-**Overall:** 93% complete (5.5/6 phases - Phase 09 planned)
+**Overall:** 100% complete (6/6 phases)
 
 ---
 *Roadmap created: 2026-01-21*
-*Last updated: 2026-01-23 after Phase 09 planning complete*
+*Last updated: 2026-01-24 after v2.0 completion (Phase 09 finalized)*
