@@ -1,8 +1,15 @@
 # Project Milestones: Livermore
 
-## v2.0 Data Pipeline Redesign (Shipped: 2026-01-24)
+## v2.0 Data Pipeline Redesign (Code Complete: 2026-01-24)
+
+**Status:** Code complete, pending runtime verification
 
 **Delivered:** Cache-first, event-driven data pipeline eliminating 429 errors and data gaps through native WebSocket candles and intelligent boundary-triggered REST fetching.
+
+**Pending verification:**
+- [ ] Server starts and receives candle events
+- [ ] Alerts show actual prices (not $0.00)
+- [ ] Zero 429 errors in 24-hour observation
 
 **Phases completed:** 04-10 (17 plans total)
 

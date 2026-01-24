@@ -9,19 +9,19 @@ See: .planning/PROJECT.md
 
 ## Current Position
 
-**Milestone:** v2.0 Data Pipeline Redesign **SHIPPED**
+**Milestone:** v2.0 Data Pipeline Redesign **CODE COMPLETE**
 **Phase:** Complete (7/7 phases)
-**Status:** Ready for next milestone
-**Last activity:** 2026-01-24 - Shipped v2.0
+**Status:** Pending runtime verification
+**Last activity:** 2026-01-24 - Code complete, awaiting testing
 
-**Progress:** ✅ v2.0 complete — run `/gsd:new-milestone` to start next
+**Progress:** Code complete — test before marking shipped
 
 ## Milestones
 
 | Version | Name | Status | Shipped |
 |---------|------|--------|---------|
 | v1.0 | Fee Analysis Spike | Archived | 2026-01-19 |
-| v2.0 | Data Pipeline Redesign | Shipped | 2026-01-24 |
+| v2.0 | Data Pipeline Redesign | Code Complete | Pending |
 
 See `.planning/MILESTONES.md` for full history.
 
