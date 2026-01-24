@@ -12,8 +12,8 @@ import type { Redis } from 'ioredis';
 import { BaseExchangeAdapter } from './base-adapter';
 import { CoinbaseAuth } from '../rest/auth';
 import { CoinbaseRestClient } from '../rest/client';
-import { CandleCacheStrategy, candleCloseChannel } from '@livermore/cache';
-import type { Timeframe, UnifiedCandle } from '@livermore/schemas';
+import { CandleCacheStrategy, candleCloseChannel, TickerCacheStrategy } from '@livermore/cache';
+import type { Timeframe, UnifiedCandle, Ticker } from '@livermore/schemas';
 import { logger } from '@livermore/utils';
 
 /**
@@ -64,11 +64,39 @@ interface HeartbeatsMessage {
 }
 
 /**
+ * Ticker event from Coinbase WebSocket
+ */
+interface CoinbaseTickerEvent {
+  type: 'snapshot' | 'update';
+  tickers: Array<{
+    type: 'ticker';
+    product_id: string;
+    price: string;
+    volume_24_h: string;
+    low_24_h: string;
+    high_24_h: string;
+    price_percent_chg_24_h: string;
+  }>;
+}
+
+/**
+ * Ticker channel message from Coinbase WebSocket
+ */
+interface TickerMessage {
+  channel: 'ticker';
+  client_id: string;
+  timestamp: string;
+  sequence_num: number;
+  events: CoinbaseTickerEvent[];
+}
+
+/**
  * All possible WebSocket message types
  */
 type CoinbaseWSMessage =
   | CandlesMessage
   | HeartbeatsMessage
+  | TickerMessage
   | { channel: 'subscriptions'; events: Array<{ subscriptions: Record<string, string[]> }> }
   | { channel: 'error'; message: string };
 
@@ -121,6 +149,9 @@ export class CoinbaseAdapter extends BaseExchangeAdapter {
   /** Cache strategy for candle storage (used in Plan 02 for handleMessage) */
   protected candleCache: CandleCacheStrategy;
 
+  /** Cache strategy for ticker storage and pub/sub */
+  protected tickerCache: TickerCacheStrategy;
+
   /** Redis client for pub/sub (used in Plan 02 for handleMessage) */
   protected redis: Redis;
 
@@ -162,6 +193,7 @@ export class CoinbaseAdapter extends BaseExchangeAdapter {
     this.auth = new CoinbaseAuth(options.apiKeyId, options.privateKeyPem);
     this.restClient = new CoinbaseRestClient(options.apiKeyId, options.privateKeyPem);
     this.candleCache = new CandleCacheStrategy(options.redis);
+    this.tickerCache = new TickerCacheStrategy(options.redis);
     this.redis = options.redis;
     this.userId = options.userId;
     this.exchangeIdNum = options.exchangeId;
@@ -263,6 +295,9 @@ export class CoinbaseAdapter extends BaseExchangeAdapter {
 
     this.ws!.send(JSON.stringify(subscribeMessage));
     logger.info({ symbols, channel: 'candles' }, 'Subscribed to candles channel');
+
+    // Also subscribe to ticker for price updates (used by alerts)
+    this.subscribeToTicker();
   }
 
   /**
@@ -300,6 +335,26 @@ export class CoinbaseAdapter extends BaseExchangeAdapter {
 
     this.ws!.send(JSON.stringify(subscribeMessage));
     logger.info('Subscribed to heartbeats channel');
+  }
+
+  /**
+   * Subscribe to ticker channel for price updates
+   * Called after candles subscription when symbols are known.
+   * Unlike heartbeats, ticker requires product_ids.
+   */
+  private subscribeToTicker(): void {
+    if (!this.isConnected() || this.subscribedSymbols.length === 0) return;
+
+    const token = this.auth.generateToken();
+    const subscribeMessage = {
+      type: 'subscribe',
+      channel: 'ticker',
+      product_ids: this.subscribedSymbols,
+      jwt: token,
+    };
+
+    this.ws!.send(JSON.stringify(subscribeMessage));
+    logger.info({ symbols: this.subscribedSymbols.length }, 'Subscribed to ticker channel');
   }
 
   /**
@@ -399,6 +454,46 @@ export class CoinbaseAdapter extends BaseExchangeAdapter {
   }
 
   /**
+   * Process incoming ticker messages
+   * Transforms Coinbase ticker to Livermore Ticker format and publishes to Redis
+   */
+  private async handleTickerMessage(message: TickerMessage): Promise<void> {
+    for (const event of message.events) {
+      // Only process 'update' events, not 'snapshot'
+      if (event.type !== 'update') continue;
+
+      for (const tickerData of event.tickers) {
+        const price = parseFloat(tickerData.price);
+        const timestamp = new Date(message.timestamp).getTime();
+        const changePercent24h = parseFloat(tickerData.price_percent_chg_24_h);
+        // Calculate absolute change from percentage: change = price - (price / (1 + pct/100))
+        const change24h = price - (price / (1 + changePercent24h / 100));
+
+        const ticker: Ticker = {
+          symbol: tickerData.product_id,
+          price,
+          change24h,
+          changePercent24h,
+          volume24h: parseFloat(tickerData.volume_24_h),
+          low24h: parseFloat(tickerData.low_24_h),
+          high24h: parseFloat(tickerData.high_24_h),
+          timestamp,
+        };
+
+        try {
+          // Cache ticker in Redis (with 60s TTL)
+          await this.tickerCache.setTicker(this.userId, this.exchangeIdNum, ticker);
+
+          // Publish update via Redis pub/sub (AlertEvaluationService subscribes to this)
+          await this.tickerCache.publishUpdate(this.userId, this.exchangeIdNum, ticker);
+        } catch (error) {
+          logger.error({ error, symbol: ticker.symbol }, 'Failed to cache/publish ticker');
+        }
+      }
+    }
+  }
+
+  /**
    * Handle incoming WebSocket messages
    * Routes messages to appropriate handlers based on channel type
    */
@@ -432,6 +527,14 @@ export class CoinbaseAdapter extends BaseExchangeAdapter {
       // Handle heartbeats - just log at debug level for now
       if (message.channel === 'heartbeats') {
         logger.debug({ counter: (message as HeartbeatsMessage).events[0]?.heartbeat_counter }, 'Heartbeat received');
+        return;
+      }
+
+      // Handle ticker - fire and forget to avoid blocking
+      if (message.channel === 'ticker') {
+        this.handleTickerMessage(message as TickerMessage).catch(error => {
+          logger.error({ error }, 'Error processing ticker message');
+        });
         return;
       }
 
