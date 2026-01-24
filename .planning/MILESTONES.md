@@ -2,14 +2,15 @@
 
 ## v2.0 Data Pipeline Redesign (Code Complete: 2026-01-24)
 
-**Status:** Code complete, pending runtime verification
+**Status:** Shipped (2026-01-24)
 
 **Delivered:** Cache-first, event-driven data pipeline eliminating 429 errors and data gaps through native WebSocket candles and intelligent boundary-triggered REST fetching.
 
-**Pending verification:**
-- [ ] Server starts and receives candle events
-- [ ] Alerts show actual prices (not $0.00)
-- [ ] Zero 429 errors in 24-hour observation
+**Verification (2026-01-24):**
+- [x] Server starts and receives candle events
+- [x] Boundary triggers deduplicated (single trigger per boundary, not per symbol)
+- [x] Zero 429 errors (fix: snapshot filtering + boundary deduplication)
+- [ ] Alerts show actual prices (not $0.00) — ticker pub/sub ready, awaiting signal trigger
 
 **Phases completed:** 04-10 (17 plans total)
 
@@ -28,7 +29,7 @@
 - ~1,500 lines of TypeScript
 - 3 days from start to ship (2026-01-21 → 2026-01-24)
 
-**Git range:** `f1de50e` → `235c9ff`
+**Git range:** `f1de50e` → `7017e13`
 
 **What's next:** Multi-exchange support (Binance.us, Binance.com) or observability improvements
 

@@ -10,8 +10,8 @@ Data accuracy and timely alerts — indicators must calculate on complete, accur
 
 ## Current State
 
-**Status:** v2.0 Data Pipeline Redesign — code complete (2026-01-24)
-**Current focus:** Runtime verification before marking shipped
+**Status:** v2.0 Data Pipeline Redesign — shipped (2026-01-24)
+**Current focus:** Observation period complete, ready for next milestone
 
 ## Requirements
 

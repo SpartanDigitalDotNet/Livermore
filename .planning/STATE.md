@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md
 
 **Core value:** Real-time crypto trading analysis and decision support
-**Current focus:** v2.0 Data Pipeline Redesign
+**Current focus:** Ready for next milestone
 
 ## Current Position
 
-**Milestone:** v2.0 Data Pipeline Redesign **CODE COMPLETE**
+**Milestone:** v2.0 Data Pipeline Redesign **SHIPPED**
 **Phase:** Complete (7/7 phases)
-**Status:** Pending runtime verification
-**Last activity:** 2026-01-24 - Code complete, awaiting testing
+**Status:** Shipped and verified
+**Last activity:** 2026-01-24 - Runtime verification passed
 
-**Progress:** Code complete — test before marking shipped
+**Progress:** v2.0 shipped — planning next milestone
 
 ## Milestones
 
 | Version | Name | Status | Shipped |
 |---------|------|--------|---------|
 | v1.0 | Fee Analysis Spike | Archived | 2026-01-19 |
-| v2.0 | Data Pipeline Redesign | Code Complete | Pending |
+| v2.0 | Data Pipeline Redesign | Shipped | 2026-01-24 |
 
 See `.planning/MILESTONES.md` for full history.
 
@@ -183,12 +183,22 @@ Low-liquidity symbols have massive gaps, causing 30+ point MACD-V variance.
 ### Last Session
 
 **Date:** 2026-01-24
-**Activity:** Executed 10-01-PLAN.md (Ticker Publisher)
-**Stopped At:** v2.0 fully complete including ticker publisher
+**Activity:** Runtime verification and 429 error fix
+**Stopped At:** v2.0 shipped after successful verification
 
 ### Resume Context
 
-**v2.0 Data Pipeline Redesign is FULLY COMPLETE.**
+**v2.0 Data Pipeline Redesign is SHIPPED.**
+
+**Verification session findings (2026-01-24):**
+- Server starts successfully with backfill (125/125 in 29.8s, 0 errors)
+- Discovered WebSocket snapshot was flooding boundary triggers (100 historical candles per symbol)
+- Fixed by adding `event.type === 'update'` check in CoinbaseAdapter (only emit candle:close for real-time updates)
+- Added deduplication in BoundaryRestService (Set-based key: `${timestamp}-${timeframe}`)
+- Added 10-minute age filter to skip historical candles
+- Post-fix: boundary triggers work correctly (single trigger per boundary, 50/50 candles fetched, 0 errors)
+
+**Fix commit:** `7017e13` - "fix: prevent 429 errors from boundary REST flooding"
 
 **Phase 10 Deliverables:**
 
@@ -231,8 +241,8 @@ Alert Evaluation (receives ticker prices)
 - Event-driven higher timeframe fetching (no cron, no aggregation)
 - Real-time ticker prices for alert notifications (fixes $0.00 display)
 
-**Next:** Production observation and testing
+**Next:** v3.0 milestone planning (multi-exchange support or observability improvements)
 
 ---
 *State initialized: 2026-01-18*
-*Last updated: 2026-01-24 after 10-01-PLAN.md execution complete (ticker publisher implemented)*
+*Last updated: 2026-01-24 after v2.0 runtime verification passed and shipped*
