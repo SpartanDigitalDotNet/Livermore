@@ -65,9 +65,8 @@ export class FileTransport {
    * Ensure the log directory exists
    */
   private ensureLogDirectory(): void {
-    const serviceDir = path.join(this.config.logDir, this.config.service);
-    if (!fs.existsSync(serviceDir)) {
-      fs.mkdirSync(serviceDir, { recursive: true });
+    if (!fs.existsSync(this.config.logDir)) {
+      fs.mkdirSync(this.config.logDir, { recursive: true });
     }
   }
 
@@ -78,7 +77,6 @@ export class FileTransport {
     const suffix = type === 'main' ? '.log' : `.${type}.log`;
     return path.join(
       this.config.logDir,
-      this.config.service,
       `${this.config.service}-${date}${suffix}`
     );
   }
