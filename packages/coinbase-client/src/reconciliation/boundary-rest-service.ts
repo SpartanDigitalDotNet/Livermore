@@ -116,9 +116,10 @@ export class BoundaryRestService {
       logger.info({
         event: 'boundary_candle_received',
         symbol: candle.symbol,
+        timeframe: candle.timeframe,
         timestamp: new Date(timestamp).toISOString(),
         ageMs: now - timestamp,
-      }, `Received candle:close for ${candle.symbol}`);
+      }, `Received candle:close for ${candle.symbol} (${candle.timeframe})`);
 
       // Skip historical candles from WebSocket snapshot (only process recent candles)
       const candleAge = now - timestamp;
@@ -264,8 +265,8 @@ export class BoundaryRestService {
       return;
     }
 
-    // Get the most recent candle (REST returns oldest first, so last is newest)
-    const latestCandle = candles[candles.length - 1];
+    // Get the most recent candle (REST returns newest first, so first is newest)
+    const latestCandle = candles[0];
 
     // Write to cache using versioned writes
     const unified: UnifiedCandle = {

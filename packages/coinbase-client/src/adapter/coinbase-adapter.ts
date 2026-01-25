@@ -104,12 +104,44 @@ interface TickerMessage {
 }
 
 /**
+ * Market trade from Coinbase WebSocket market_trades channel
+ */
+interface CoinbaseMarketTrade {
+  trade_id: string;
+  product_id: string;
+  price: string;
+  size: string;
+  side: 'BUY' | 'SELL';
+  time: string;
+}
+
+/**
+ * Market trades event from Coinbase WebSocket
+ */
+interface MarketTradesEvent {
+  type: 'snapshot' | 'update';
+  trades: CoinbaseMarketTrade[];
+}
+
+/**
+ * Market trades channel message from Coinbase WebSocket
+ */
+interface MarketTradesMessage {
+  channel: 'market_trades';
+  client_id: string;
+  timestamp: string;
+  sequence_num: number;
+  events: MarketTradesEvent[];
+}
+
+/**
  * All possible WebSocket message types
  */
 type CoinbaseWSMessage =
   | CandlesMessage
   | HeartbeatsMessage
   | TickerMessage
+  | MarketTradesMessage
   | { channel: 'subscriptions'; events: Array<{ subscriptions: Record<string, string[]> }> }
   | { channel: 'error'; message: string };
 
@@ -197,6 +229,12 @@ export class CoinbaseAdapter extends BaseExchangeAdapter {
 
   /** Flag indicating a sequence gap was detected during this connection */
   private hasDetectedGap = false;
+
+  /** Count of sequence gaps detected (for periodic logging) */
+  private sequenceGapCount = 0;
+
+  /** Total messages dropped (for periodic logging) */
+  private totalDroppedMessages = 0;
 
   /** Backfill threshold - only backfill if gap is greater than this (5 minutes) */
   private readonly BACKFILL_THRESHOLD_MS = 5 * 60 * 1000;
@@ -314,6 +352,29 @@ export class CoinbaseAdapter extends BaseExchangeAdapter {
 
     // Also subscribe to ticker for price updates (used by alerts)
     this.subscribeToTicker();
+
+    // Subscribe to market_trades for accurate 1m candle building
+    // Only for a limited subset of high-volume symbols to avoid sequence gaps
+    this.subscribeToMarketTrades();
+  }
+
+  /**
+   * Subscribe to market_trades channel for building accurate 1m candles
+   * IMPORTANT: Only subscribe to symbols that need 1m candles to reduce message volume.
+   */
+  private subscribeToMarketTrades(): void {
+    if (!this.isConnected() || this.subscribedSymbols.length === 0) return;
+
+    const token = this.auth.generateToken();
+    const subscribeMessage = {
+      type: 'subscribe',
+      channel: 'market_trades',
+      product_ids: this.subscribedSymbols,
+      jwt: token,
+    };
+
+    this.ws!.send(JSON.stringify(subscribeMessage));
+    logger.info({ symbols: this.subscribedSymbols.length }, 'Subscribed to market_trades channel for 1m candles');
   }
 
   /**
@@ -373,6 +434,7 @@ export class CoinbaseAdapter extends BaseExchangeAdapter {
     logger.info({ symbols: this.subscribedSymbols.length }, 'Subscribed to ticker channel');
   }
 
+
   /**
    * Normalize Coinbase WebSocket candle to UnifiedCandle format
    */
@@ -393,34 +455,19 @@ export class CoinbaseAdapter extends BaseExchangeAdapter {
 
   /**
    * Process incoming candle messages
-   * Tracks sequence numbers, detects gaps, and detects candle close by comparing timestamps.
+   * Detects candle close by comparing timestamps.
    *
    * IMPORTANT: Only emits candle:close for 'update' events (real-time), not for 'snapshot'.
    * The snapshot contains ~100 historical candles per symbol which would flood the
    * BoundaryRestService with hundreds of boundary triggers.
    */
   private async handleCandlesMessage(message: CandlesMessage): Promise<void> {
-    const sequenceNum = message.sequence_num;
-
-    // Check for sequence gap (more than 1 difference indicates missed messages)
-    // Note: Sequence numbers reset per connection, so only check after first message
-    if (this.lastSequenceNum > 0 && sequenceNum > this.lastSequenceNum + 1) {
-      const gap = sequenceNum - this.lastSequenceNum - 1;
-      logger.warn(
-        { lastSequence: this.lastSequenceNum, newSequence: sequenceNum, gap },
-        'Sequence gap detected - messages may have been dropped'
-      );
-      this.hasDetectedGap = true;
-    }
-
-    this.lastSequenceNum = sequenceNum;
-
     for (const event of message.events) {
       // Track whether this is a real-time update vs historical snapshot
       const isRealTimeUpdate = event.type === 'update';
 
       for (const rawCandle of event.candles) {
-        const candle = this.normalizeCandle(rawCandle, sequenceNum);
+        const candle = this.normalizeCandle(rawCandle, message.sequence_num);
         const symbol = candle.symbol;
         const previousTimestamp = this.lastCandleTimestamps.get(symbol);
 
@@ -511,8 +558,6 @@ export class CoinbaseAdapter extends BaseExchangeAdapter {
           // Publish update via Redis pub/sub (AlertEvaluationService subscribes to this)
           await this.tickerCache.publishUpdate(this.userId, this.exchangeIdNum, ticker);
 
-          // Aggregate ticker into 1m candle (event-driven candle building)
-          await this.aggregateTickerTo1mCandle(tickerData.product_id, price, timestamp);
         } catch (error) {
           logger.error({ error, symbol: ticker.symbol }, 'Failed to cache/publish ticker');
         }
@@ -521,20 +566,42 @@ export class CoinbaseAdapter extends BaseExchangeAdapter {
   }
 
   /**
-   * Aggregate ticker event into local 1m candle
-   * Emits candle close event when minute boundary is crossed
+   * Process incoming market_trades messages - SYNCHRONOUS to avoid blocking
+   * Updates in-memory candle state only. Redis writes happen on candle close (fire-and-forget).
    */
-  private async aggregateTickerTo1mCandle(symbol: string, price: number, timestamp: number): Promise<void> {
-    const timeframe: Timeframe = '1m';
-    const candleTime = getCandleTimestamp(timestamp, timeframe);
+  private handleMarketTradesMessage(message: MarketTradesMessage): void {
+    for (const event of message.events) {
+      // Only process 'update' events (not historical snapshots)
+      if (event.type !== 'update') continue;
 
+      for (const trade of event.trades) {
+        const price = parseFloat(trade.price);
+        const size = parseFloat(trade.size);
+        const timestamp = new Date(trade.time).getTime();
+
+        // Synchronous in-memory aggregation - no await!
+        this.aggregateTradeInto1mCandle(trade.product_id, price, size, timestamp);
+      }
+    }
+  }
+
+  /**
+   * Aggregate trade into local 1m candle - SYNCHRONOUS
+   * Uses actual trade prices for accurate high/low. Volume is accumulated from trade sizes.
+   * Only emits to Redis on candle close (fire-and-forget, non-blocking).
+   */
+  private aggregateTradeInto1mCandle(symbol: string, price: number, size: number, timestamp: number): void {
+    const candleTime = getCandleTimestamp(timestamp, '1m');
     const existing = this.oneMinuteCandles.get(symbol);
 
     if (!existing || candleTime > existing.timestamp) {
-      // Close previous candle if exists and not already closed
+      // New minute started - close previous candle if exists
       if (existing && !existing.isClosed) {
         existing.isClosed = true;
-        await this.emit1mCandleClose(symbol, existing);
+        // Fire-and-forget - don't await!
+        this.emit1mCandleClose(symbol, existing).catch(err => {
+          logger.error({ err, symbol }, 'Failed to emit 1m candle close');
+        });
       }
 
       // Start new candle
@@ -544,7 +611,7 @@ export class CoinbaseAdapter extends BaseExchangeAdapter {
         high: price,
         low: price,
         close: price,
-        volume: 0, // Volume not available from ticker
+        volume: size,
         isClosed: false,
       });
     } else {
@@ -552,11 +619,12 @@ export class CoinbaseAdapter extends BaseExchangeAdapter {
       existing.high = Math.max(existing.high, price);
       existing.low = Math.min(existing.low, price);
       existing.close = price;
+      existing.volume += size;
     }
   }
 
   /**
-   * Emit 1m candle close - saves to cache and publishes candle:close event
+   * Emit 1m candle close - saves to cache and publishes event
    */
   private async emit1mCandleClose(symbol: string, state: CandleState): Promise<void> {
     const timeframe: Timeframe = '1m';
@@ -566,9 +634,9 @@ export class CoinbaseAdapter extends BaseExchangeAdapter {
       symbol,
       timestamp: new Date(state.timestamp).toISOString(),
       ohlc: `${state.open}/${state.high}/${state.low}/${state.close}`,
+      hl_range: (state.high - state.low).toFixed(2),
     }, `1m candle closed: ${symbol}`);
 
-    // Create candle for cache
     const candle: Candle = {
       timestamp: state.timestamp,
       open: state.open,
@@ -585,15 +653,36 @@ export class CoinbaseAdapter extends BaseExchangeAdapter {
       await this.candleCache.addCandles(this.userId, this.exchangeIdNum, [candle]);
 
       // Publish candle:close event (triggers indicator recalculation)
-      const unified: UnifiedCandle = {
-        ...candle,
-        exchange: 'coinbase',
-      };
+      const unified: UnifiedCandle = { ...candle, exchange: 'coinbase' };
       const channel = candleCloseChannel(this.userId, this.exchangeIdNum, symbol, timeframe);
       await this.redis.publish(channel, JSON.stringify(unified));
     } catch (error) {
-      logger.error({ error, symbol, timeframe }, 'Failed to emit 1m candle close');
+      logger.error({ error, symbol, timeframe }, 'Failed to persist 1m candle');
     }
+  }
+
+  /**
+   * Track sequence numbers across ALL message types
+   * Sequence numbers are global per connection, not per channel
+   */
+  private trackSequence(sequenceNum: number | undefined): void {
+    if (sequenceNum === undefined) return;
+
+    if (this.lastSequenceNum > 0 && sequenceNum > this.lastSequenceNum + 1) {
+      const gap = sequenceNum - this.lastSequenceNum - 1;
+      this.sequenceGapCount++;
+      this.totalDroppedMessages += gap;
+      this.hasDetectedGap = true;
+
+      // Log periodically (every 100 gaps) instead of every time
+      if (this.sequenceGapCount % 100 === 0) {
+        logger.warn(
+          { gapCount: this.sequenceGapCount, totalDropped: this.totalDroppedMessages },
+          'Sequence gaps detected - some messages dropped'
+        );
+      }
+    }
+    this.lastSequenceNum = sequenceNum;
   }
 
   /**
@@ -606,6 +695,9 @@ export class CoinbaseAdapter extends BaseExchangeAdapter {
 
     try {
       const message = JSON.parse(data.toString()) as CoinbaseWSMessage;
+
+      // Track sequence for all message types (global per connection)
+      this.trackSequence((message as { sequence_num?: number }).sequence_num);
 
       // Log subscription confirmations
       if (message.channel === 'subscriptions') {
@@ -638,6 +730,12 @@ export class CoinbaseAdapter extends BaseExchangeAdapter {
         this.handleTickerMessage(message as TickerMessage).catch(error => {
           logger.error({ error }, 'Error processing ticker message');
         });
+        return;
+      }
+
+      // Handle market_trades - SYNCHRONOUS to avoid message backlog
+      if (message.channel === 'market_trades') {
+        this.handleMarketTradesMessage(message as MarketTradesMessage);
         return;
       }
 
@@ -701,8 +799,17 @@ export class CoinbaseAdapter extends BaseExchangeAdapter {
    * Sequence numbers are per-connection, so reset to 0
    */
   private resetSequenceTracking(): void {
+    // Log summary if there were gaps in previous connection
+    if (this.sequenceGapCount > 0) {
+      logger.info(
+        { gapCount: this.sequenceGapCount, totalDropped: this.totalDroppedMessages },
+        'Connection reset - sequence gap summary from previous connection'
+      );
+    }
     this.lastSequenceNum = 0;
     this.hasDetectedGap = false;
+    this.sequenceGapCount = 0;
+    this.totalDroppedMessages = 0;
   }
 
   /**
@@ -715,7 +822,8 @@ export class CoinbaseAdapter extends BaseExchangeAdapter {
 
   /**
    * Check for data gaps and backfill from REST API if needed
-   * Called after reconnection to fill any gaps that occurred during disconnect
+   * Called after reconnection to fill any gaps that occurred during disconnect.
+   * THROTTLED: 100ms delay between REST calls to avoid 429 rate limiting.
    */
   private async checkAndBackfill(): Promise<void> {
     if (this.subscribedSymbols.length === 0) {
@@ -724,10 +832,11 @@ export class CoinbaseAdapter extends BaseExchangeAdapter {
     }
 
     const now = Date.now();
+    const symbolsNeedingBackfill: Array<{ symbol: string; lastTimestamp: number }> = [];
 
+    // First pass: identify which symbols need backfill (no REST calls yet)
     for (const symbol of this.subscribedSymbols) {
       try {
-        // Get latest cached candle for this symbol
         const latestCached = await this.candleCache.getLatestCandle(
           this.userId,
           this.exchangeIdNum,
@@ -738,24 +847,39 @@ export class CoinbaseAdapter extends BaseExchangeAdapter {
         const lastTimestamp = latestCached?.timestamp ?? 0;
         const gapMs = now - lastTimestamp;
 
-        // Only backfill if gap > threshold (5 minutes)
         if (gapMs > this.BACKFILL_THRESHOLD_MS) {
-          logger.info(
-            { symbol, lastTimestamp: new Date(lastTimestamp).toISOString(), gapMs },
-            'Gap detected - backfilling from REST API'
-          );
-
-          await this.backfillSymbol(symbol, lastTimestamp, now);
-        } else {
-          logger.debug(
-            { symbol, gapMs },
-            'Gap within threshold - no backfill needed'
-          );
+          symbolsNeedingBackfill.push({ symbol, lastTimestamp });
         }
       } catch (error) {
-        logger.error({ error, symbol }, 'Error checking/backfilling symbol');
+        logger.error({ error, symbol }, 'Error checking symbol for backfill');
       }
     }
+
+    if (symbolsNeedingBackfill.length === 0) {
+      logger.debug('No symbols need backfill');
+      return;
+    }
+
+    logger.info(
+      { count: symbolsNeedingBackfill.length },
+      'Starting throttled backfill for symbols with gaps'
+    );
+
+    // Second pass: backfill with throttling (100ms between calls)
+    for (const { symbol, lastTimestamp } of symbolsNeedingBackfill) {
+      try {
+        await this.backfillSymbol(symbol, lastTimestamp, now);
+        // Throttle: wait 100ms between REST calls to avoid 429
+        await new Promise(resolve => setTimeout(resolve, 100));
+      } catch (error) {
+        logger.error({ error, symbol }, 'Error backfilling symbol');
+      }
+    }
+
+    logger.info(
+      { count: symbolsNeedingBackfill.length },
+      'Backfill complete'
+    );
   }
 
   /**
