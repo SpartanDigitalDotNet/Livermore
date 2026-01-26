@@ -47,6 +47,11 @@ Plans:
 
 **Dependencies:** Phase 11 (needs deployment scripts to apply schema)
 
+**Plans:** 1 plan
+
+Plans:
+- [ ] 12-01-PLAN.md - Add IAM columns to users table, deploy to local + sandbox, create role type helper
+
 **Requirements:**
 - IAM-01: Users table extended with `identity_provider` VARCHAR(20)
 - IAM-02: Users table extended with `identity_sub` VARCHAR(255)
@@ -145,7 +150,7 @@ Plans:
 | Phase | Name | Status | Requirements | Completion |
 |-------|------|--------|--------------|------------|
 | 11 | Database Workflow | Complete | 4 | 100% |
-| 12 | IAM Schema | Pending | 6 | 0% |
+| 12 | IAM Schema | Planned | 6 | 0% |
 | 13 | Clerk Authentication | Pending | 3 | 0% |
 | 14 | User Sync Webhooks | Pending | 2 | 0% |
 | 15 | Admin UI | Pending | 4 | 0% |
@@ -182,4 +187,4 @@ Plans:
 
 ---
 *Roadmap created: 2026-01-26*
-*Last updated: 2026-01-26 - Phase 11 complete*
+*Last updated: 2026-01-26 - Phase 12 planned*
