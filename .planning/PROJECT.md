@@ -10,8 +10,20 @@ Data accuracy and timely alerts — indicators must calculate on complete, accur
 
 ## Current State
 
-**Status:** v2.0 Data Pipeline Redesign — shipped (2026-01-24)
-**Current focus:** Observation period complete, ready for next milestone
+**Status:** v3.0 Admin UI + IAM Foundation — in progress
+**Current focus:** Database-first workflow, IAM tables, admin monitoring UI
+
+## Current Milestone: v3.0 Admin UI + IAM Foundation
+
+**Goal:** Establish Atlas-based database workflow, extend users table for OAuth identity, build local admin UI for monitoring, unblock Kaia's UI development on Sandbox database.
+
+**Target features:**
+- Database-first workflow (Atlas migrations + Drizzle pull for types)
+- Sandbox deployment scripts for Azure PostgreSQL
+- IAM schema: OAuth identity columns on users table
+- Admin UI: MACD-V viewer, log viewer, trade signals viewer
+- Clerk.com authentication for admin UI
+- Kaia handoff documentation
 
 ## Requirements
 
@@ -32,8 +44,9 @@ Data accuracy and timely alerts — indicators must calculate on complete, accur
 - ✓ Startup backfill with 60-candle minimum per symbol/timeframe — v2.0
 - ✓ Ticker pub/sub for alert price display — v2.0
 
-### Next Milestone Goals
+### Next Milestone Goals (v3.1+)
 
+- Trading contracts (orders, positions, paper trading) — requires exchange model research
 - Multi-exchange support (Binance.us, Binance.com adapters)
 - Observability improvements (connection health metrics, circuit breaker)
 - Additional indicators for confluence stacking
@@ -94,6 +107,20 @@ Alert Evaluation (receives ticker prices)
 | Boundary-triggered REST | Higher timeframes fetched at 5m boundaries (no cron) | ✓ Shipped v2.0 |
 | Exchange adapter pattern | Multi-exchange support without indicator changes | ✓ Shipped v2.0 |
 | Preserve legacy service | Deprecated but kept for rollback during observation | ✓ Shipped v2.0 |
+| Atlas-only migrations | Database schema (schema.sql) is source of truth; Drizzle migrations BANNED | — v3.0 |
+| Database-first ORM | Use `drizzle-kit pull` to generate TypeScript from database (like EF scaffolding) | — v3.0 |
+| Sandbox as shared DB | Azure PostgreSQL (Sandbox) shared between Livermore and Kaia's UI | — v3.0 |
+
+## Partnership Context
+
+**Kaia's UI (PerseusWeb):** Frontend trading platform that connects to Livermore as backend service.
+
+**Integration points:**
+- Sandbox PostgreSQL: Shared database for IAM and future trading data
+- WebSocket: Real-time data feed (candles, indicators, signals) — future milestone
+- Contracts: Shared TypeScript models for API communication — future milestone
+
+**Current blocker:** Kaia needs IAM tables deployed to Sandbox to build authentication flows.
 
 ---
-*Last updated: 2026-01-24 after v2.0 milestone shipped*
+*Last updated: 2026-01-26 after v3.0 milestone started*
