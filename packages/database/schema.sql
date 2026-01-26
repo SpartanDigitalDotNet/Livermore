@@ -18,12 +18,22 @@ CREATE TABLE "users" (
   "username" character varying(50) NOT NULL,
   "email" character varying(255) NOT NULL,
   "is_active" boolean NOT NULL DEFAULT true,
+  "identity_provider" character varying(20) NULL,
+  "identity_sub" character varying(255) NULL,
+  "display_name" character varying(100) NULL,
+  "identity_picture_url" text NULL,
+  "role" character varying(20) NOT NULL DEFAULT 'user',
+  "last_login_at" timestamp NULL,
   "created_at" timestamp NOT NULL DEFAULT now(),
   "updated_at" timestamp NOT NULL DEFAULT now(),
   PRIMARY KEY ("id"),
   CONSTRAINT "users_email_unique" UNIQUE ("email"),
   CONSTRAINT "users_username_unique" UNIQUE ("username")
 );
+
+-- Unique partial index for OAuth identity lookup (allows multiple NULL identity_provider values)
+CREATE UNIQUE INDEX "users_identity_provider_sub_idx" ON "users" ("identity_provider", "identity_sub")
+  WHERE identity_provider IS NOT NULL;
 
 -- Create "user_exchanges" table
 CREATE TABLE "user_exchanges" (
