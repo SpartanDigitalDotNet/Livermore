@@ -43,7 +43,8 @@
       "Bash(node -e:*)",
       "Bash(npx tsx:*)",
       "WebFetch(domain:atlasgo.io)",
-      "WebFetch(domain:orm.drizzle.team)"
+      "WebFetch(domain:orm.drizzle.team)",
+      "WebFetch(domain:clerk.com)"
     ]
   }
 }

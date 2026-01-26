@@ -26,5 +26,6 @@ Write-Host "Loaded Coinbase_ApiKeyId: $(if ($env:Coinbase_ApiKeyId) { 'set' } el
 Write-Host "Loaded Coinbase_EcPrivateKeyPem: $(if ($env:Coinbase_EcPrivateKeyPem) { 'set' } else { 'NOT SET' })"
 
 # Change to project directory and run dev server
-Set-Location 'C:\Dev\claude\Livermore'
+Set-Location (Split-Path -Path $PSScriptRoot -Parent)
+
 pnpm --filter @livermore/api dev
