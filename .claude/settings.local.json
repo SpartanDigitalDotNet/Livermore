@@ -41,7 +41,9 @@
       "Bash(pwsh -ExecutionPolicy Bypass -File scripts/test-candles-channel.ps1 -Duration 15)",
       "Bash(pwsh -Command:*)",
       "Bash(node -e:*)",
-      "Bash(npx tsx:*)"
+      "Bash(npx tsx:*)",
+      "WebFetch(domain:atlasgo.io)",
+      "WebFetch(domain:orm.drizzle.team)"
     ]
   }
 }
