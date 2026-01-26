@@ -1,6 +1,6 @@
 # Architecture
 
-**Analysis Date:** 2026-01-18
+**Analysis Date:** 2026-01-26
 
 ## Pattern Overview
 
@@ -30,9 +30,10 @@
 - Used by: API server, scripts, future frontends
 
 **Database Layer (packages/database):**
-- Purpose: PostgreSQL schema and Drizzle ORM client
+- Purpose: PostgreSQL schema (Atlas) and Drizzle ORM client (types only)
 - Location: `packages/database/src/`
-- Contains: Schema definitions, migrations, client singleton
+- Contains: Schema source of truth (schema.sql), generated Drizzle types, client singleton
+- Schema management: Atlas (NOT Drizzle migrations)
 - Depends on: `@livermore/schemas`, `@livermore/utils`
 - Used by: API services for persistence
 
@@ -107,10 +108,10 @@
 - Triggers: `pnpm --filter @livermore/api dev` or `npm run dev`
 - Responsibilities: Initialize services, register tRPC, start Fastify
 
-**Database Migrations:**
-- Location: `packages/database/src/migrate.ts`
-- Triggers: `pnpm db:migrate` (via drizzle-kit)
-- Responsibilities: Apply schema changes to PostgreSQL
+**Database Schema Management:**
+- Location: `packages/database/schema.sql` (source of truth)
+- Triggers: `scripts/sync-schema.ps1` (local), `scripts/apply-schema-sandbox.ps1` (Azure)
+- Responsibilities: Apply schema via Atlas, regenerate Drizzle types
 
 **Database Seed:**
 - Location: `packages/database/src/seed.ts`
@@ -121,6 +122,62 @@
 - Location: `scripts/*.ps1`
 - Triggers: Manual execution for debugging/analysis
 - Responsibilities: Redis debugging, portfolio analysis, test execution
+
+## Database Workflow
+
+**IMPORTANT: Drizzle migrations are BANNED. Atlas is the only migration tool.**
+
+### Why Atlas, Not Drizzle
+
+| Concern | Atlas | Drizzle |
+|---------|-------|---------|
+| Schema source of truth | `schema.sql` (plain SQL) | TypeScript schema files |
+| Migration style | State-based (declarative) | Change-based (imperative) |
+| Diff generation | Automatic from schema | Manual migration files |
+| Production safety | Built-in diff policies | Manual review required |
+
+### Schema Change Workflow
+
+1. **Edit `packages/database/schema.sql`** - Make schema changes in plain SQL
+2. **Run `scripts/sync-schema.ps1`** (local development):
+   - Atlas diffs schema.sql against local PostgreSQL
+   - Atlas applies the diff
+   - drizzle-kit pull regenerates TypeScript types
+3. **Run `scripts/apply-schema-sandbox.ps1`** (deploy to Azure Sandbox):
+   - Atlas applies schema.sql to Azure PostgreSQL
+   - No Drizzle pull (Sandbox doesn't need local types)
+
+### Scripts
+
+| Script | Environment | Actions |
+|--------|-------------|---------|
+| `sync-schema.ps1` | Local | Atlas apply + Drizzle pull |
+| `apply-schema-sandbox.ps1` | Azure Sandbox | Atlas apply only |
+| `apply-schema.ps1` | Local | Atlas apply only (legacy) |
+
+### Environment Variables
+
+**Local (Windows User scope):**
+- `DATABASE_HOST`, `DATABASE_PORT`
+- `DATABASE_LIVERMORE_USERNAME`, `DATABASE_LIVERMORE_PASSWORD`
+- `LIVERMORE_DATABASE_NAME`
+
+**Sandbox (Windows User scope):**
+- `PG_SANDBOX_HOST`, `PG_SANDBOX_USER`, `PG_SANDBOX_PASSWORD`
+
+### Atlas Configuration
+
+Atlas environments in `packages/database/atlas.hcl`:
+- `local` - Local PostgreSQL (sslmode=disable)
+- `sandbox` - Azure PostgreSQL (sslmode=require)
+- `production` - Production (extra drop_table protection)
+
+### Anti-Patterns (DO NOT)
+
+- **DO NOT** use `drizzle-kit push` or `drizzle-kit generate`
+- **DO NOT** create migration files in `packages/database/migrations/`
+- **DO NOT** edit generated files in `packages/database/src/schema/`
+- **DO** edit only `schema.sql` for schema changes
 
 ## Error Handling
 
@@ -151,4 +208,4 @@
 
 ---
 
-*Architecture analysis: 2026-01-18*
+*Architecture analysis: 2026-01-26*
