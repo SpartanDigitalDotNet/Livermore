@@ -19,6 +19,14 @@ Establishes the database-first workflow with Atlas migrations, extends the users
 
 **Dependencies:** None (foundation phase)
 
+**Plans:** 4 plans
+
+Plans:
+- [ ] 11-01-PLAN.md - Atlas sandbox environment configuration
+- [ ] 11-02-PLAN.md - apply-schema-sandbox.ps1 script
+- [ ] 11-03-PLAN.md - sync-schema.ps1 script
+- [ ] 11-04-PLAN.md - ARCHITECTURE.md documentation update
+
 **Requirements:**
 - DB-01: Atlas `sandbox` environment configured in `atlas.hcl` with PG_SANDBOX_* variables
 - DB-02: `apply-schema-sandbox.ps1` script deploys schema to Azure PostgreSQL (Sandbox)
@@ -136,7 +144,7 @@ Establishes the database-first workflow with Atlas migrations, extends the users
 
 | Phase | Name | Status | Requirements | Completion |
 |-------|------|--------|--------------|------------|
-| 11 | Database Workflow | Pending | 4 | 0% |
+| 11 | Database Workflow | Planned | 4 | 0% |
 | 12 | IAM Schema | Pending | 6 | 0% |
 | 13 | Clerk Authentication | Pending | 3 | 0% |
 | 14 | User Sync Webhooks | Pending | 2 | 0% |
