@@ -70,32 +70,32 @@ Deferred to next milestone.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| DB-01 | TBD | Pending |
-| DB-02 | TBD | Pending |
-| DB-03 | TBD | Pending |
-| DB-04 | TBD | Pending |
-| IAM-01 | TBD | Pending |
-| IAM-02 | TBD | Pending |
-| IAM-03 | TBD | Pending |
-| IAM-04 | TBD | Pending |
-| IAM-05 | TBD | Pending |
-| IAM-06 | TBD | Pending |
-| AUTH-01 | TBD | Pending |
-| AUTH-02 | TBD | Pending |
-| AUTH-03 | TBD | Pending |
-| AUTH-04 | TBD | Pending |
-| AUTH-05 | TBD | Pending |
-| UI-01 | TBD | Pending |
-| UI-02 | TBD | Pending |
-| UI-03 | TBD | Pending |
-| UI-04 | TBD | Pending |
-| DOC-01 | TBD | Pending |
+| DB-01 | 11 | Pending |
+| DB-02 | 11 | Pending |
+| DB-03 | 11 | Pending |
+| DB-04 | 11 | Pending |
+| IAM-01 | 12 | Pending |
+| IAM-02 | 12 | Pending |
+| IAM-03 | 12 | Pending |
+| IAM-04 | 12 | Pending |
+| IAM-05 | 12 | Pending |
+| IAM-06 | 12 | Pending |
+| AUTH-01 | 13 | Pending |
+| AUTH-02 | 13 | Pending |
+| AUTH-03 | 13 | Pending |
+| AUTH-04 | 14 | Pending |
+| AUTH-05 | 14 | Pending |
+| UI-01 | 15 | Pending |
+| UI-02 | 15 | Pending |
+| UI-03 | 15 | Pending |
+| UI-04 | 15 | Pending |
+| DOC-01 | 16 | Pending |
 
 **Coverage:**
 - v3.0 requirements: 20 total
-- Mapped to phases: 0 (pending roadmap)
-- Unmapped: 20
+- Mapped to phases: 20
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-01-26*
-*Last updated: 2026-01-26 after initial definition*
+*Last updated: 2026-01-26 after roadmap creation (traceability populated)*
