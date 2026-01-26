@@ -9,10 +9,10 @@ Requirements for Admin UI + IAM Foundation milestone.
 
 ### Database Workflow
 
-- [ ] **DB-01**: Atlas `sandbox` environment configured in `atlas.hcl` with PG_SANDBOX_* variables
-- [ ] **DB-02**: `apply-schema-sandbox.ps1` script deploys schema to Azure PostgreSQL (Sandbox)
-- [ ] **DB-03**: `sync-schema.ps1` runs Atlas apply then Drizzle pull (single command workflow)
-- [ ] **DB-04**: ARCHITECTURE.md updated to reflect Atlas-only migrations (Drizzle migrations banned)
+- [x] **DB-01**: Atlas `sandbox` environment configured in `atlas.hcl` with PG_SANDBOX_* variables
+- [x] **DB-02**: `apply-schema-sandbox.ps1` script deploys schema to Azure PostgreSQL (Sandbox)
+- [x] **DB-03**: `sync-schema.ps1` runs Atlas apply then Drizzle pull (single command workflow)
+- [x] **DB-04**: ARCHITECTURE.md updated to reflect Atlas-only migrations (Drizzle migrations banned)
 
 ### IAM Schema
 
@@ -70,10 +70,10 @@ Deferred to next milestone.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| DB-01 | 11 | Pending |
-| DB-02 | 11 | Pending |
-| DB-03 | 11 | Pending |
-| DB-04 | 11 | Pending |
+| DB-01 | 11 | Complete |
+| DB-02 | 11 | Complete |
+| DB-03 | 11 | Complete |
+| DB-04 | 11 | Complete |
 | IAM-01 | 12 | Pending |
 | IAM-02 | 12 | Pending |
 | IAM-03 | 12 | Pending |
@@ -98,4 +98,4 @@ Deferred to next milestone.
 
 ---
 *Requirements defined: 2026-01-26*
-*Last updated: 2026-01-26 after roadmap creation (traceability populated)*
+*Last updated: 2026-01-26 - Phase 11 complete (DB-01 to DB-04)*
