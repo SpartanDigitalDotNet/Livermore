@@ -1,6 +1,18 @@
+import { useState, useEffect } from 'react';
 import { SignedIn, SignedOut, SignIn, UserButton } from '@clerk/clerk-react';
+import { Dashboard } from './pages/Dashboard';
+import { Signals } from './pages/Signals';
+import { Logs } from './pages/Logs';
 
 function App() {
+  const [hash, setHash] = useState(window.location.hash || '#/');
+
+  useEffect(() => {
+    const handleHashChange = () => setHash(window.location.hash || '#/');
+    window.addEventListener('hashchange', handleHashChange);
+    return () => window.removeEventListener('hashchange', handleHashChange);
+  }, []);
+
   return (
     <>
       <SignedOut>
@@ -14,13 +26,22 @@ function App() {
             <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4">
               <h1 className="text-xl font-bold text-gray-900">Livermore Admin</h1>
               <nav className="flex items-center gap-6">
-                <a href="#/" className="text-gray-600 hover:text-gray-900">
+                <a
+                  href="#/"
+                  className={`${hash === '#/' || hash === '' ? 'text-gray-900 font-medium' : 'text-gray-600'} hover:text-gray-900`}
+                >
                   Portfolio
                 </a>
-                <a href="#/signals" className="text-gray-600 hover:text-gray-900">
+                <a
+                  href="#/signals"
+                  className={`${hash === '#/signals' ? 'text-gray-900 font-medium' : 'text-gray-600'} hover:text-gray-900`}
+                >
                   Signals
                 </a>
-                <a href="#/logs" className="text-gray-600 hover:text-gray-900">
+                <a
+                  href="#/logs"
+                  className={`${hash === '#/logs' ? 'text-gray-900 font-medium' : 'text-gray-600'} hover:text-gray-900`}
+                >
                   Logs
                 </a>
                 <UserButton
@@ -35,7 +56,7 @@ function App() {
             </div>
           </header>
           <main className="mx-auto max-w-7xl px-4 py-8">
-            <HashRouter />
+            <HashRouter hash={hash} />
           </main>
         </div>
       </SignedIn>
@@ -43,37 +64,14 @@ function App() {
   );
 }
 
-/**
- * Simple hash-based router for SPA.
- * No external router library needed for 3 pages.
- */
-function HashRouter() {
-  // Use window.location.hash for routing
-  const hash = typeof window !== 'undefined' ? window.location.hash : '#/';
-
-  // Placeholder pages - will be replaced in 15-02
+function HashRouter({ hash }: { hash: string }) {
   switch (hash) {
     case '#/signals':
-      return (
-        <div className="rounded-lg bg-white p-6 shadow">
-          <h2 className="text-lg font-semibold">Trade Signals</h2>
-          <p className="mt-2 text-gray-600">Coming soon...</p>
-        </div>
-      );
+      return <Signals />;
     case '#/logs':
-      return (
-        <div className="rounded-lg bg-white p-6 shadow">
-          <h2 className="text-lg font-semibold">Logs</h2>
-          <p className="mt-2 text-gray-600">Coming soon...</p>
-        </div>
-      );
+      return <Logs />;
     default:
-      return (
-        <div className="rounded-lg bg-white p-6 shadow">
-          <h2 className="text-lg font-semibold">Portfolio Analysis</h2>
-          <p className="mt-2 text-gray-600">Coming soon...</p>
-        </div>
-      );
+      return <Dashboard />;
   }
 }
 
