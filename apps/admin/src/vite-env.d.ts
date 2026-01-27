@@ -8,3 +8,14 @@ interface ImportMetaEnv {
 interface ImportMeta {
   readonly env: ImportMetaEnv;
 }
+
+/**
+ * Clerk exposes itself on window after ClerkProvider initializes.
+ */
+interface Window {
+  Clerk?: {
+    session?: {
+      getToken: () => Promise<string | null>;
+    };
+  };
+}

@@ -131,7 +131,7 @@ importers:
         version: 11.8.1(typescript@5.9.3)
       drizzle-orm:
         specifier: ^0.36.4
-        version: 0.36.4(@types/react@19.2.10)(pg@8.17.1)(postgres@3.4.8)(react@19.2.4)
+        version: 0.36.4(@types/pg@8.16.0)(@types/react@19.2.10)(pg@8.17.1)(postgres@3.4.8)(react@19.2.4)
       fastify:
         specifier: ^5.2.2
         version: 5.6.2
@@ -145,6 +145,9 @@ importers:
       '@types/node':
         specifier: ^22.10.5
         version: 22.19.3
+      '@types/pg':
+        specifier: ^8.16.0
+        version: 8.16.0
       tsx:
         specifier: ^4.19.2
         version: 4.21.0
@@ -243,11 +246,14 @@ importers:
         version: link:../utils
       drizzle-orm:
         specifier: ^0.36.4
-        version: 0.36.4(@types/react@19.2.10)(pg@8.17.1)(postgres@3.4.8)(react@19.2.4)
+        version: 0.36.4(@types/pg@8.16.0)(@types/react@19.2.10)(pg@8.17.1)(postgres@3.4.8)(react@19.2.4)
       postgres:
         specifier: ^3.4.5
         version: 3.4.8
     devDependencies:
+      '@types/pg':
+        specifier: ^8.16.0
+        version: 8.16.0
       drizzle-kit:
         specifier: ^0.28.1
         version: 0.28.1
@@ -1675,6 +1681,9 @@ packages:
 
   '@types/node@25.0.9':
     resolution: {integrity: sha512-/rpCXHlCWeqClNBwUhDcusJxXYDjZTyE8v5oTO7WbL8eij2nKhUeU89/6xgjU7N4/Vh3He0BtyhJdQbDyhiXAw==}
+
+  '@types/pg@8.16.0':
+    resolution: {integrity: sha512-RmhMd/wD+CF8Dfo+cVIy3RR5cl8CyfXQ0tGgW6XBL8L4LM/UTEbNXYRbLwU6w+CgrKBNbrQWt4FUtTfaU5jSYQ==}
 
   '@types/react-dom@19.2.3':
     resolution: {integrity: sha512-jp2L/eY6fn+KgVVQAOqYItbF0VY/YApe5Mz2F0aykSO8gx31bYCZyvSeYxCHKvzHG5eZjc+zyaS5BrBWya2+kQ==}
@@ -4905,6 +4914,12 @@ snapshots:
     dependencies:
       undici-types: 7.16.0
 
+  '@types/pg@8.16.0':
+    dependencies:
+      '@types/node': 22.19.3
+      pg-protocol: 1.11.0
+      pg-types: 2.2.0
+
   '@types/react-dom@19.2.3(@types/react@19.2.10)':
     dependencies:
       '@types/react': 19.2.10
@@ -5405,8 +5420,9 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  drizzle-orm@0.36.4(@types/react@19.2.10)(pg@8.17.1)(postgres@3.4.8)(react@19.2.4):
+  drizzle-orm@0.36.4(@types/pg@8.16.0)(@types/react@19.2.10)(pg@8.17.1)(postgres@3.4.8)(react@19.2.4):
     optionalDependencies:
+      '@types/pg': 8.16.0
       '@types/react': 19.2.10
       pg: 8.17.1
       postgres: 3.4.8
