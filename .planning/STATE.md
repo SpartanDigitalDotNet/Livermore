@@ -10,12 +10,12 @@ See: .planning/PROJECT.md
 ## Current Position
 
 **Milestone:** v3.0 Admin UI + IAM Foundation
-**Phase:** 11 - Database Workflow (Complete)
-**Plan:** 04 of 04 complete
+**Phase:** 12 - IAM Schema (Complete)
+**Plan:** 01 of 01 complete
 **Status:** Phase complete
-**Last activity:** 2026-01-26 - Completed 11-04-PLAN.md
+**Last activity:** 2026-01-26 - Completed 12-01-PLAN.md
 
-**Progress:** [####................] 4/20 requirements (20%)
+**Progress:** [#####...............] 10/20 requirements (50%)
 
 ## Milestones
 
@@ -32,7 +32,7 @@ See `.planning/MILESTONES.md` for full history.
 | Phase | Name | Status | Requirements |
 |-------|------|--------|--------------|
 | 11 | Database Workflow | Complete | DB-01, DB-02, DB-03, DB-04 |
-| 12 | IAM Schema | Pending | IAM-01 to IAM-06 |
+| 12 | IAM Schema | Complete | IAM-01 to IAM-06 |
 | 13 | Clerk Authentication | Pending | AUTH-01, AUTH-02, AUTH-03 |
 | 14 | User Sync Webhooks | Pending | AUTH-04, AUTH-05 |
 | 15 | Admin UI | Pending | UI-01, UI-02, UI-03, UI-04 |
@@ -88,26 +88,31 @@ See `.planning/research/CLERK-INTEGRATION.md` for full details.
 
 - Low-volume symbol policy: Include or exclude symbols with < 100 candles?
 
+### IAM Schema Decisions (2026-01-26)
+
+| Decision | Rationale |
+|----------|-----------|
+| Partial unique index on identity_provider/identity_sub | Allows NULL values for non-OAuth users while enforcing uniqueness for OAuth identities |
+| Role as VARCHAR(20) with 'user' default | Matches Clerk metadata pattern, allows future role expansion |
+| Azure livermore database created | Was missing from sandbox environment |
+
 ## Session Continuity
 
 ### Last Session
 
 **Date:** 2026-01-26
-**Activity:** Completed 11-04-PLAN.md (ARCHITECTURE.md Database Workflow Documentation)
-**Stopped At:** Phase 11 complete
+**Activity:** Completed 12-01-PLAN.md (IAM Schema columns and TypeScript role types)
+**Stopped At:** Phase 12 complete
 
 ### Resume Context
 
-**Phase 11 (Database Workflow) complete.**
+**Phase 12 (IAM Schema) complete.**
 
-**All plans delivered:**
-- 11-01: Atlas HCL sandbox environment configuration
-- 11-02: Sandbox schema deployment script (apply-schema-sandbox.ps1)
-- 11-03: Local sync schema script (sync-schema.ps1)
-- 11-04: ARCHITECTURE.md database workflow documentation
+**Plan delivered:**
+- 12-01: IAM columns in users table, Drizzle types regenerated, TypeScript role helpers
 
-**Next:** Phase 12 (IAM Schema)
+**Next:** Phase 13 (Clerk Authentication)
 
 ---
 *State initialized: 2026-01-18*
-*Last updated: 2026-01-26 after 11-04-PLAN.md completion*
+*Last updated: 2026-01-26 after 12-01-PLAN.md completion*
