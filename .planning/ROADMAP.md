@@ -99,6 +99,11 @@ Plans:
 
 **Dependencies:** Phase 13 (Clerk plugin registered, IAM columns exist)
 
+**Plans:** 1 plan
+
+Plans:
+- [ ] 14-01-PLAN.md - Webhook handler with signature verification and user sync
+
 **Requirements:**
 - AUTH-04: Clerk webhook endpoint `/webhooks/clerk` syncs users on `user.created`
 - AUTH-05: Clerk webhook syncs user data on `user.updated` events
@@ -157,7 +162,7 @@ Plans:
 | 11 | Database Workflow | Complete | 4 | 100% |
 | 12 | IAM Schema | Complete | 6 | 100% |
 | 13 | Clerk Authentication | Complete | 3 | 100% |
-| 14 | User Sync Webhooks | Pending | 2 | 0% |
+| 14 | User Sync Webhooks | Planned | 2 | 0% |
 | 15 | Admin UI | Pending | 4 | 0% |
 | 16 | Kaia Handoff | Pending | 1 | 0% |
 
@@ -180,8 +185,8 @@ Plans:
 | AUTH-01 | 13 | Complete |
 | AUTH-02 | 13 | Complete |
 | AUTH-03 | 13 | Complete |
-| AUTH-04 | 14 | Pending |
-| AUTH-05 | 14 | Pending |
+| AUTH-04 | 14 | Planned |
+| AUTH-05 | 14 | Planned |
 | UI-01 | 15 | Pending |
 | UI-02 | 15 | Pending |
 | UI-03 | 15 | Pending |
@@ -192,4 +197,4 @@ Plans:
 
 ---
 *Roadmap created: 2026-01-26*
-*Last updated: 2026-01-26 - Phase 13 complete*
+*Last updated: 2026-01-26 - Phase 14 planned*
