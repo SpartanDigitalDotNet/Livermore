@@ -1,7 +1,9 @@
 import { z } from 'zod';
 import { router, publicProcedure } from '@livermore/trpc-config';
 import { getDbClient, alertHistory } from '@livermore/database';
-import { eq, and, desc } from 'drizzle-orm';
+import { eq, and, desc, type InferSelectModel } from 'drizzle-orm';
+
+type AlertHistoryEntry = InferSelectModel<typeof alertHistory>;
 
 const db = getDbClient();
 
@@ -36,7 +38,7 @@ export const alertRouter = router({
 
       return {
         success: true,
-        data: triggers.map((t) => ({
+        data: triggers.map((t: AlertHistoryEntry) => ({
           ...t,
           price: parseFloat(t.price),
           triggerValue: t.triggerValue ? parseFloat(t.triggerValue) : null,
@@ -71,7 +73,7 @@ export const alertRouter = router({
 
       return {
         success: true,
-        data: triggers.map((t) => ({
+        data: triggers.map((t: AlertHistoryEntry) => ({
           ...t,
           price: parseFloat(t.price),
           triggerValue: t.triggerValue ? parseFloat(t.triggerValue) : null,
@@ -106,7 +108,7 @@ export const alertRouter = router({
 
       return {
         success: true,
-        data: triggers.map((t) => ({
+        data: triggers.map((t: AlertHistoryEntry) => ({
           ...t,
           price: parseFloat(t.price),
           triggerValue: t.triggerValue ? parseFloat(t.triggerValue) : null,
