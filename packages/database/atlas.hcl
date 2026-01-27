@@ -60,11 +60,11 @@ env "sandbox" {
   // Source of truth - same schema as all environments
   src = "file://schema.sql"
 
-  // Azure PostgreSQL connection - requires SSL
-  url = "postgresql://${var.pg_sandbox_user}:${var.pg_sandbox_password}@${var.pg_sandbox_host}:5432/livermore?sslmode=require"
+  // Azure PostgreSQL connection - requires SSL (with search_path for schema targeting)
+  url = "postgresql://${var.pg_sandbox_user}:${var.pg_sandbox_password}@${var.pg_sandbox_host}:5432/livermore?sslmode=require&search_path=public"
 
-  // Schema to manage
-  schemas = ["public"]
+  // Dev database for computing diffs (uses Docker)
+  dev = "docker://postgres/15/dev?search_path=public"
 
   // Diff policy - protect against accidental drops (same as local)
   diff {

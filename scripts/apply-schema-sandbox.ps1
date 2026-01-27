@@ -34,9 +34,12 @@ $url = "postgresql://${user}:${password}@${host_}:5432/livermore?sslmode=require
 Write-Host "Target: postgresql://${user}:****@${host_}:5432/livermore" -ForegroundColor White
 Write-Host ""
 
-# Set DATABASE_URL and run Atlas
+# Set environment variables for Atlas HCL
+# The sandbox env in atlas.hcl uses PG_SANDBOX_* variables, not DATABASE_URL
 Write-Host "Running Atlas schema apply..." -ForegroundColor White
-$env:DATABASE_URL = $url
+$env:PG_SANDBOX_HOST = $host_
+$env:PG_SANDBOX_USER = $user
+$env:PG_SANDBOX_PASSWORD = $password
 
 $originalLocation = Get-Location
 try {
