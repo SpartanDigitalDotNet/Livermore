@@ -10,12 +10,12 @@ See: .planning/PROJECT.md
 ## Current Position
 
 **Milestone:** v3.0 Admin UI + IAM Foundation
-**Phase:** 14 - User Sync Webhooks (Complete)
-**Plan:** 01 of 01 complete
-**Status:** Phase complete
-**Last activity:** 2026-01-27 - Completed 14-01-PLAN.md
+**Phase:** 15 - Admin UI (In Progress)
+**Plan:** 02 of 04 complete
+**Status:** In progress
+**Last activity:** 2026-01-27 - Completed 15-02-PLAN.md
 
-**Progress:** [#######.............] 15/20 requirements (75%)
+**Progress:** [########............] 16/20 requirements (80%)
 
 ## Milestones
 
@@ -35,7 +35,7 @@ See `.planning/MILESTONES.md` for full history.
 | 12 | IAM Schema | Complete | IAM-01 to IAM-06 |
 | 13 | Clerk Authentication | Complete | AUTH-01, AUTH-02, AUTH-03 |
 | 14 | User Sync Webhooks | Complete | AUTH-04, AUTH-05 |
-| 15 | Admin UI | Pending | UI-01, UI-02, UI-03, UI-04 |
+| 15 | Admin UI | In Progress | UI-01, UI-02, UI-03, UI-04 |
 | 16 | Kaia Handoff | Pending | DOC-01 |
 
 ## Accumulated Context
@@ -111,27 +111,33 @@ See `.planning/research/CLERK-INTEGRATION.md` for full details.
 | Check-then-update instead of onConflictDoUpdate | Partial unique index doesn't work with Drizzle's onConflictDoUpdate |
 | Timestamp mode 'string' in users schema | Ensures ISO string compatibility with lastLoginAt from Clerk |
 
+### Logs Router Decisions (2026-01-27)
+
+| Decision | Rationale |
+|----------|-----------|
+| Use protectedProcedure for logs endpoints | Logs may contain sensitive operational data |
+| Level filtering with hierarchy | ERROR only, WARN+ERROR, INFO+WARN+ERROR, all - standard log filtering pattern |
+
 ## Session Continuity
 
 ### Last Session
 
 **Date:** 2026-01-27
-**Activity:** Completed 14-01-PLAN.md (Clerk webhook with user sync)
-**Stopped At:** Phase 14 complete
+**Activity:** Completed 15-02-PLAN.md (Logs router with getRecent endpoint)
+**Stopped At:** Plan 15-02 complete
 
 ### Resume Context
 
-**Phase 14 (User Sync Webhooks) complete.**
+**Phase 15 (Admin UI) in progress.**
 
-**Plan delivered:**
-- 14-01: /webhooks/clerk endpoint, svix signature verification, idempotent user sync
+**Plans delivered:**
+- 15-01: Admin app scaffolding with Vite + React + TailwindCSS
+- 15-02: Logs router with getRecent and getAvailableDates endpoints
 
-**Next:** Phase 15 (Admin UI)
+**Next:** Plan 15-03 (Log viewer React component)
 
-**User setup required before webhooks work:**
-- Set CLERK_WEBHOOK_SIGNING_SECRET environment variable
-- Configure webhook endpoint in Clerk Dashboard (subscribe to user.created, user.updated)
+**Note:** Server startup has pre-existing dotenv issue. Router code verified correct via type-check and import test.
 
 ---
 *State initialized: 2026-01-18*
-*Last updated: 2026-01-27 after 14-01-PLAN.md completion*
+*Last updated: 2026-01-27 after 15-02-PLAN.md completion*
