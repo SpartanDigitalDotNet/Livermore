@@ -1,6 +1,10 @@
+// CRITICAL: dotenv must be imported FIRST - Clerk reads CLERK_SECRET_KEY during ES module initialization
+import 'dotenv/config';
+
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import websocket from '@fastify/websocket';
+import { clerkPlugin } from '@clerk/fastify';
 import { fastifyTRPCPlugin } from '@trpc/server/adapters/fastify';
 import { logger, validateEnv } from '@livermore/utils';
 import { getDbClient } from '@livermore/database';
@@ -157,6 +161,10 @@ async function start() {
   });
 
   await fastify.register(websocket);
+
+  // Register Clerk authentication plugin (must be before tRPC so getAuth works in context)
+  await fastify.register(clerkPlugin);
+  logger.info('Clerk authentication plugin registered');
 
   // Initialize database connection
   getDbClient(); // Initialize connection

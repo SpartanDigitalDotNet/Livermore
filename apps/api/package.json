@@ -12,6 +12,7 @@
     "type-check": "tsc --noEmit"
   },
   "dependencies": {
+    "@clerk/fastify": "^2.6.17",
     "@fastify/cors": "^10.0.1",
     "@fastify/websocket": "^11.0.1",
     "@livermore/cache": "workspace:*",

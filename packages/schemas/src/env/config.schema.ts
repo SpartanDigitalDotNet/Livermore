@@ -30,6 +30,10 @@ export const EnvConfigSchema = z.object({
 
   // Discord webhook
   DISCORD_LIVERMORE_BOT: z.string().url('Invalid Discord webhook URL'),
+
+  // Clerk Authentication
+  CLERK_PUBLISHABLE_KEY: z.string().min(1, 'Clerk publishable key is required'),
+  CLERK_SECRET_KEY: z.string().min(1, 'Clerk secret key is required'),
 });
 
 /**
