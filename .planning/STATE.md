@@ -10,12 +10,12 @@ See: .planning/PROJECT.md
 ## Current Position
 
 **Milestone:** v3.0 Admin UI + IAM Foundation
-**Phase:** 13 - Clerk Authentication (Complete)
+**Phase:** 14 - User Sync Webhooks (Complete)
 **Plan:** 01 of 01 complete
 **Status:** Phase complete
-**Last activity:** 2026-01-26 - Completed 13-01-PLAN.md
+**Last activity:** 2026-01-27 - Completed 14-01-PLAN.md
 
-**Progress:** [######..............] 13/20 requirements (65%)
+**Progress:** [#######.............] 15/20 requirements (75%)
 
 ## Milestones
 
@@ -34,7 +34,7 @@ See `.planning/MILESTONES.md` for full history.
 | 11 | Database Workflow | Complete | DB-01, DB-02, DB-03, DB-04 |
 | 12 | IAM Schema | Complete | IAM-01 to IAM-06 |
 | 13 | Clerk Authentication | Complete | AUTH-01, AUTH-02, AUTH-03 |
-| 14 | User Sync Webhooks | Pending | AUTH-04, AUTH-05 |
+| 14 | User Sync Webhooks | Complete | AUTH-04, AUTH-05 |
 | 15 | Admin UI | Pending | UI-01, UI-02, UI-03, UI-04 |
 | 16 | Kaia Handoff | Pending | DOC-01 |
 
@@ -103,27 +103,35 @@ See `.planning/research/CLERK-INTEGRATION.md` for full details.
 | Import Clerk types from @clerk/backend/internal | SignedInAuthObject/SignedOutAuthObject not exported from public API |
 | Add @clerk/types as explicit dependency | Required for portable type declarations in protectedProcedure |
 
+### User Sync Webhooks Decisions (2026-01-27)
+
+| Decision | Rationale |
+|----------|-----------|
+| Register webhook route BEFORE clerkPlugin | Webhook is server-to-server, has no JWT token; routes after clerkPlugin require JWT |
+| Check-then-update instead of onConflictDoUpdate | Partial unique index doesn't work with Drizzle's onConflictDoUpdate |
+| Timestamp mode 'string' in users schema | Ensures ISO string compatibility with lastLoginAt from Clerk |
+
 ## Session Continuity
 
 ### Last Session
 
-**Date:** 2026-01-26
-**Activity:** Completed 13-01-PLAN.md (Clerk authentication integration)
-**Stopped At:** Phase 13 complete
+**Date:** 2026-01-27
+**Activity:** Completed 14-01-PLAN.md (Clerk webhook with user sync)
+**Stopped At:** Phase 14 complete
 
 ### Resume Context
 
-**Phase 13 (Clerk Authentication) complete.**
+**Phase 14 (User Sync Webhooks) complete.**
 
 **Plan delivered:**
-- 13-01: @clerk/fastify plugin, tRPC auth context, protectedProcedure middleware
+- 14-01: /webhooks/clerk endpoint, svix signature verification, idempotent user sync
 
-**Next:** Phase 14 (User Sync Webhooks)
+**Next:** Phase 15 (Admin UI)
 
-**User setup required before testing:**
-- Set CLERK_PUBLISHABLE_KEY and CLERK_SECRET_KEY environment variables
-- Create Clerk application in Clerk Dashboard (if not already done)
+**User setup required before webhooks work:**
+- Set CLERK_WEBHOOK_SIGNING_SECRET environment variable
+- Configure webhook endpoint in Clerk Dashboard (subscribe to user.created, user.updated)
 
 ---
 *State initialized: 2026-01-18*
-*Last updated: 2026-01-26 after 13-01-PLAN.md completion*
+*Last updated: 2026-01-27 after 14-01-PLAN.md completion*
