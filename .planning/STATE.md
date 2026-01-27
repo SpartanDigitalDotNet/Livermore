@@ -10,12 +10,12 @@ See: .planning/PROJECT.md
 ## Current Position
 
 **Milestone:** v3.0 Admin UI + IAM Foundation
-**Phase:** 12 - IAM Schema (Complete)
+**Phase:** 13 - Clerk Authentication (Complete)
 **Plan:** 01 of 01 complete
 **Status:** Phase complete
-**Last activity:** 2026-01-26 - Completed 12-01-PLAN.md
+**Last activity:** 2026-01-26 - Completed 13-01-PLAN.md
 
-**Progress:** [#####...............] 10/20 requirements (50%)
+**Progress:** [######..............] 13/20 requirements (65%)
 
 ## Milestones
 
@@ -33,7 +33,7 @@ See `.planning/MILESTONES.md` for full history.
 |-------|------|--------|--------------|
 | 11 | Database Workflow | Complete | DB-01, DB-02, DB-03, DB-04 |
 | 12 | IAM Schema | Complete | IAM-01 to IAM-06 |
-| 13 | Clerk Authentication | Pending | AUTH-01, AUTH-02, AUTH-03 |
+| 13 | Clerk Authentication | Complete | AUTH-01, AUTH-02, AUTH-03 |
 | 14 | User Sync Webhooks | Pending | AUTH-04, AUTH-05 |
 | 15 | Admin UI | Pending | UI-01, UI-02, UI-03, UI-04 |
 | 16 | Kaia Handoff | Pending | DOC-01 |
@@ -77,7 +77,7 @@ Alert Evaluation (receives ticker prices)
 ### Clerk Integration Research (2026-01-26)
 
 Research completed for v3.0. Key findings:
-- `@clerk/fastify@2.6.14` compatible with Fastify 5.2.2
+- `@clerk/fastify@2.6.17` compatible with Fastify 5.2.2
 - Critical: `dotenv/config` must be imported BEFORE `@clerk/fastify`
 - tRPC integration via `getAuth(req)` in createContext
 - Webhook verification via `svix` package
@@ -96,23 +96,34 @@ See `.planning/research/CLERK-INTEGRATION.md` for full details.
 | Role as VARCHAR(20) with 'user' default | Matches Clerk metadata pattern, allows future role expansion |
 | Azure livermore database created | Was missing from sandbox environment |
 
+### Clerk Authentication Decisions (2026-01-26)
+
+| Decision | Rationale |
+|----------|-----------|
+| Import Clerk types from @clerk/backend/internal | SignedInAuthObject/SignedOutAuthObject not exported from public API |
+| Add @clerk/types as explicit dependency | Required for portable type declarations in protectedProcedure |
+
 ## Session Continuity
 
 ### Last Session
 
 **Date:** 2026-01-26
-**Activity:** Completed 12-01-PLAN.md (IAM Schema columns and TypeScript role types)
-**Stopped At:** Phase 12 complete
+**Activity:** Completed 13-01-PLAN.md (Clerk authentication integration)
+**Stopped At:** Phase 13 complete
 
 ### Resume Context
 
-**Phase 12 (IAM Schema) complete.**
+**Phase 13 (Clerk Authentication) complete.**
 
 **Plan delivered:**
-- 12-01: IAM columns in users table, Drizzle types regenerated, TypeScript role helpers
+- 13-01: @clerk/fastify plugin, tRPC auth context, protectedProcedure middleware
 
-**Next:** Phase 13 (Clerk Authentication)
+**Next:** Phase 14 (User Sync Webhooks)
+
+**User setup required before testing:**
+- Set CLERK_PUBLISHABLE_KEY and CLERK_SECRET_KEY environment variables
+- Create Clerk application in Clerk Dashboard (if not already done)
 
 ---
 *State initialized: 2026-01-18*
-*Last updated: 2026-01-26 after 12-01-PLAN.md completion*
+*Last updated: 2026-01-26 after 13-01-PLAN.md completion*
