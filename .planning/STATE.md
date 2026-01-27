@@ -118,20 +118,28 @@ See `.planning/research/CLERK-INTEGRATION.md` for full details.
 | Use protectedProcedure for logs endpoints | Logs may contain sensitive operational data |
 | Level filtering with hierarchy | ERROR only, WARN+ERROR, INFO+WARN+ERROR, all - standard log filtering pattern |
 
+### Admin UI Decisions (2026-01-27)
+
+| Decision | Rationale |
+|----------|-----------|
+| createTRPCOptionsProxy with queryClient | tRPC v11 requires queryClient passed to options proxy |
+| Add @types/pg to API and database packages | Fixed pnpm duplicate drizzle-orm instances from peer dep mismatch |
+| Export queryClient from trpc.ts | Single QueryClient instance shared between tRPC and React Query providers |
+
 ## Session Continuity
 
 ### Last Session
 
 **Date:** 2026-01-27
-**Activity:** Completed 15-02-PLAN.md (Logs router with getRecent endpoint)
-**Stopped At:** Plan 15-02 complete
+**Activity:** Completed 15-01-PLAN.md (Admin app foundation with Clerk and tRPC)
+**Stopped At:** Plan 15-01 and 15-02 complete
 
 ### Resume Context
 
 **Phase 15 (Admin UI) in progress.**
 
 **Plans delivered:**
-- 15-01: Admin app scaffolding with Vite + React + TailwindCSS
+- 15-01: Admin app with Vite + React + Clerk auth + tRPC client
 - 15-02: Logs router with getRecent and getAvailableDates endpoints
 
 **Next:** Plan 15-03 (Log viewer React component)
@@ -140,4 +148,4 @@ See `.planning/research/CLERK-INTEGRATION.md` for full details.
 
 ---
 *State initialized: 2026-01-18*
-*Last updated: 2026-01-27 after 15-02-PLAN.md completion*
+*Last updated: 2026-01-27 after 15-01-PLAN.md completion*
