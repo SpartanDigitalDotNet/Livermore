@@ -122,6 +122,13 @@ Plans:
 
 **Dependencies:** Phase 14 (authentication complete, user sync working)
 
+**Plans:** 3 plans
+
+Plans:
+- [ ] 15-01-PLAN.md - Vite + React + Clerk + tRPC client foundation
+- [ ] 15-02-PLAN.md - Logs router endpoint for server-side log access
+- [ ] 15-03-PLAN.md - Portfolio, Signals, and Logs pages with data tables
+
 **Requirements:**
 - UI-01: MACD-V portfolio viewer (symbols, prices, MACD-V values, signals)
 - UI-02: Log viewer (error/warning logs from Livermore)
@@ -163,7 +170,7 @@ Plans:
 | 12 | IAM Schema | Complete | 6 | 100% |
 | 13 | Clerk Authentication | Complete | 3 | 100% |
 | 14 | User Sync Webhooks | Complete | 2 | 100% |
-| 15 | Admin UI | Pending | 4 | 0% |
+| 15 | Admin UI | Planned | 4 | 0% |
 | 16 | Kaia Handoff | Pending | 1 | 0% |
 
 **Milestone Progress:** 15/20 requirements complete (75%)
@@ -197,4 +204,4 @@ Plans:
 
 ---
 *Roadmap created: 2026-01-26*
-*Last updated: 2026-01-26 - Phase 14 complete*
+*Last updated: 2026-01-27 - Phase 15 planned (3 plans)*
