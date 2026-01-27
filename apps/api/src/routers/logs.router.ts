@@ -6,7 +6,7 @@ import path from 'path';
 /**
  * Log entry shape from structured JSON logs.
  */
-interface LogEntry {
+export interface LogEntry {
   timestamp: string;
   level: 'DEBUG' | 'INFO' | 'WARN' | 'ERROR';
   name: string;
