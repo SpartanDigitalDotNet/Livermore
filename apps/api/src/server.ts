@@ -15,6 +15,7 @@ import { IndicatorCalculationService } from './services/indicator-calculation.se
 import { AlertEvaluationService } from './services/alert-evaluation.service';
 import { getDiscordService } from './services/discord-notification.service';
 import { appRouter } from './routers';
+import { clerkWebhookHandler } from './routes/webhooks/clerk';
 import type { Timeframe } from '@livermore/schemas';
 
 // Blacklisted symbols (delisted, stablecoins, or no valid USD trading pair)
@@ -161,6 +162,11 @@ async function start() {
   });
 
   await fastify.register(websocket);
+
+  // WEBHOOK ROUTE - must be registered BEFORE clerkPlugin
+  // This route does NOT require JWT authentication (server-to-server)
+  fastify.post('/webhooks/clerk', clerkWebhookHandler);
+  logger.info('Clerk webhook route registered at /webhooks/clerk');
 
   // Register Clerk authentication plugin (must be before tRPC so getAuth works in context)
   await fastify.register(clerkPlugin);
