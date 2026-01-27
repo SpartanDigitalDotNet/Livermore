@@ -25,9 +25,9 @@ Requirements for Admin UI + IAM Foundation milestone.
 
 ### Authentication
 
-- [ ] **AUTH-01**: `@clerk/fastify` plugin registered in Fastify server (import order: dotenv first)
-- [ ] **AUTH-02**: tRPC context includes auth object from `getAuth(req)`
-- [ ] **AUTH-03**: `protectedProcedure` middleware created, checks `ctx.auth.userId`
+- [x] **AUTH-01**: `@clerk/fastify` plugin registered in Fastify server (import order: dotenv first)
+- [x] **AUTH-02**: tRPC context includes auth object from `getAuth(req)`
+- [x] **AUTH-03**: `protectedProcedure` middleware created, checks `ctx.auth.userId`
 - [ ] **AUTH-04**: Clerk webhook endpoint `/webhooks/clerk` syncs users on `user.created`
 - [ ] **AUTH-05**: Clerk webhook syncs user data on `user.updated` events
 
@@ -80,9 +80,9 @@ Deferred to next milestone.
 | IAM-04 | 12 | Complete |
 | IAM-05 | 12 | Complete |
 | IAM-06 | 12 | Complete |
-| AUTH-01 | 13 | Pending |
-| AUTH-02 | 13 | Pending |
-| AUTH-03 | 13 | Pending |
+| AUTH-01 | 13 | Complete |
+| AUTH-02 | 13 | Complete |
+| AUTH-03 | 13 | Complete |
 | AUTH-04 | 14 | Pending |
 | AUTH-05 | 14 | Pending |
 | UI-01 | 15 | Pending |
@@ -98,4 +98,4 @@ Deferred to next milestone.
 
 ---
 *Requirements defined: 2026-01-26*
-*Last updated: 2026-01-26 - Phase 12 complete (IAM-01 to IAM-06)*
+*Last updated: 2026-01-26 - Phase 13 complete (AUTH-01 to AUTH-03)*
