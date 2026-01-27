@@ -20,6 +20,8 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
+    "@clerk/backend": "^2.29.5",
+    "@clerk/fastify": "^2.6.17",
     "@livermore/schemas": "workspace:*",
     "@livermore/utils": "workspace:*",
     "@trpc/server": "^11.0.0-rc.663",

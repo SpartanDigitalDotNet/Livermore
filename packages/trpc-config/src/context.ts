@@ -1,16 +1,32 @@
 import type { CreateFastifyContextOptions } from '@trpc/server/adapters/fastify';
+import { getAuth } from '@clerk/fastify';
+import type { SignedInAuthObject, SignedOutAuthObject } from '@clerk/backend/internal';
 import { createLogger, type Logger } from '@livermore/utils';
 
 /**
- * Base context interface
- * This will be extended with database, cache, and service instances
- * when setting up the actual API server
+ * Clerk auth can be signed in (has userId) or signed out (userId is null)
+ */
+type ClerkAuth = SignedInAuthObject | SignedOutAuthObject;
+
+/**
+ * Base context interface with Clerk auth
+ * Available in all tRPC procedures
  */
 export interface BaseContext {
   /** Logger instance for this request */
   logger: Logger;
   /** Request ID for tracing */
   requestId: string;
+  /** Clerk auth object (may be signed in or signed out) */
+  auth: ClerkAuth;
+}
+
+/**
+ * Context after isAuthed middleware - userId guaranteed to be string
+ * Use this type in protectedProcedure handlers
+ */
+export interface AuthenticatedContext extends Omit<BaseContext, 'auth'> {
+  auth: SignedInAuthObject & { userId: string };
 }
 
 /**
@@ -22,10 +38,12 @@ export interface BaseContext {
 export function createContext({ req }: CreateFastifyContextOptions): BaseContext {
   const requestId = (req.headers['x-request-id'] as string) || generateRequestId();
   const logger = createLogger('trpc').child({ requestId });
+  const auth = getAuth(req);
 
   return {
     logger,
     requestId,
+    auth,
   };
 }
 
