@@ -75,6 +75,11 @@ Plans:
 
 **Dependencies:** Phase 12 (IAM columns exist for user sync)
 
+**Plans:** 1 plan
+
+Plans:
+- [ ] 13-01-PLAN.md - Install @clerk/fastify, register plugin, add auth to tRPC context, create protectedProcedure
+
 **Requirements:**
 - AUTH-01: `@clerk/fastify` plugin registered in Fastify server (import order: dotenv first)
 - AUTH-02: tRPC context includes auth object from `getAuth(req)`
@@ -187,4 +192,4 @@ Plans:
 
 ---
 *Roadmap created: 2026-01-26*
-*Last updated: 2026-01-26 - Phase 12 complete*
+*Last updated: 2026-01-26 - Phase 13 planned*
