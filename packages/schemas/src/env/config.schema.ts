@@ -35,8 +35,8 @@ export const EnvConfigSchema = z.object({
   CLERK_PUBLISHABLE_KEY: z.string().min(1, 'Clerk publishable key is required'),
   CLERK_SECRET_KEY: z.string().min(1, 'Clerk secret key is required'),
 
-  // Clerk Webhook
-  CLERK_WEBHOOK_SIGNING_SECRET: z.string().min(1, 'Clerk webhook signing secret is required'),
+  // Clerk Webhook (optional in development - required for production webhook handling)
+  CLERK_WEBHOOK_SIGNING_SECRET: z.string().optional(),
 });
 
 /**

@@ -3,6 +3,7 @@ import { indicatorRouter } from './indicator.router';
 import { alertRouter } from './alert.router';
 import { positionRouter } from './position.router';
 import { logsRouter } from './logs.router';
+import { userRouter } from './user.router';
 
 /**
  * Main application router
@@ -14,6 +15,7 @@ export const appRouter = router({
   alert: alertRouter,
   position: positionRouter,
   logs: logsRouter,
+  user: userRouter,
 });
 
 export type AppRouter = typeof appRouter;
@@ -23,3 +25,4 @@ export { indicatorRouter } from './indicator.router';
 export { alertRouter } from './alert.router';
 export { positionRouter } from './position.router';
 export { logsRouter } from './logs.router';
+export { userRouter } from './user.router';

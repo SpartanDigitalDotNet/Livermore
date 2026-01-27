@@ -33,14 +33,14 @@ Requirements for Admin UI + IAM Foundation milestone.
 
 ### Admin UI
 
-- [ ] **UI-01**: MACD-V portfolio viewer — displays portfolio analysis (symbols, prices, MACD-V values, signals)
-- [ ] **UI-02**: Log viewer — displays error/warning logs from Livermore
-- [ ] **UI-03**: Trade signals viewer — displays triggered alerts with timestamp, symbol, signal type
-- [ ] **UI-04**: Clerk sign-in component with Google OAuth
+- [x] **UI-01**: MACD-V portfolio viewer — displays portfolio analysis (symbols, prices, MACD-V values, signals)
+- [x] **UI-02**: Log viewer — displays error/warning logs from Livermore
+- [x] **UI-03**: Trade signals viewer — displays triggered alerts with timestamp, symbol, signal type
+- [x] **UI-04**: Clerk sign-in component with Google OAuth
 
 ### Documentation
 
-- [ ] **DOC-01**: `docs/KAIA-IAM-HANDOFF.md` — full context document for Kaia's AI workflow
+- [x] **DOC-01**: `docs/KAIA-IAM-HANDOFF.md` — full context document for Kaia's AI workflow
 
 ## v3.1 Requirements
 
@@ -85,11 +85,11 @@ Deferred to next milestone.
 | AUTH-03 | 13 | Complete |
 | AUTH-04 | 14 | Complete |
 | AUTH-05 | 14 | Complete |
-| UI-01 | 15 | Pending |
-| UI-02 | 15 | Pending |
-| UI-03 | 15 | Pending |
-| UI-04 | 15 | Pending |
-| DOC-01 | 16 | Pending |
+| UI-01 | 15 | Complete |
+| UI-02 | 15 | Complete |
+| UI-03 | 15 | Complete |
+| UI-04 | 15 | Complete |
+| DOC-01 | 16 | Complete |
 
 **Coverage:**
 - v3.0 requirements: 20 total
@@ -98,4 +98,4 @@ Deferred to next milestone.
 
 ---
 *Requirements defined: 2026-01-26*
-*Last updated: 2026-01-26 - Phase 14 complete (AUTH-04, AUTH-05)*
+*Last updated: 2026-01-27 - v3.0 complete (all 20 requirements)*

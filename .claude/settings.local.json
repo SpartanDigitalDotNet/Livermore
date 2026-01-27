@@ -44,7 +44,12 @@
       "Bash(npx tsx:*)",
       "WebFetch(domain:atlasgo.io)",
       "WebFetch(domain:orm.drizzle.team)",
-      "WebFetch(domain:clerk.com)"
+      "WebFetch(domain:clerk.com)",
+      "WebFetch(domain:dev.to)",
+      "WebFetch(domain:github.com)",
+      "Bash(ls:*)",
+      "Bash(Select-String -Pattern \"sslmode\" -Context 0,2)",
+      "Bash(npx tsc:*)"
     ]
   }
 }
