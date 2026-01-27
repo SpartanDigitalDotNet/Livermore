@@ -16,12 +16,12 @@ Requirements for Admin UI + IAM Foundation milestone.
 
 ### IAM Schema
 
-- [ ] **IAM-01**: Users table extended with `identity_provider` VARCHAR(20) — OAuth provider name
-- [ ] **IAM-02**: Users table extended with `identity_sub` VARCHAR(255) — Provider's user ID
-- [ ] **IAM-03**: Users table extended with `display_name` VARCHAR(100) — User's display name from provider
-- [ ] **IAM-04**: Users table extended with `identity_picture_url` TEXT — Profile picture URL from provider
-- [ ] **IAM-05**: Users table extended with `role` VARCHAR(20) DEFAULT 'user' — User role (admin, user, subscriber_basic, subscriber_pro)
-- [ ] **IAM-06**: Users table extended with `last_login_at` TIMESTAMP — Last login timestamp
+- [x] **IAM-01**: Users table extended with `identity_provider` VARCHAR(20) — OAuth provider name
+- [x] **IAM-02**: Users table extended with `identity_sub` VARCHAR(255) — Provider's user ID
+- [x] **IAM-03**: Users table extended with `display_name` VARCHAR(100) — User's display name from provider
+- [x] **IAM-04**: Users table extended with `identity_picture_url` TEXT — Profile picture URL from provider
+- [x] **IAM-05**: Users table extended with `role` VARCHAR(20) DEFAULT 'user' — User role (admin, user, subscriber_basic, subscriber_pro)
+- [x] **IAM-06**: Users table extended with `last_login_at` TIMESTAMP — Last login timestamp
 
 ### Authentication
 
@@ -74,12 +74,12 @@ Deferred to next milestone.
 | DB-02 | 11 | Complete |
 | DB-03 | 11 | Complete |
 | DB-04 | 11 | Complete |
-| IAM-01 | 12 | Pending |
-| IAM-02 | 12 | Pending |
-| IAM-03 | 12 | Pending |
-| IAM-04 | 12 | Pending |
-| IAM-05 | 12 | Pending |
-| IAM-06 | 12 | Pending |
+| IAM-01 | 12 | Complete |
+| IAM-02 | 12 | Complete |
+| IAM-03 | 12 | Complete |
+| IAM-04 | 12 | Complete |
+| IAM-05 | 12 | Complete |
+| IAM-06 | 12 | Complete |
 | AUTH-01 | 13 | Pending |
 | AUTH-02 | 13 | Pending |
 | AUTH-03 | 13 | Pending |
@@ -98,4 +98,4 @@ Deferred to next milestone.
 
 ---
 *Requirements defined: 2026-01-26*
-*Last updated: 2026-01-26 - Phase 11 complete (DB-01 to DB-04)*
+*Last updated: 2026-01-26 - Phase 12 complete (IAM-01 to IAM-06)*

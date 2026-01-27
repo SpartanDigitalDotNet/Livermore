@@ -50,7 +50,7 @@ Plans:
 **Plans:** 1 plan
 
 Plans:
-- [ ] 12-01-PLAN.md - Add IAM columns to users table, deploy to local + sandbox, create role type helper
+- [x] 12-01-PLAN.md - Add IAM columns to users table, deploy to local + sandbox, create role type helper
 
 **Requirements:**
 - IAM-01: Users table extended with `identity_provider` VARCHAR(20)
@@ -150,13 +150,13 @@ Plans:
 | Phase | Name | Status | Requirements | Completion |
 |-------|------|--------|--------------|------------|
 | 11 | Database Workflow | Complete | 4 | 100% |
-| 12 | IAM Schema | Planned | 6 | 0% |
+| 12 | IAM Schema | Complete | 6 | 100% |
 | 13 | Clerk Authentication | Pending | 3 | 0% |
 | 14 | User Sync Webhooks | Pending | 2 | 0% |
 | 15 | Admin UI | Pending | 4 | 0% |
 | 16 | Kaia Handoff | Pending | 1 | 0% |
 
-**Milestone Progress:** 4/20 requirements complete (20%)
+**Milestone Progress:** 10/20 requirements complete (50%)
 
 ## Coverage
 
@@ -166,12 +166,12 @@ Plans:
 | DB-02 | 11 | Complete |
 | DB-03 | 11 | Complete |
 | DB-04 | 11 | Complete |
-| IAM-01 | 12 | Pending |
-| IAM-02 | 12 | Pending |
-| IAM-03 | 12 | Pending |
-| IAM-04 | 12 | Pending |
-| IAM-05 | 12 | Pending |
-| IAM-06 | 12 | Pending |
+| IAM-01 | 12 | Complete |
+| IAM-02 | 12 | Complete |
+| IAM-03 | 12 | Complete |
+| IAM-04 | 12 | Complete |
+| IAM-05 | 12 | Complete |
+| IAM-06 | 12 | Complete |
 | AUTH-01 | 13 | Pending |
 | AUTH-02 | 13 | Pending |
 | AUTH-03 | 13 | Pending |
@@ -187,4 +187,4 @@ Plans:
 
 ---
 *Roadmap created: 2026-01-26*
-*Last updated: 2026-01-26 - Phase 12 planned*
+*Last updated: 2026-01-26 - Phase 12 complete*
