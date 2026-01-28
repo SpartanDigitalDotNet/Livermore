@@ -73,7 +73,7 @@ import { defineConfig } from 'drizzle-kit';
 const requiredEnvVars = [
   'DATABASE_HOST',
   'DATABASE_PORT',
-  'DATABASE_USERNAME',
+  'DATABASE_USER',
   'DATABASE_PASSWORD',
   'DATABASE_NAME',
 ] as const;
@@ -91,7 +91,7 @@ export default defineConfig({
   dbCredentials: {
     host: process.env.DATABASE_HOST!,
     port: parseInt(process.env.DATABASE_PORT!),
-    user: process.env.DATABASE_USERNAME!,
+    user: process.env.DATABASE_USER!,
     password: process.env.DATABASE_PASSWORD!,
     database: process.env.DATABASE_NAME!,
     ssl: process.env.DATABASE_SSL === 'true',
@@ -113,12 +113,28 @@ import { drizzle } from 'drizzle-orm/node-postgres';
 import { Pool } from 'pg';
 import * as schema from '../drizzle/schema';
 
+// Validate required environment variables
+const requiredEnvVars = [
+  'DATABASE_HOST',
+  'DATABASE_PORT',
+  'DATABASE_USER',
+  'DATABASE_PASSWORD',
+  'DATABASE_NAME',
+] as const;
+
+for (const envVar of requiredEnvVars) {
+  if (!process.env[envVar]) {
+    throw new Error(`Missing required environment variable: ${envVar}`);
+  }
+}
+
 const pool = new Pool({
-  host: process.env.DATABASE_HOST,
-  port: parseInt(process.env.DATABASE_PORT || '5432'),
-  user: process.env.DATABASE_USERNAME,
-  password: process.env.DATABASE_PASSWORD,
-  database: process.env.DATABASE_NAME,
+  host: process.env.DATABASE_HOST!,
+  port: parseInt(process.env.DATABASE_PORT!),
+  user: process.env.DATABASE_USER!,
+  password: process.env.DATABASE_PASSWORD!,
+  database: process.env.DATABASE_NAME!,
+  ssl: process.env.DATABASE_SSL === 'true' ? { rejectUnauthorized: false } : undefined,
 });
 
 export const db = drizzle(pool, { schema });
