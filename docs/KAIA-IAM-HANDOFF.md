@@ -69,16 +69,31 @@ pnpm add -D drizzle-kit @types/pg
 // drizzle.config.ts
 import { defineConfig } from 'drizzle-kit';
 
+// Validate required environment variables
+const requiredEnvVars = [
+  'DATABASE_HOST',
+  'DATABASE_PORT',
+  'DATABASE_USERNAME',
+  'DATABASE_PASSWORD',
+  'DATABASE_NAME',
+] as const;
+
+for (const envVar of requiredEnvVars) {
+  if (!process.env[envVar]) {
+    throw new Error(`Missing required environment variable: ${envVar}`);
+  }
+}
+
 export default defineConfig({
   dialect: 'postgresql',
   out: './drizzle',
   schema: './drizzle/schema.ts',
   dbCredentials: {
-    host: process.env.DATABASE_HOST || 'localhost',
-    port: parseInt(process.env.DATABASE_PORT || '5432'),
-    user: process.env.DATABASE_USERNAME,
-    password: process.env.DATABASE_PASSWORD,
-    database: process.env.DATABASE_NAME || 'Livermore',
+    host: process.env.DATABASE_HOST!,
+    port: parseInt(process.env.DATABASE_PORT!),
+    user: process.env.DATABASE_USERNAME!,
+    password: process.env.DATABASE_PASSWORD!,
+    database: process.env.DATABASE_NAME!,
     ssl: process.env.DATABASE_SSL === 'true',
   },
 });
