@@ -21,6 +21,7 @@ export function createDbClient(config: EnvConfig) {
   const queryClient = postgres(connectionString, {
     max: HARDCODED_CONFIG.database.poolSize,
     connect_timeout: HARDCODED_CONFIG.database.connectionTimeoutMs / 1000,
+    ssl: 'require', // Always use SSL - no exceptions
     onnotice: () => {}, // Suppress notices in logs
   });
 

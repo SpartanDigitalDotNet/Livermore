@@ -20,7 +20,7 @@ const getAuthToken = async (): Promise<string | null> => {
 export const trpcClient = createTRPCClient<AppRouter>({
   links: [
     httpBatchLink({
-      url: import.meta.env.VITE_API_URL ?? 'http://localhost:3002/trpc',
+      url: import.meta.env.VITE_API_URL ?? 'http://localhost:4000/trpc',
       headers: async () => {
         const token = await getAuthToken();
         return token ? { Authorization: `Bearer ${token}` } : {};

@@ -11,6 +11,6 @@ export default defineConfig({
     },
   },
   server: {
-    port: 5173,
+    port: 4001, // Avoid conflicts with PerseusWeb (3000-3002)
   },
 });

@@ -258,7 +258,7 @@ When a user signs in to PerseusWeb with Google OAuth, call this endpoint to auth
 const googleUser = getGoogleUserFromJWT(idToken);
 
 try {
-  const response = await fetch('http://localhost:3002/trpc/user.loginFromGoogle', {
+  const response = await fetch('http://localhost:4000/trpc/user.loginFromGoogle', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -319,7 +319,7 @@ if (!result.data) {
 ## 4. Available tRPC Endpoints
 
 ### Base URL
-- **Local:** `http://localhost:3002/trpc`
+- **Local:** `http://localhost:4000/trpc`
 - **Sandbox:** Ask Mike
 
 ### Indicator Router (`indicator.*`)
@@ -448,7 +448,7 @@ Or use the PowerShell script:
 .\scripts\run-api-dev.ps1
 ```
 
-The API runs on `http://localhost:3002` by default.
+The API runs on `http://localhost:4000` by default.
 
 ### Running Admin UI (optional)
 
@@ -457,7 +457,7 @@ If you want to test LivermoreAdmin:
 pnpm --filter @livermore/admin dev
 ```
 
-The Admin UI runs on `http://localhost:5173` by default.
+The Admin UI runs on `http://localhost:4001` by default.
 
 ## 7. Future: WebSocket Integration
 

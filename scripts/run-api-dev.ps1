@@ -14,8 +14,8 @@ $env:CLERK_PUBLISHABLE_KEY = [Environment]::GetEnvironmentVariable('CLERK_PUBLIS
 $env:CLERK_SECRET_KEY = [Environment]::GetEnvironmentVariable('CLERK_SECRET_KEY', 'User')
 $env:CLERK_WEBHOOK_SIGNING_SECRET = [Environment]::GetEnvironmentVariable('CLERK_WEBHOOK_SIGNING_SECRET', 'User')
 
-# Override API port to avoid conflicts
-$env:API_PORT = '3002'
+# Override API port to avoid conflicts with PerseusWeb (which uses 3000-3002)
+$env:API_PORT = '4000'
 
 # Set NODE_ENV (Zod schema expects 'development', not 'dev')
 $env:NODE_ENV = 'development'

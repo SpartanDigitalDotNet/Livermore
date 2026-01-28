@@ -13,7 +13,7 @@ $symbols = @(
 
 $input = @{ symbols = $symbols } | ConvertTo-Json -Compress
 $encoded = [System.Web.HttpUtility]::UrlEncode($input)
-$url = "http://localhost:3002/trpc/indicator.getPortfolioAnalysis?input=$encoded"
+$url = "http://localhost:4000/trpc/indicator.getPortfolioAnalysis?input=$encoded"
 
 $start = Get-Date
 try {

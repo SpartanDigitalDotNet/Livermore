@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { router, protectedProcedure } from '@livermore/trpc-config';
 import { readFileSync, existsSync, readdirSync } from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'url';
 
 /**
  * Log entry shape from structured JSON logs.
@@ -19,9 +20,12 @@ export interface LogEntry {
 
 /**
  * Get the logs directory path.
- * Logs are stored in ./logs/ relative to the project root.
+ * Logs are stored in ./logs/ relative to the project root (monorepo root).
+ * Since API runs from apps/api, we go up two levels to reach the root.
  */
-const LOG_DIR = path.resolve(process.cwd(), 'logs');
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const LOG_DIR = path.resolve(__dirname, '../../../../logs');
 
 /**
  * Parse a single log line (JSON format).

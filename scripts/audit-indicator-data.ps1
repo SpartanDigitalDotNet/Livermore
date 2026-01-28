@@ -1,7 +1,7 @@
 # Audit Indicator Data
 # Checks timestamps, data freshness, and timeframe alignment
 
-$baseUrl = "http://localhost:3002/trpc"
+$baseUrl = "http://localhost:4000/trpc"
 
 function Get-IndicatorData {
     param([string]$symbol, [string]$timeframe)

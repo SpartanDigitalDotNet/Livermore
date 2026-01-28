@@ -34,7 +34,9 @@ async function seed() {
 
   // Create database connection
   const connectionString = `postgresql://${requiredEnvVars.DATABASE_LIVERMORE_USERNAME}:${requiredEnvVars.DATABASE_LIVERMORE_PASSWORD}@${requiredEnvVars.DATABASE_HOST}:${requiredEnvVars.DATABASE_PORT}/${requiredEnvVars.LIVERMORE_DATABASE_NAME}`;
-  const client = postgres(connectionString);
+  const client = postgres(connectionString, {
+    ssl: 'require', // Always use SSL - no exceptions
+  });
   const db = drizzle(client);
 
   try {
