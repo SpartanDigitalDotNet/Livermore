@@ -31,7 +31,10 @@ async function runMigrations() {
 
   // Create migration connection
   const connectionString = `postgresql://${requiredEnvVars.DATABASE_LIVERMORE_USERNAME}:${requiredEnvVars.DATABASE_LIVERMORE_PASSWORD}@${requiredEnvVars.DATABASE_HOST}:${requiredEnvVars.DATABASE_PORT}/${requiredEnvVars.LIVERMORE_DATABASE_NAME}`;
-  const migrationClient = postgres(connectionString, { max: 1 });
+  const migrationClient = postgres(connectionString, {
+    max: 1,
+    ssl: 'require', // Always use SSL - no exceptions
+  });
 
   const db = drizzle(migrationClient);
 

@@ -7,8 +7,8 @@ import websocket from '@fastify/websocket';
 import { clerkPlugin } from '@clerk/fastify';
 import { fastifyTRPCPlugin } from '@trpc/server/adapters/fastify';
 import { logger, validateEnv } from '@livermore/utils';
-import { getDbClient } from '@livermore/database';
-import { getRedisClient } from '@livermore/cache';
+import { getDbClient, testDatabaseConnection } from '@livermore/database';
+import { getRedisClient, testRedisConnection } from '@livermore/cache';
 import { createContext } from '@livermore/trpc-config';
 import { CoinbaseRestClient, StartupBackfillService, BoundaryRestService, DEFAULT_BOUNDARY_CONFIG, CoinbaseAdapter } from '@livermore/coinbase-client';
 import { IndicatorCalculationService } from './services/indicator-calculation.service';
@@ -172,15 +172,25 @@ async function start() {
   await fastify.register(clerkPlugin);
   logger.info('Clerk authentication plugin registered');
 
-  // Initialize database connection
-  getDbClient(); // Initialize connection
-  logger.info('Database connection established');
+  // ============================================
+  // PRE-FLIGHT CONNECTION CHECKS
+  // Fail fast if database or Redis are unavailable
+  // ============================================
+  logger.info('Running pre-flight connection checks...');
 
-  // Initialize Redis connection
+  // Initialize and test database connection
+  const db = getDbClient();
+  await testDatabaseConnection(db);
+
+  // Initialize and test Redis connection
   const redis = getRedisClient();
+  await testRedisConnection(redis);
+
   // Create separate Redis subscriber connection (required for psubscribe - cannot share with main client)
   const subscriberRedis = redis.duplicate();
-  logger.info('Redis connection established');
+  await testRedisConnection(subscriberRedis);
+
+  logger.info('Pre-flight checks passed - all connections verified');
 
   // Initialize Discord notification service
   const discordService = getDiscordService();

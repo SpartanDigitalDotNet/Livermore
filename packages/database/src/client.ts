@@ -1,4 +1,5 @@
 import { drizzle } from 'drizzle-orm/postgres-js';
+import { sql } from 'drizzle-orm';
 import postgres from 'postgres';
 import { HARDCODED_CONFIG, type EnvConfig } from '@livermore/schemas';
 import { createLogger, validateEnv } from '@livermore/utils';
@@ -37,6 +38,22 @@ export function createDbClient(config: EnvConfig) {
  * Helper type for database instance
  */
 export type Database = ReturnType<typeof createDbClient>;
+
+/**
+ * Test database connection with a simple query
+ * Throws an error if connection fails
+ */
+export async function testDatabaseConnection(db: Database): Promise<void> {
+  try {
+    // Simple query to verify connection works
+    await db.execute(sql`SELECT 1`);
+    logger.info('Database connection test passed');
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    logger.error({ error: message }, 'Database connection test FAILED');
+    throw new Error(`Database connection failed: ${message}`);
+  }
+}
 
 /**
  * Singleton database client instance

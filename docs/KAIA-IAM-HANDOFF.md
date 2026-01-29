@@ -47,12 +47,13 @@ PerseusWeb (React + Google OAuth)
 
 ### Connection Details
 
-| Environment | Host | Port | Database | SSL |
-|-------------|------|------|----------|-----|
-| Local | `localhost` | `5432` | `Livermore` | No |
-| Sandbox | Ask Mike for Azure hostname | `5432` | `livermore` | Required |
+| Environment | Host | Port | Database |
+|-------------|------|------|----------|
+| Sandbox (Azure) | Ask Mike for hostname | `5432` | `livermore` |
 
 **Credentials:** Ask Mike for username/password.
+
+**IMPORTANT:** SSL is ALWAYS required. The code examples below hardcode SSL - do not make it optional.
 
 ### Using Drizzle ORM (Recommended)
 
@@ -94,7 +95,7 @@ export default defineConfig({
     user: process.env.DATABASE_USER!,
     password: process.env.DATABASE_PASSWORD!,
     database: process.env.DATABASE_NAME!,
-    ssl: process.env.DATABASE_SSL === 'true',
+    ssl: true, // SSL required for Azure PostgreSQL - no exceptions
   },
 });
 ```
@@ -134,7 +135,7 @@ const pool = new Pool({
   user: process.env.DATABASE_USER!,
   password: process.env.DATABASE_PASSWORD!,
   database: process.env.DATABASE_NAME!,
-  ssl: process.env.DATABASE_SSL === 'true' ? { rejectUnauthorized: false } : undefined,
+  ssl: { rejectUnauthorized: false }, // SSL required for Azure PostgreSQL - no exceptions
 });
 
 export const db = drizzle(pool, { schema });

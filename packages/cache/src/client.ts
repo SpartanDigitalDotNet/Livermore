@@ -69,6 +69,24 @@ export function createRedisPubSubClient(config: EnvConfig): Redis {
 export type RedisClient = Redis;
 
 /**
+ * Test Redis connection with PING command
+ * Throws an error if connection fails
+ */
+export async function testRedisConnection(redis: Redis): Promise<void> {
+  try {
+    const result = await redis.ping();
+    if (result !== 'PONG') {
+      throw new Error(`Unexpected PING response: ${result}`);
+    }
+    logger.info('Redis connection test passed');
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    logger.error({ error: message }, 'Redis connection test FAILED');
+    throw new Error(`Redis connection failed: ${message}`);
+  }
+}
+
+/**
  * Singleton Redis client instance
  */
 let redisInstance: Redis | null = null;

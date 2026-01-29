@@ -9,5 +9,6 @@ export default {
   dialect: 'postgresql',
   dbCredentials: {
     url: connectionString,
+    ssl: true, // SSL required for Azure PostgreSQL - no exceptions
   },
 } satisfies Config;

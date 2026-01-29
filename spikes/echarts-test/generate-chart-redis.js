@@ -529,7 +529,10 @@ async function main() {
   const dbName = process.env.LIVERMORE_DATABASE_NAME || 'livermore';
 
   const connectionString = `postgresql://${dbUser}:${dbPass}@${dbHost}:${dbPort}/${dbName}`;
-  const pool = new Pool({ connectionString });
+  const pool = new Pool({
+    connectionString,
+    ssl: { rejectUnauthorized: false }, // SSL required for Azure PostgreSQL
+  });
 
   try {
     // Fetch candles (extra for EMA warmup)
