@@ -453,11 +453,11 @@ The API runs on `http://localhost:4000` by default.
 ### Running Admin UI (optional)
 
 If you want to test LivermoreAdmin:
-```bash
-pnpm --filter @livermore/admin dev
+```powershell
+.\scripts\run-admin-dev.ps1
 ```
 
-The Admin UI runs on `http://localhost:4001` by default.
+This script loads `CLERK_PUBLISHABLE_KEY` from Windows User environment and maps it to the Vite-prefixed variable. The Admin UI runs on `http://localhost:4001`.
 
 ## 7. Future: WebSocket Integration
 
