@@ -4,6 +4,7 @@
   "private": true,
   "description": "Professional crypto trading monitoring system",
   "scripts": {
+    "postinstall": "turbo run build",
     "dev": "turbo run dev",
     "build": "turbo run build",
     "test": "turbo run test",
