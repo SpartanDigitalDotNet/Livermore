@@ -2,6 +2,8 @@ import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 import { router, protectedProcedure } from '@livermore/trpc-config';
 import { CoinbaseRestClient } from '@livermore/coinbase-client';
+import { getDbClient, users } from '@livermore/database';
+import { eq, and } from 'drizzle-orm';
 
 /**
  * Helper: Normalize symbol format for Coinbase (BASE-QUOTE)
@@ -212,6 +214,135 @@ export const symbolRouter = router({
       );
 
       return results;
+    }),
+
+  /**
+   * GET /symbol.bulkValidate
+   *
+   * Validate multiple symbols for bulk import.
+   * Returns validation status for each: valid, invalid, or duplicate.
+   * Implements delta-based validation - skips symbols already in user's list.
+   *
+   * Requirement: SYM-05 (bulk import), SYM-03 (delta validation)
+   */
+  bulkValidate: protectedProcedure
+    .input(
+      z.object({
+        symbols: z.array(z.string()).min(1).max(50),
+      })
+    )
+    .query(async ({ ctx, input }) => {
+      ctx.logger.debug({ symbolCount: input.symbols.length }, 'Bulk validating symbols');
+
+      const db = getDbClient();
+      const clerkId = ctx.auth.userId;
+
+      // Get user's current symbols for delta calculation
+      const [user] = await db
+        .select({ settings: users.settings })
+        .from(users)
+        .where(
+          and(
+            eq(users.identityProvider, 'clerk'),
+            eq(users.identitySub, clerkId)
+          )
+        )
+        .limit(1);
+
+      if (!user) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'User not found',
+        });
+      }
+
+      const existing = new Set<string>(
+        ((user.settings as Record<string, unknown>)?.symbols as string[]) ?? []
+      );
+
+      const client = getCoinbaseClient();
+
+      // Validate each symbol
+      type ValidationResult = {
+        symbol: string;
+        status: 'valid' | 'invalid' | 'duplicate';
+        metrics?: {
+          price: string;
+          volume24h: string;
+          priceChange24h: string;
+          baseName: string;
+          quoteName: string;
+        };
+        error?: string;
+      };
+
+      const results: ValidationResult[] = [];
+
+      for (const rawSymbol of input.symbols) {
+        const symbol = normalizeSymbol(rawSymbol);
+
+        // Check duplicates first (no API call needed)
+        if (existing.has(symbol)) {
+          results.push({ symbol, status: 'duplicate' });
+          continue;
+        }
+
+        // Validate against exchange
+        try {
+          const product = await client.getProduct(symbol);
+
+          if (product.trading_disabled || product.status !== 'online') {
+            results.push({
+              symbol,
+              status: 'invalid',
+              error: 'Symbol not available for trading',
+            });
+          } else {
+            results.push({
+              symbol,
+              status: 'valid',
+              metrics: {
+                price: product.price || '0',
+                volume24h: product.volume_24h || '0',
+                priceChange24h: product.price_percentage_change_24h || '0',
+                baseName: product.base_name || '',
+                quoteName: product.quote_name || '',
+              },
+            });
+          }
+        } catch {
+          results.push({
+            symbol,
+            status: 'invalid',
+            error: 'Symbol not found on exchange',
+          });
+        }
+
+        // Rate limit: 100ms delay between API calls (safe for 10 req/sec limit)
+        if (input.symbols.indexOf(rawSymbol) < input.symbols.length - 1) {
+          await delay(100);
+        }
+      }
+
+      ctx.logger.debug(
+        {
+          total: results.length,
+          valid: results.filter((r) => r.status === 'valid').length,
+          invalid: results.filter((r) => r.status === 'invalid').length,
+          duplicate: results.filter((r) => r.status === 'duplicate').length,
+        },
+        'Bulk validation complete'
+      );
+
+      return {
+        results,
+        summary: {
+          valid: results.filter((r) => r.status === 'valid').length,
+          invalid: results.filter((r) => r.status === 'invalid').length,
+          duplicate: results.filter((r) => r.status === 'duplicate').length,
+          total: results.length,
+        },
+      };
     }),
 });
 
