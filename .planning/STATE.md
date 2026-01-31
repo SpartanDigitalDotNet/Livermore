@@ -11,15 +11,15 @@ See: .planning/PROJECT.md
 
 **Milestone:** v4.0 User Settings + Runtime Control
 **Phase:** 17 (Settings Infrastructure)
-**Plan:** 02 of 2 complete
+**Plan:** 03 of 3 complete
 **Status:** Phase complete
 
 ```
-Progress: [==........] 17%
+Progress: [==........] 20%
 Phases:   17 [X] 18 [ ] 19 [ ] 20 [ ] 21 [ ] 22 [ ]
 ```
 
-**Last activity:** 2026-01-31 - Completed 17-02-PLAN.md (Settings tRPC Endpoints)
+**Last activity:** 2026-01-31 - Completed 17-03-PLAN.md (Settings Export/Import)
 
 ## Milestones
 
@@ -36,7 +36,7 @@ See `.planning/MILESTONES.md` for full history.
 
 | Phase | Goal | Requirements | Status |
 |-------|------|--------------|--------|
-| 17 | Settings Infrastructure | SET-01 to SET-07 | Complete (SET-01 to SET-05) |
+| 17 | Settings Infrastructure | SET-01 to SET-07 | Complete (SET-01 to SET-07) |
 | 18 | Control Channel Foundation | RUN-01,02,03,10,11,12,13 | Pending |
 | 19 | Runtime Commands | RUN-04 to RUN-09 | Pending |
 | 20 | Symbol Management | SYM-01 to SYM-06 | Pending |
@@ -121,7 +121,7 @@ Alert Evaluation (receives ticker prices)
 ### Last Session
 
 **Date:** 2026-01-31
-**Activity:** Completed plan 17-02 (Settings tRPC Endpoints)
+**Activity:** Completed plan 17-03 (Settings Export/Import)
 **Stopped At:** Phase 17 complete, ready for Phase 18
 
 ### Resume Context
@@ -140,11 +140,15 @@ Completed:
   - Patch uses PostgreSQL jsonb_set for atomic updates
   - Commits: 3e1fa03
 
+- Plan 17-03: Settings Export/Import (SET-06, SET-07)
+  - Added settings.export query with metadata envelope
+  - Added settings.import mutation with Zod validation
+  - Commits: 9568c6c
+
 Next steps:
 1. Proceed to Phase 18 (Control Channel Foundation)
 2. Implement Redis pub/sub for runtime control commands
-3. Note: SET-06 and SET-07 (export/import) may be added in Phase 21 Admin UI
 
 ---
 *State initialized: 2026-01-18*
-*Last updated: 2026-01-31 - Completed 17-02-PLAN.md*
+*Last updated: 2026-01-31 - Completed 17-03-PLAN.md*
