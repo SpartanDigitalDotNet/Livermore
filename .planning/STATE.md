@@ -11,15 +11,15 @@ See: .planning/PROJECT.md
 
 **Milestone:** v4.0 User Settings + Runtime Control
 **Phase:** 19 (Runtime Commands)
-**Plan:** 01 of 3 complete
+**Plan:** 02 of 3 complete
 **Status:** In progress
 
 ```
-Progress: [=====.....] 45%
+Progress: [======....] 50%
 Phases:   17 [X] 18 [X] 19 [.] 20 [ ] 21 [ ] 22 [ ]
 ```
 
-**Last activity:** 2026-01-31 - Completed 19-01-PLAN.md (Service Registry & Constructor)
+**Last activity:** 2026-01-31 - Completed 19-02-PLAN.md (Command Handler Implementation)
 
 ## Milestones
 
@@ -38,7 +38,7 @@ See `.planning/MILESTONES.md` for full history.
 |-------|------|--------------|--------|
 | 17 | Settings Infrastructure | SET-01 to SET-07 | Complete (SET-01 to SET-07) |
 | 18 | Control Channel Foundation | RUN-01,02,03,10,11,12,13 | Complete (RUN-01,02,03,10,11,12,13) |
-| 19 | Runtime Commands | RUN-04 to RUN-09 | In Progress (01/03) |
+| 19 | Runtime Commands | RUN-04 to RUN-09 | In Progress (02/03) |
 | 20 | Symbol Management | SYM-01 to SYM-06 | Pending |
 | 21 | Admin UI - Settings | UI-SET-01 to UI-SET-06 | Pending |
 | 22 | Admin UI - Control + Symbols | UI-CTL-*, UI-SYM-* | Pending |
@@ -121,27 +121,30 @@ Alert Evaluation (receives ticker prices)
 ### Last Session
 
 **Date:** 2026-01-31
-**Activity:** Completed plan 19-01 (Service Registry & Constructor Update)
-**Stopped At:** Ready for 19-02 (Command Handler Implementation)
+**Activity:** Completed plan 19-02 (Command Handler Implementation)
+**Stopped At:** Ready for 19-03 (Remaining Command Handlers)
 
 ### Resume Context
 
 **PHASE 19 IN PROGRESS**
 
-Plan 19-01 completed (Service Registry & Constructor Update):
-- Created ServiceRegistry interface with typed service references
-- Added RuntimeConfig interface for API credentials
-- Updated ControlChannelService constructor to accept optional services
-- Added isPaused state field and paused/hasServices getters
-- Backward compatible - server.ts unchanged
-- Commits: 2e0c8b4, ee62597
+Plan 19-02 completed (Command Handler Implementation):
+- Extended ServiceRegistry with runtime state (monitoredSymbols, indicatorConfigs, timeframes)
+- Injected ServiceRegistry into ControlChannelService via server.ts
+- Implemented command dispatcher routing to type-specific handlers
+- Implemented pause handler (RUN-04): stops services downstream-first
+- Implemented resume handler (RUN-05): starts services upstream-first
+- Added stub handlers for remaining commands (throw "not yet implemented")
+- Commits: 91943d9, c5d83d5, 6eadcfc
 
 Next steps:
-1. Execute Plan 19-02 (Command Handler Implementation)
-   - Update server.ts to inject ServiceRegistry
-   - Implement pause/resume handlers (RUN-04, RUN-05)
-   - Implement other command handlers (RUN-06 to RUN-09)
+1. Execute Plan 19-03 (Remaining Command Handlers)
+   - Implement reload-settings (RUN-06)
+   - Implement switch-mode (RUN-07)
+   - Implement force-backfill (RUN-08)
+   - Implement clear-cache (RUN-09)
+   - Implement add-symbol / remove-symbol
 
 ---
 *State initialized: 2026-01-18*
-*Last updated: 2026-01-31 - Completed 19-01-PLAN.md (Service Registry & Constructor)*
+*Last updated: 2026-01-31 - Completed 19-02-PLAN.md (Command Handler Implementation)*
