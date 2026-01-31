@@ -46,9 +46,9 @@ Plans:
 **Plans**: 3 plans
 
 Plans:
-- [ ] 18-01-PLAN.md — Schemas + channel key helpers
-- [ ] 18-02-PLAN.md — ControlChannelService with pub/sub + priority queue
-- [ ] 18-03-PLAN.md — Server integration (startup/shutdown)
+- [x] 18-01-PLAN.md — Schemas + channel key helpers
+- [x] 18-02-PLAN.md — ControlChannelService with pub/sub + priority queue
+- [x] 18-03-PLAN.md — Server integration (startup/shutdown)
 
 **Requirements:**
 - RUN-01: Redis pub/sub command channel `livermore:commands:{identity_sub}`
@@ -173,7 +173,7 @@ Plans:
 | Phase | Name | Status | Plans |
 |-------|------|--------|-------|
 | 17 | Settings Infrastructure | Complete | 3/3 |
-| 18 | Control Channel Foundation | Pending | 0/3 |
+| 18 | Control Channel Foundation | Complete | 3/3 |
 | 19 | Runtime Commands | Pending | 0/? |
 | 20 | Symbol Management | Pending | 0/? |
 | 21 | Admin UI - Settings | Pending | 0/? |
