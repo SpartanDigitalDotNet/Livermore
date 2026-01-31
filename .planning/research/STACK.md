@@ -1,351 +1,621 @@
-# Stack Research: v2.0 Data Pipeline
+# Stack Research: v4.0 User Settings & Admin Controls
 
 **Project:** Livermore Trading Platform
-**Researched:** 2026-01-19
-**Scope:** Exchange adapter pattern, event-driven candle processing, background reconciliation, unified cache schema
+**Researched:** 2026-01-31
+**Scope:** JSONB settings management, Redis pub/sub commands, exchange symbol scanning, form-based settings editor
+**Overall Confidence:** HIGH
+
+---
+
+## Executive Summary
+
+This research covers the stack requirements for adding:
+1. User settings stored as JSONB in PostgreSQL
+2. Redis pub/sub for Admin-to-API command communication
+3. Symbol scanner for fetching top exchange symbols
+4. Form-based settings editor in React
+
+The existing Livermore stack is well-suited for these features. No new major dependencies are required - the work primarily extends existing patterns with Drizzle ORM (JSONB), ioredis (pub/sub), and adds react-hook-form for the admin UI.
 
 ---
 
 ## Existing Stack (Keep)
 
-These components are validated and should remain unchanged for v2.0.
+These components are validated and should remain unchanged for v4.0.
 
 | Technology | Version | Purpose | Keep Rationale |
 |------------|---------|---------|----------------|
 | TypeScript | 5.6.3 | All application code | Established, type safety critical |
-| Node.js | 20+ | Runtime | LTS, required for worker threads |
-| Fastify | 5.2.2 | HTTP server | Already integrated with tRPC |
-| tRPC | 11.0.2 | Type-safe API | Works well, no change needed |
-| ioredis | 5.4.2 | Redis client | Already supports pub/sub, sorted sets |
-| Pino | 9.5.0 | Structured logging | Already configured with file output |
-| Zod | 3.24.1 | Runtime validation | Used throughout, essential |
-| ws | 8.18.0 | WebSocket client | Already in coinbase-client package |
-| Drizzle ORM | 0.36.4 | Database ORM | User settings, not candle-critical |
-
-**Critical:** The existing `@livermore/cache` package already implements sorted set patterns for candles with the key schema `candles:{userId}:{exchangeId}:{symbol}:{timeframe}`. This is a solid foundation.
+| drizzle-orm | 0.36.4 | Database ORM | Already has JSONB with `$type<T>()` |
+| ioredis | 5.4.2 | Redis client | Already supports pub/sub |
+| postgres | 3.4.5 | PostgreSQL driver | Already configured |
+| zod | 3.24.1 | Runtime validation | Used throughout codebase |
+| @livermore/coinbase-client | workspace | Coinbase API | Already has `getProducts()` |
 
 ---
 
 ## Additions Needed
 
-### 1. Type-Safe Event System
+### 1. Admin UI Forms: React Hook Form + Zod
 
-**Recommendation:** Use Node.js native `EventEmitter` with TypeScript generics (available since @types/node 20+)
+| Technology | Version | Purpose | Rationale |
+|------------|---------|---------|-----------|
+| react-hook-form | ^7.54.0 | Form state management | Best DX, minimal re-renders, TypeScript-first |
+| @hookform/resolvers | ^3.9.0 | Zod integration | Type-safe validation with existing Zod schemas |
 
-**Why:** The codebase already uses callback patterns (`onCandleClose`, `onMessage`). Converting to typed EventEmitter provides:
-- Compile-time event name checking
-- Type-safe payload signatures
-- Familiar Node.js patterns
+**Installation:**
+```bash
+pnpm --filter @livermore/admin add react-hook-form @hookform/resolvers
+```
 
-**Implementation Pattern:**
-```typescript
-// No new dependency - use @types/node generics
-interface ExchangeEvents {
-  'candle:close': [exchange: string, symbol: string, timeframe: Timeframe, candle: Candle];
-  'candle:update': [exchange: string, symbol: string, candle: Candle];
-  'connection:lost': [exchange: string, reason: string];
-  'connection:restored': [exchange: string];
+**Why React Hook Form:**
+- Uncontrolled inputs = minimal re-renders
+- `resolver` prop integrates Zod schemas directly
+- `formState.errors` provides field-level validation messages
+- `formState.isSubmitting` handles loading states
+- Already integrates with Zod via `@hookform/resolvers`
+
+**Basic Pattern:**
+```tsx
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+
+const settingsSchema = z.object({
+  watchlist: z.array(z.string()).min(1, "At least one symbol required"),
+  alertThreshold: z.number().min(0).max(100),
+  refreshInterval: z.number().min(5).max(300),
+});
+
+type SettingsForm = z.infer<typeof settingsSchema>;
+
+function SettingsEditor() {
+  const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm<SettingsForm>({
+    resolver: zodResolver(settingsSchema),
+    defaultValues: {
+      watchlist: [],
+      alertThreshold: 5,
+      refreshInterval: 30,
+    },
+  });
+
+  const onSubmit = async (data: SettingsForm) => {
+    await trpc.settings.update.mutate(data);
+  };
+
+  return (
+    <form onSubmit={handleSubmit(onSubmit)}>
+      {/* Form fields with register() */}
+    </form>
+  );
 }
-
-// TypeScript 5.x + @types/node 20+ support this natively
-class ExchangeAdapter extends EventEmitter<ExchangeEvents> { }
 ```
-
-**Confidence:** HIGH (verified @types/node supports this since July 2024)
-
-**Alternative Considered:** `typed-emitter` package - adds minimal value since native support exists.
-
----
-
-### 2. Background Job Scheduler
-
-**Recommendation:** `node-cron` ^3.0.3
-
-**Why:**
-- Lightweight (no external dependencies like Redis/MongoDB)
-- Cron syntax for reconciliation intervals (e.g., `*/5 * * * *` for every 5 minutes)
-- Already proven stable in Node.js ecosystem
-- Reconciliation jobs are simple time-triggered tasks, not distributed workloads
-
-**Use Case:**
-```typescript
-import cron from 'node-cron';
-
-// Run gap detection every 5 minutes
-cron.schedule('*/5 * * * *', () => reconciliationService.detectGaps());
-
-// Run full reconciliation hourly
-cron.schedule('0 * * * *', () => reconciliationService.fullReconcile());
-```
-
-**Confidence:** HIGH
 
 **Alternatives Considered:**
-| Library | Why Not |
-|---------|---------|
-| `bree` | Overkill - worker threads unnecessary for simple scheduled tasks |
-| `node-schedule` | Similar to node-cron but less popular |
-| `BullMQ` | Requires Redis queue, over-engineered for single-process reconciliation |
+
+| Library | Verdict | Why Not |
+|---------|---------|---------|
+| Formik | NO | More boilerplate, larger bundle, less TypeScript support |
+| Final Form | NO | Less active development, weaker TypeScript |
+| Native useState | NO | Manual validation, more code, easy to get wrong |
+| Tanstack Form | MAYBE | Newer library, less ecosystem support currently |
+
+**Confidence:** HIGH - Industry standard, official Zod integration, excellent TypeScript support
+
+**Sources:**
+- [React Hook Form useForm Docs](https://react-hook-form.com/docs/useform)
+- [@hookform/resolvers GitHub](https://github.com/react-hook-form/resolvers)
+- [Zod + React Hook Form Tutorial](https://www.freecodecamp.org/news/react-form-validation-zod-react-hook-form/)
 
 ---
 
-### 3. Exchange Adapter Abstraction
+### 2. Database: JSONB Settings with Drizzle ORM
 
-**Recommendation:** Custom adapter interface (NOT CCXT)
+**No new dependencies** - Drizzle ORM already supports JSONB with `$type<T>()` for compile-time type safety.
 
-**Why NOT CCXT:**
-- Project only needs Coinbase now, Binance later
-- CCXT adds 100+ exchange abstraction overhead
-- Performance penalty (45ms vs 0.05ms signing with native implementation)
-- Custom Coinbase client already exists with JWT auth working
-- CCXT WebSocket support is secondary to REST focus
-
-**Recommended Pattern:**
+**Current State:**
+The existing `user_settings` table uses a global key (no userId):
 ```typescript
-// packages/exchange-adapters/src/types.ts
-export interface ExchangeAdapter extends EventEmitter<ExchangeEvents> {
-  readonly exchangeId: string;
-  readonly name: string;
-
-  // Lifecycle
-  connect(): Promise<void>;
-  disconnect(): Promise<void>;
-  isConnected(): boolean;
-
-  // WebSocket subscriptions
-  subscribeCandles(symbols: string[]): void;
-  subscribeTicker(symbols: string[]): void;
-
-  // REST backfill (startup only)
-  fetchHistoricalCandles(symbol: string, timeframe: Timeframe, start: number, end: number): Promise<Candle[]>;
-
-  // Metadata
-  getSupportedTimeframes(): Timeframe[];
-  normalizeSymbol(symbol: string): string;  // Exchange-specific to unified
-}
-```
-
-**Confidence:** HIGH - matches existing `CoinbaseWebSocketClient` patterns
-
----
-
-### 4. Coinbase Candles Channel Support
-
-**Addition to existing WebSocket client:** Add `candles` channel type
-
-The Coinbase WebSocket `candles` channel provides native 5-minute candles with:
-- Updates every second during active trading
-- OHLCV data directly from exchange
-- No local aggregation needed for 5m timeframe
-
-**Implementation:**
-```typescript
-// Add to CoinbaseWSMessage union type
-| {
-    channel: 'candles';
-    timestamp: string;
-    sequence_num: number;
-    events: Array<{
-      type: 'snapshot' | 'update';
-      candles: Array<{
-        start: string;      // Unix timestamp
-        high: string;
-        low: string;
-        open: string;
-        close: string;
-        volume: string;
-        product_id: string;
-      }>;
-    }>;
-  }
-```
-
-**Note:** Coinbase WebSocket only provides 5m candles. 1m candles must continue to be built from ticker data. Higher timeframes (15m, 1h, 4h, 1d) must be aggregated from 5m or fetched via REST at startup.
-
-**Confidence:** HIGH (verified via [Coinbase WebSocket docs](https://docs.cdp.coinbase.com/coinbase-app/advanced-trade-apis/websocket/websocket-channels))
-
----
-
-### 5. Unified Cache Schema Extension
-
-**Keep existing pattern, add exchange dimension:**
-
-Current: `candles:{userId}:{exchangeId}:{symbol}:{timeframe}`
-This already supports multi-exchange via `exchangeId`.
-
-**Additional keys needed:**
-
-```typescript
-// Cache metadata for reconciliation
-export function candleMetaKey(
-  userId: number,
-  exchangeId: number,
-  symbol: string,
-  timeframe: Timeframe
-): string {
-  return `candle:meta:${userId}:${exchangeId}:${symbol}:${timeframe}`;
-}
-
-// Store: { lastUpdated: timestamp, gapCount: number, lastReconciled: timestamp }
-
-// Gap tracking for reconciliation
-export function gapKey(userId: number, exchangeId: number): string {
-  return `candle:gaps:${userId}:${exchangeId}`;
-}
-// Store as sorted set: timestamp -> JSON({ symbol, timeframe, start, end })
-```
-
-**Confidence:** HIGH - extends existing patterns
-
----
-
-### 6. Redis Pub/Sub for Event Distribution
-
-**Already supported by ioredis** - use existing infrastructure.
-
-**Pattern for cross-service events:**
-```typescript
-// Publish candle close event (already partially implemented)
-await redis.publish(
-  `events:candle:close:${exchangeId}`,
-  JSON.stringify({ symbol, timeframe, candle })
-);
-
-// Subscribe in indicator service
-const subscriber = redis.duplicate();
-await subscriber.subscribe(`events:candle:close:*`);
-subscriber.on('message', (channel, message) => {
-  // Trigger indicator recalculation
+// packages/database/drizzle/schema.ts
+export const userSettings = pgTable("user_settings", {
+  id: serial().primaryKey().notNull(),
+  key: varchar({ length: 100 }).notNull(),
+  value: jsonb().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 ```
 
-**Confidence:** HIGH (ioredis pub/sub is well-documented)
+**Recommended Schema Extension:**
+Add `userId` for user-specific settings, or create a new `user_preferences` table:
 
----
+```typescript
+import { jsonb, pgTable, serial, varchar, timestamp, foreignKey } from "drizzle-orm/pg-core";
 
-## Not Recommended
-
-### CCXT Library
-
-**Why avoid:**
-- Massive dependency (100+ exchanges) when you need 2-3
-- Performance overhead for latency-sensitive operations
-- Existing Coinbase client already handles JWT auth correctly
-- WebSocket support is less mature than REST
-- Maintenance burden of tracking CCXT API changes vs exchange APIs directly
-
-**When CCXT would make sense:** If you needed 10+ exchanges with minimal effort and didn't care about WebSocket latency.
-
-### BullMQ / Agenda for Reconciliation
-
-**Why avoid:**
-- Requires external queue infrastructure (Redis queue or MongoDB)
-- Over-engineered for single-process background jobs
-- Reconciliation is not distributed workload - runs on single API server
-- Adds operational complexity without benefit
-
-**When BullMQ would make sense:** Distributed workers across multiple servers, job persistence across restarts, retry with backoff.
-
-### Separate TypedEvent Libraries (typed-emitter, eventemitter3)
-
-**Why avoid:**
-- @types/node now supports typed EventEmitter natively
-- Adding dependencies for solved problems
-- Existing codebase doesn't use EventEmitter extensively (uses callbacks)
-
-**When typed-emitter would make sense:** If stuck on Node 18 LTS without generic EventEmitter support.
-
-### Custom Event Bus (EventEmitter2, mitt)
-
-**Why avoid:**
-- Redis pub/sub already provides cross-process event distribution
-- In-process events can use native EventEmitter
-- Additional abstraction layer without clear benefit
-
----
-
-## Integration Notes
-
-### How New Components Fit Together
-
-```
-                                    +-----------------+
-                                    |  Indicator      |
-                                    |  Service        |
-                                    |  (unchanged)    |
-                                    +--------+--------+
-                                             |
-                                             | subscribes to Redis events
-                                             | reads from unified cache
-                                             v
-+------------------+              +----------+----------+
-| Coinbase Adapter |  events      |                     |
-| (extends base)   +------------->|   Redis             |
-+------------------+    writes    |   - Sorted Sets     |
-                        candles   |   - Pub/Sub Events  |
-+------------------+              |   - Gap Metadata    |
-| Binance Adapter  |              |                     |
-| (future)         +------------->|                     |
-+------------------+              +----------+----------+
-                                             ^
-                                             |
-                                  +----------+----------+
-                                  | Reconciliation      |
-                                  | Service             |
-                                  | (node-cron)         |
-                                  +---------------------+
+// Type-safe JSONB with compile-time inference
+export const userPreferences = pgTable("user_preferences", {
+  id: serial().primaryKey().notNull(),
+  userId: serial("user_id").notNull(),
+  key: varchar({ length: 100 }).notNull(),
+  value: jsonb().$type<UserPreferenceValue>().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => ({
+  userIdFk: foreignKey({
+    columns: [table.userId],
+    foreignColumns: [users.id],
+    name: "user_preferences_user_id_fk"
+  }).onDelete("cascade"),
+  uniqueUserKey: unique().on(table.userId, table.key),
+}));
 ```
 
-### Migration Path
+**Discriminated Union Pattern for Type Safety:**
+```typescript
+// packages/schemas/src/settings/user-settings.schema.ts
+import { z } from "zod";
 
-1. **Phase 1:** Add `candles` channel to existing Coinbase WebSocket client
-2. **Phase 2:** Create `ExchangeAdapter` interface, wrap existing Coinbase client
-3. **Phase 3:** Update cache keys to use Redis pub/sub for candle events
-4. **Phase 4:** Modify indicator service to subscribe to events instead of polling
-5. **Phase 5:** Add reconciliation service with node-cron
-6. **Phase 6:** Remove REST API calls from indicator recalculation path
+export const WatchlistSettingsSchema = z.object({
+  type: z.literal("watchlist"),
+  symbols: z.array(z.string().regex(/^[A-Z]+-[A-Z]+$/)),
+  sortBy: z.enum(["alpha", "volume", "change"]).default("alpha"),
+});
 
-### Version Compatibility Matrix
+export const AlertSettingsSchema = z.object({
+  type: z.literal("alerts"),
+  enabled: z.boolean().default(true),
+  priceChangeThreshold: z.number().min(0).max(50).default(5),
+  volumeSpike: z.boolean().default(false),
+});
 
-| Component | Min Version | Reason |
-|-----------|-------------|--------|
-| Node.js | 20.0.0 | Generic EventEmitter types |
-| TypeScript | 5.0.0 | Satisfies modifier, const type params |
-| @types/node | 20.0.0 | EventEmitter generics |
-| ioredis | 5.0.0 | TypeScript native, pub/sub improvements |
-| node-cron | 3.0.0 | ESM support, TypeScript types |
+export const ScannerSettingsSchema = z.object({
+  type: z.literal("scanner"),
+  topN: z.number().min(10).max(100).default(50),
+  quoteAsset: z.enum(["USD", "USDC"]).default("USD"),
+  minVolume24h: z.number().min(0).default(100000),
+});
+
+// Discriminated union for type-safe storage
+export const UserPreferenceValueSchema = z.discriminatedUnion("type", [
+  WatchlistSettingsSchema,
+  AlertSettingsSchema,
+  ScannerSettingsSchema,
+]);
+
+export type UserPreferenceValue = z.infer<typeof UserPreferenceValueSchema>;
+```
+
+**JSONB Query Pattern:**
+Drizzle requires raw SQL for JSONB field access (native operators not yet supported):
+```typescript
+import { sql } from "drizzle-orm";
+
+// Query JSONB field
+const results = await db.select()
+  .from(userPreferences)
+  .where(sql`${userPreferences.value}->>'type' = 'watchlist'`);
+```
+
+**Confidence:** HIGH - Official Drizzle docs verify `$type<T>()` pattern, existing codebase already uses JSONB
+
+**Sources:**
+- [Drizzle ORM PostgreSQL Column Types](https://orm.drizzle.team/docs/column-types/pg)
+- [Drizzle JSONB Type Safety Discussion](https://github.com/drizzle-team/drizzle-orm/discussions/386)
+- [Drizzle PostgreSQL Best Practices 2025](https://gist.github.com/productdevbook/7c9ce3bbeb96b3fabc3c7c2aa2abc717)
 
 ---
 
-## Installation
+### 3. Redis Pub/Sub: Admin Commands
+
+**No new dependencies** - ioredis already supports pub/sub. The existing `createRedisPubSubClient()` in `@livermore/cache` provides the pattern.
+
+**Critical Rule:** Separate clients for pub/sub vs regular operations.
+
+Once a Redis client calls `subscribe()`, it enters "subscriber mode" and can ONLY execute:
+- `subscribe`, `psubscribe`
+- `unsubscribe`, `punsubscribe`
+- `ping`, `quit`
+
+Regular commands (`set`, `get`, `zadd`, etc.) will fail.
+
+**Implementation Pattern:**
+
+```typescript
+// packages/cache/src/pubsub/admin-commands.ts
+import Redis from "ioredis";
+import { createLogger } from "@livermore/utils";
+
+const logger = createLogger("admin-pubsub");
+
+// Channel constants
+export const ADMIN_COMMANDS_CHANNEL = "admin:commands";
+export const ADMIN_STATUS_CHANNEL = "admin:status";
+
+// Command types (defined in @livermore/schemas)
+export interface AdminCommand {
+  type: "SCANNER_START" | "SCANNER_STOP" | "REFRESH_SYMBOLS" | "SYNC_SETTINGS";
+  payload: Record<string, unknown>;
+  timestamp: number;
+}
+
+// Publisher (used by API server to publish commands from Admin UI)
+export class AdminCommandPublisher {
+  constructor(private redis: Redis) {}
+
+  async publish(command: AdminCommand): Promise<void> {
+    const message = JSON.stringify({
+      ...command,
+      timestamp: Date.now(),
+    });
+    await this.redis.publish(ADMIN_COMMANDS_CHANNEL, message);
+    logger.info({ type: command.type }, "Published admin command");
+  }
+
+  async publishStatus(status: { type: string; data: unknown }): Promise<void> {
+    await this.redis.publish(ADMIN_STATUS_CHANNEL, JSON.stringify(status));
+  }
+}
+
+// Subscriber (used by API server to handle incoming commands)
+export class AdminCommandSubscriber {
+  private subscriber: Redis;
+
+  constructor(private redis: Redis) {
+    // MUST create separate client for subscribing
+    this.subscriber = redis.duplicate();
+  }
+
+  async start(handler: (command: AdminCommand) => Promise<void>): Promise<void> {
+    await this.subscriber.subscribe(ADMIN_COMMANDS_CHANNEL);
+
+    this.subscriber.on("message", async (channel, message) => {
+      if (channel === ADMIN_COMMANDS_CHANNEL) {
+        try {
+          const command = JSON.parse(message) as AdminCommand;
+          await handler(command);
+        } catch (err) {
+          logger.error({ err, message }, "Failed to handle admin command");
+        }
+      }
+    });
+
+    // Re-subscribe on reconnection
+    this.subscriber.on("ready", () => {
+      this.subscriber.subscribe(ADMIN_COMMANDS_CHANNEL);
+    });
+
+    logger.info("Admin command subscriber started");
+  }
+
+  async stop(): Promise<void> {
+    await this.subscriber.unsubscribe(ADMIN_COMMANDS_CHANNEL);
+    await this.subscriber.quit();
+  }
+}
+```
+
+**Channel Naming Convention:**
+```
+admin:commands           # Admin UI -> API server commands
+admin:status             # API server -> Admin UI status updates
+scanner:results:{userId} # Scanner results per user
+settings:changed:{userId} # Settings change notifications
+```
+
+**Existing Pattern Reference:**
+The codebase already uses Redis pub/sub for candle close events in `CoinbaseAdapter`:
+```typescript
+// packages/coinbase-client/src/adapter/coinbase-adapter.ts line 514-524
+const channel = candleCloseChannel(
+  this.userId,
+  this.exchangeIdNum,
+  candle.symbol,
+  candle.timeframe
+);
+await this.redis.publish(channel, JSON.stringify(candle));
+```
+
+**Confidence:** HIGH - ioredis pub/sub is well-documented, existing codebase already uses pattern
+
+**Sources:**
+- [ioredis GitHub - Pub/Sub](https://github.com/redis/ioredis)
+- [Redis Pub/Sub Official Docs](https://redis.io/docs/latest/develop/pubsub/)
+- [ioredis Pub/Sub Guide](https://thisdavej.com/guides/redis-node/node/pubsub.html)
+
+---
+
+### 4. Symbol Scanner: Coinbase Products API
+
+**No new dependencies** - The existing `CoinbaseRestClient.getProducts()` already fetches all products.
+
+**Current Implementation:**
+```typescript
+// packages/coinbase-client/src/rest/client.ts
+async getProducts(): Promise<any[]> {
+  const path = '/api/v3/brokerage/products';
+  const response = await this.request('GET', path);
+  return response.products || [];
+}
+```
+
+**Recommended Extension:**
+Add a method to get top symbols by volume:
+
+```typescript
+// Add to CoinbaseRestClient class
+interface CoinbaseProduct {
+  product_id: string;        // "BTC-USD"
+  base_currency_id: string;  // "BTC"
+  quote_currency_id: string; // "USD"
+  status: "online" | "offline" | "delisted";
+  volume_24h: string;        // 24h trading volume
+  price: string;             // Current price
+  price_percentage_change_24h: string;
+}
+
+async getTopSymbolsByVolume(
+  limit: number = 50,
+  quoteAsset: string = "USD"
+): Promise<CoinbaseProduct[]> {
+  const products = await this.getProducts();
+
+  return products
+    .filter((p: CoinbaseProduct) =>
+      p.status === "online" &&
+      p.quote_currency_id === quoteAsset &&
+      parseFloat(p.volume_24h) > 0
+    )
+    .sort((a: CoinbaseProduct, b: CoinbaseProduct) =>
+      parseFloat(b.volume_24h) - parseFloat(a.volume_24h)
+    )
+    .slice(0, limit);
+}
+```
+
+**Scanner Service Pattern:**
+```typescript
+// packages/services/src/scanner/symbol-scanner.ts
+export class SymbolScanner {
+  constructor(
+    private restClient: CoinbaseRestClient,
+    private redis: Redis
+  ) {}
+
+  async scan(options: ScannerOptions): Promise<ScanResult[]> {
+    const products = await this.restClient.getTopSymbolsByVolume(
+      options.topN,
+      options.quoteAsset
+    );
+
+    const results: ScanResult[] = products
+      .filter(p => parseFloat(p.volume_24h) >= options.minVolume24h)
+      .map(p => ({
+        symbol: p.product_id,
+        volume24h: parseFloat(p.volume_24h),
+        price: parseFloat(p.price),
+        change24h: parseFloat(p.price_percentage_change_24h),
+      }));
+
+    // Cache results
+    await this.redis.setex(
+      `scanner:results:${options.userId}`,
+      300, // 5 minute TTL
+      JSON.stringify(results)
+    );
+
+    return results;
+  }
+}
+```
+
+**Why NOT CCXT:**
+- Livermore is Coinbase-only (for now)
+- CCXT adds 2MB+ bundle size
+- Extra abstraction layer = more complexity
+- Already have working Coinbase client with JWT auth
+- Would need to learn CCXT API on top of Coinbase API
+
+**If Multi-Exchange Later:**
+Revisit CCXT or build on existing `BaseExchangeAdapter` pattern.
+
+**Confidence:** HIGH - Existing working implementation, just needs extension
+
+**Sources:**
+- [Coinbase Advanced Trade API](https://docs.cdp.coinbase.com/advanced-trade/docs/api-overview/)
+- [CCXT npm](https://www.npmjs.com/package/ccxt) - evaluated but not recommended
+
+---
+
+## Full Installation Commands
 
 ```bash
-# New dependency only
-pnpm add node-cron
+# Admin UI forms (new dependencies)
+pnpm --filter @livermore/admin add react-hook-form @hookform/resolvers
 
-# Dev dependency for types
-pnpm add -D @types/node-cron
+# No new backend dependencies required - all existing:
+# - drizzle-orm (JSONB) - already ^0.36.4
+# - ioredis (pub/sub) - already ^5.4.2
+# - @livermore/coinbase-client (products API) - workspace package
+# - zod (schemas) - already ^3.24.1
 ```
-
-**Total new dependencies:** 1 runtime, 1 dev
 
 ---
 
-## Sources
+## Patterns to Follow
 
-### Official Documentation (HIGH confidence)
-- [Coinbase WebSocket Channels](https://docs.cdp.coinbase.com/coinbase-app/advanced-trade-apis/websocket/websocket-channels) - Candles channel specification
-- [ioredis GitHub](https://github.com/redis/ioredis) - Pub/sub patterns, TypeScript support
-- [@types/node EventEmitter generics](https://github.com/DefinitelyTyped/DefinitelyTyped/discussions/55298) - Native typed events
+### 1. Settings Schema Organization
 
-### Comparison Research (MEDIUM confidence)
-- [Better Stack: Node.js Schedulers Comparison](https://betterstack.com/community/guides/scaling-nodejs/best-nodejs-schedulers/) - node-cron vs bree vs node-schedule
-- [LogRocket: Node.js Schedulers](https://blog.logrocket.com/comparing-best-node-js-schedulers/) - Feature comparison
-- [CCXT GitHub](https://github.com/ccxt/ccxt) - Multi-exchange library (not recommended)
+Create Zod schemas in `@livermore/schemas` for settings types:
 
-### Architecture Patterns (MEDIUM confidence)
-- [Event-Driven Architecture in JavaScript 2025](https://dev.to/hamzakhan/event-driven-architecture-in-javascript-applications-a-2025-deep-dive-4b8g) - EDA patterns
-- [Redis Multi-Tenant Patterns](https://medium.com/@okan.yurt/multi-tenant-caching-strategies-why-redis-alone-isnt-enough-hybrid-pattern-f404877632e5) - Key prefixing strategies
+```typescript
+// packages/schemas/src/settings/index.ts
+export * from "./watchlist.schema";
+export * from "./alerts.schema";
+export * from "./scanner.schema";
+export * from "./user-preference.schema";
+```
+
+### 2. tRPC Router for Settings
+
+```typescript
+// apps/api/src/routers/settings.router.ts
+import { z } from "zod";
+import { router, protectedProcedure } from "../trpc";
+import { UserPreferenceValueSchema } from "@livermore/schemas";
+
+export const settingsRouter = router({
+  get: protectedProcedure
+    .input(z.object({ key: z.string() }))
+    .query(async ({ ctx, input }) => {
+      return ctx.db.query.userPreferences.findFirst({
+        where: and(
+          eq(userPreferences.userId, ctx.user.id),
+          eq(userPreferences.key, input.key)
+        )
+      });
+    }),
+
+  update: protectedProcedure
+    .input(z.object({
+      key: z.string(),
+      value: UserPreferenceValueSchema,
+    }))
+    .mutation(async ({ ctx, input }) => {
+      // Upsert to database
+      await ctx.db.insert(userPreferences)
+        .values({
+          userId: ctx.user.id,
+          key: input.key,
+          value: input.value,
+          updatedAt: new Date(),
+        })
+        .onConflictDoUpdate({
+          target: [userPreferences.userId, userPreferences.key],
+          set: {
+            value: input.value,
+            updatedAt: new Date(),
+          }
+        });
+
+      // Publish change notification via Redis pub/sub
+      await ctx.publisher.publish({
+        type: "SYNC_SETTINGS",
+        payload: { userId: ctx.user.id, key: input.key }
+      });
+    }),
+});
+```
+
+### 3. Admin Command Types
+
+```typescript
+// packages/schemas/src/admin/commands.schema.ts
+import { z } from "zod";
+
+export const AdminCommandSchema = z.discriminatedUnion("type", [
+  z.object({
+    type: z.literal("SCANNER_START"),
+    payload: z.object({
+      userId: z.number(),
+      filters: z.object({
+        topN: z.number(),
+        quoteAsset: z.string(),
+        minVolume24h: z.number().optional(),
+      }),
+    }),
+  }),
+  z.object({
+    type: z.literal("SCANNER_STOP"),
+    payload: z.object({ userId: z.number() }),
+  }),
+  z.object({
+    type: z.literal("REFRESH_SYMBOLS"),
+    payload: z.object({}),
+  }),
+  z.object({
+    type: z.literal("SYNC_SETTINGS"),
+    payload: z.object({ userId: z.number(), key: z.string().optional() }),
+  }),
+]);
+
+export type AdminCommand = z.infer<typeof AdminCommandSchema>;
+```
+
+---
+
+## Anti-Patterns to Avoid
+
+### 1. Single Redis Client for Everything
+
+**BAD:**
+```typescript
+const redis = createRedisClient(config);
+redis.subscribe("channel"); // Now redis can ONLY do subscribe commands!
+redis.set("key", "value");  // ERROR: client is in subscriber mode
+```
+
+**GOOD:**
+```typescript
+const publisher = createRedisClient(config);
+const subscriber = createRedisClient(config); // or publisher.duplicate()
+subscriber.subscribe("channel");
+publisher.set("key", "value"); // Works fine
+```
+
+### 2. Storing Complex Objects Without Schema
+
+**BAD:**
+```typescript
+// Untyped JSONB - runtime errors waiting to happen
+value: jsonb().default({})
+```
+
+**GOOD:**
+```typescript
+// Type-safe with validation
+value: jsonb().$type<z.infer<typeof SettingsSchema>>()
+// PLUS validate on insert/update with Zod
+```
+
+### 3. Polling Instead of Pub/Sub
+
+**BAD:**
+```typescript
+// Admin UI polling for status every 5 seconds
+setInterval(() => fetchStatus(), 5000);
+```
+
+**GOOD:**
+```typescript
+// Real-time via WebSocket subscription backed by Redis pub/sub
+const statusSubscription = trpc.admin.status.subscribe({
+  onData: (status) => setStatus(status)
+});
+```
+
+### 4. JSONB for High-Query Fields
+
+**BAD:**
+```typescript
+// Frequently queried field buried in JSONB
+where(sql`${settings.value}->>'status' = 'active'`)
+```
+
+**GOOD:**
+```typescript
+// Frequently queried = top-level column with index
+isActive: boolean("is_active").default(true).notNull()
+```
+
+---
+
+## Version Compatibility Matrix
+
+| Package | Current | Recommended | Notes |
+|---------|---------|-------------|-------|
+| drizzle-orm | 0.36.4 | 0.36.4 | Keep current, JSONB $type works |
+| ioredis | 5.4.2 | 5.4.2 | Keep current, pub/sub works |
+| zod | 3.24.1 | 3.24.1 | Keep current |
+| react-hook-form | NEW | ^7.54.0 | Add to admin package |
+| @hookform/resolvers | NEW | ^3.9.0 | Add to admin package |
 
 ---
 
@@ -353,12 +623,33 @@ pnpm add -D @types/node-cron
 
 | Area | Confidence | Rationale |
 |------|------------|-----------|
-| Event System | HIGH | Native @types/node support verified |
-| Background Jobs | HIGH | node-cron is mature, well-documented |
-| Exchange Adapter | HIGH | Matches existing patterns, custom approach proven |
-| Candles Channel | HIGH | Official Coinbase docs verified |
-| Cache Schema | HIGH | Extends existing implementation |
-| Avoid CCXT | MEDIUM | Performance claims from CCXT docs, tradeoffs situational |
+| React Hook Form | HIGH | Official docs, standard industry choice, Zod integration |
+| Drizzle JSONB | HIGH | Official docs, existing pattern in codebase |
+| ioredis Pub/Sub | HIGH | Official docs, existing usage in codebase |
+| Coinbase Products API | HIGH | Existing working implementation |
+| Admin Command Pattern | MEDIUM | Designed pattern, needs implementation validation |
+| Settings Schema Design | HIGH | Follows existing codebase patterns |
+
+---
+
+## Sources
+
+### Official Documentation (HIGH confidence)
+- [Drizzle ORM PostgreSQL Column Types](https://orm.drizzle.team/docs/column-types/pg)
+- [ioredis GitHub](https://github.com/redis/ioredis)
+- [Redis Pub/Sub Docs](https://redis.io/docs/latest/develop/pubsub/)
+- [React Hook Form useForm](https://react-hook-form.com/docs/useform)
+- [@hookform/resolvers](https://github.com/react-hook-form/resolvers)
+- [Coinbase Advanced Trade API](https://docs.cdp.coinbase.com/advanced-trade/docs/api-overview/)
+
+### Community Resources (MEDIUM confidence)
+- [Drizzle JSONB Best Practices 2025](https://gist.github.com/productdevbook/7c9ce3bbeb96b3fabc3c7c2aa2abc717)
+- [ioredis Pub/Sub Guide](https://thisdavej.com/guides/redis-node/node/pubsub.html)
+- [React Hook Form + Zod Tutorial](https://www.freecodecamp.org/news/react-form-validation-zod-react-hook-form/)
+- [Drizzle JSONB Type Safety Discussion](https://github.com/drizzle-team/drizzle-orm/discussions/386)
+
+### Evaluated but Not Recommended
+- [CCXT npm](https://www.npmjs.com/package/ccxt) - Overkill for single-exchange use
 
 ---
 

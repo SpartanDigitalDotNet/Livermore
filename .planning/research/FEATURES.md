@@ -1,450 +1,467 @@
-# Features Research: v2.0 Data Pipeline
+# Feature Landscape: v4.0 User Settings + Runtime Control
 
-**Domain:** Real-time cryptocurrency data pipeline with exchange adapters
-**Researched:** 2026-01-19
-**Overall Confidence:** HIGH (official Coinbase documentation + existing codebase analysis)
-
-## Coinbase WebSocket Channels
-
-### Connection Details
-
-| Property | Value | Source |
-|----------|-------|--------|
-| Market Data URL | `wss://advanced-trade-ws.coinbase.com` | [Official Docs](https://docs.cdp.coinbase.com/coinbase-app/advanced-trade-apis/websocket/websocket-overview) |
-| User Data URL | `wss://advanced-trade-ws-user.coinbase.com` | [Official Docs](https://docs.cdp.coinbase.com/coinbase-app/advanced-trade-apis/websocket/websocket-overview) |
-| Authentication | JWT (expires 2 min, regenerate per message) | Official Docs |
-| Connection Timeout | Disconnect if no subscribe within 5 seconds | Official Docs |
-| Idle Timeout | Closes 60-90 seconds if no updates | Official Docs |
-
-### Rate Limits
-
-| Limit Type | Value | Notes |
-|------------|-------|-------|
-| Connections | 750/second/IP | Connection establishment rate |
-| Unauthenticated Messages | 8/second/IP | Subscribe/unsubscribe messages |
-| Authenticated Messages | Not specified | Higher limit expected |
-
-### Channel: Candles
-
-**Purpose:** Real-time candle updates with native 5-minute granularity
-
-| Property | Value |
-|----------|-------|
-| Granularity | 5 minutes only (fixed) |
-| Update Frequency | Every second per product |
-| Authentication | Not required (public channel) |
-
-**Message Format:**
-```json
-{
-  "type": "candles",
-  "product_id": "ETH-USD",
-  "start": "1673467200",
-  "high": "1234.56",
-  "low": "1230.00",
-  "open": "1232.00",
-  "close": "1233.50",
-  "volume": "125.5"
-}
-```
-
-**Limitations:**
-- **5-minute only**: Cannot get 1m, 15m, 1h, 4h, 1d candles via WebSocket
-- 1m candles must be built from ticker data (current approach)
-- Higher timeframes (15m, 1h, 4h, 1d) must be aggregated from cached 1m/5m data
-
-**Implication for v2.0:** Continue building 1m candles from ticker. Add candles channel for native 5m data. Aggregate 15m/1h/4h/1d from cached data instead of REST API.
-
-### Channel: Ticker
-
-**Purpose:** Real-time price updates on each trade match
-
-| Property | Value |
-|----------|-------|
-| Update Frequency | Real-time (batched per trade) |
-| Authentication | Not required (public channel) |
-| Fields | price, volume_24_h, high_24_h, low_24_h, best_bid, best_ask, price_percent_chg_24_h |
-
-**Use Case:** Building 1m candles, real-time price display, calculating bid-ask spread.
-
-### Channel: Ticker Batch
-
-**Purpose:** Throttled ticker updates (reduces message volume)
-
-| Property | Value |
-|----------|-------|
-| Update Frequency | Every 5 seconds |
-| Authentication | Not required |
-| Fields | Same as ticker except excludes bid/ask |
-
-**Use Case:** Lower-frequency updates where 5-second latency is acceptable.
-
-### Channel: Level2
-
-**Purpose:** Order book depth with guaranteed delivery
-
-| Property | Value |
-|----------|-------|
-| Initial Message | Full snapshot (bids/asks arrays) |
-| Updates | Incremental `l2update` messages |
-| Update Format | `{side, price_level, new_quantity, event_time}` |
-| Zero Quantity | Indicates price level should be removed |
-| Authentication | Not required |
-
-**Use Case:** Order book visualization, liquidity analysis, market depth.
-
-**Note:** qty=0 in updates means remove that price level from local book.
-
-### Channel: Level2 Batch
-
-**Purpose:** Batched order book updates (lower message volume)
-
-| Property | Value |
-|----------|-------|
-| Update Frequency | Every 50 milliseconds |
-| Schema | Identical to level2 |
-
-### Channel: Heartbeats
-
-**Purpose:** Keep connections alive during low-activity periods
-
-| Property | Value |
-|----------|-------|
-| Frequency | Every second |
-| Field | `heartbeat_counter` for sequence verification |
-| Authentication | Not required |
-
-**Critical for v2.0:** Must subscribe to heartbeats alongside other channels to prevent 60-90 second idle disconnection.
-
-### Channel: Market Trades
-
-**Purpose:** Real-time trade execution data
-
-| Property | Value |
-|----------|-------|
-| Update Frequency | Batched every 250ms |
-| Fields | trade_id, product_id, price, size, side, time |
-| Authentication | Not required |
-
-### Channel: User
-
-**Purpose:** User-specific order and position updates
-
-| Property | Value |
-|----------|-------|
-| Authentication | Required |
-| Connection Limit | One connection per user |
-| Snapshot | Batched by 50 orders initially |
-| Scope | Orders, positions (futures) |
-
-**Not needed for v2.0:** We're focused on market data, not order management.
-
-### Sequence Numbers and Gap Detection
-
-From official docs: "Sequence numbers that are greater than one integer value from the previous number indicate that a message has been dropped."
-
-**Implication:** Consumer must track sequence numbers and detect gaps. When gap detected, either:
-1. Request re-subscription (get new snapshot)
-2. Trigger reconciliation via REST API
+**Domain:** Trading platform settings management, admin control panel, runtime commands
+**Researched:** 2026-01-31
+**Overall Confidence:** HIGH (industry patterns + existing codebase alignment)
 
 ---
 
-## Exchange Adapter Features
+## Executive Summary
 
-### Table Stakes (Must Have for v2.0)
+This research identifies features for a trading platform settings/control system with four main areas:
+1. **User Settings Management** - Profile, preferences, exchange configurations stored as JSONB
+2. **Admin Runtime Control Panel** - Start/stop, mode switching, service commands
+3. **Symbol Management** - Scanner + manual curation hybrid approach
+4. **Runtime Command Protocol** - Redis pub/sub for Admin-to-API communication
 
-| Feature | Description | Rationale |
-|---------|-------------|-----------|
-| **Unified Interface** | Single interface for all exchange adapters | Indicator service must not know exchange specifics |
-| **WebSocket Connection Management** | Connect, disconnect, reconnect with exponential backoff | Coinbase disconnects idle connections after 60-90s |
-| **Heartbeat Subscription** | Auto-subscribe to heartbeats on connect | Prevents idle disconnection |
-| **Candle Normalization** | Convert exchange-specific candle format to unified schema | Current `CandleSchema` already defines this |
-| **Event Emission** | Emit standardized events (candleClose, tickerUpdate) | Indicator service subscribes to these |
-| **Cache Writing** | Write candles directly to Redis cache | Core v2.0 requirement - cache as source of truth |
-| **Sequence Tracking** | Track message sequence numbers per channel | Gap detection per Coinbase docs |
-| **Gap Detection** | Detect dropped messages via sequence gaps | Trigger reconciliation when gaps found |
-| **Startup Backfill** | Fetch historical candles on startup | 60-candle minimum for MACD-V accuracy |
-| **Symbol Management** | Subscribe/unsubscribe to specific symbols dynamically | Support adding/removing symbols without restart |
-| **Error Handling** | Handle 429s, connection drops, invalid messages gracefully | Production resilience |
-| **Logging** | Structured logging with exchange context | Debugging and monitoring |
-
-### Adapter Interface (Recommended Design)
-
-```typescript
-interface ExchangeAdapter {
-  // Lifecycle
-  connect(): Promise<void>;
-  disconnect(): Promise<void>;
-
-  // Subscription management
-  subscribeSymbols(symbols: string[]): Promise<void>;
-  unsubscribeSymbols(symbols: string[]): Promise<void>;
-
-  // Events emitted
-  on('candleClose', handler: (candle: Candle) => void): void;
-  on('tickerUpdate', handler: (ticker: Ticker) => void): void;
-  on('error', handler: (error: AdapterError) => void): void;
-  on('gapDetected', handler: (gap: GapInfo) => void): void;
-
-  // Status
-  isConnected(): boolean;
-  getSubscribedSymbols(): string[];
-
-  // Backfill (REST)
-  backfillCandles(symbol: string, timeframe: Timeframe, count: number): Promise<Candle[]>;
-}
-```
-
-### Differentiators (Nice to Have)
-
-| Feature | Description | Value |
-|---------|-------------|-------|
-| **Connection Health Metrics** | Track latency, message rate, error rate | Observability for production |
-| **Automatic Reconnection** | Exponential backoff with jitter | Prevents thundering herd on reconnect |
-| **Circuit Breaker** | Stop reconnect attempts after N failures | Prevent resource exhaustion |
-| **Message Deduplication** | Detect and drop duplicate messages | Coinbase can send duplicates on reconnect |
-| **Batched Cache Writes** | Buffer candles, write in batches | Reduce Redis operations |
-| **Backpressure Handling** | Handle slow consumers without memory growth | Production stability |
-| **Multi-Product Subscription** | Single connection for multiple symbols | Current approach, efficient |
-
-### Anti-Features (Skip for v2.0)
-
-| Anti-Feature | Why Skip |
-|--------------|----------|
-| **Full Order Book Management** | Only need ticker/candles for MACD-V. Level2 is future scope. |
-| **Trade Execution** | v2.0 is monitoring only, not trading |
-| **Multiple Connection Pools** | Single connection per exchange sufficient for current scale |
-| **WebSocket Compression** | Coinbase handles this, no client-side needed |
-| **Custom Serialization** | JSON is fine, no need for protobuf/msgpack |
-| **Hot Symbol Migration** | Can restart to change symbols, live migration unnecessary |
-| **Cross-Exchange Arbitrage Data** | Out of scope, single exchange focus per adapter |
+The design aligns with established trading platform patterns (3Commas, Altrady, Bitsgap) while fitting Livermore's existing architecture.
 
 ---
 
-## Cache Management Features
+## Feature Category 1: User Settings Management
 
-### Table Stakes
+### Table Stakes (Must Have)
 
-| Feature | Description | Implementation Notes |
-|---------|-------------|---------------------|
-| **Sorted Set Storage** | Candles in Redis sorted sets by timestamp | Already implemented in `CandleCacheStrategy` |
-| **TTL Management** | 24-hour expiration for candle data | Current: `HARDCODED_CONFIG.cache.candleTtlHours * 3600` |
-| **Duplicate Prevention** | Remove existing candle before adding new | Current: `zremrangebyscore` before `zadd` |
-| **Bulk Operations** | Pipeline for batch candle writes | Current: `addCandles()` method |
-| **Recent Candle Query** | Get last N candles efficiently | Current: `getRecentCandles()` |
-| **Time Range Query** | Get candles between timestamps | Current: `getCandlesInRange()` |
-| **Pub/Sub for Updates** | Publish candle updates to subscribers | Current: `publishUpdate()` |
+| Feature | Description | Complexity | Notes |
+|---------|-------------|------------|-------|
+| **Settings JSONB Column** | Single JSONB column on users table storing all settings | Low | Already planned per PROJECT.md |
+| **Settings CRUD API** | tRPC endpoints: get, update, patch settings | Low | Standard tRPC pattern |
+| **Settings Schema Validation** | Zod schema for settings structure | Medium | Ensures data integrity |
+| **Profile Section** | Display name, timezone, locale, date/time format | Low | Already in settings file |
+| **Exchange Configuration** | Multi-exchange support with enable/disable per exchange | Medium | Existing pattern from file |
+| **Credential Env Var References** | Store env var names, not actual secrets | Low | Security requirement |
+| **Trading Preferences** | Risk tolerance, strategy, stop-loss/take-profit defaults | Low | From existing file |
+| **Notification Preferences** | Email, Discord, push notification settings | Low | Discord already integrated |
+| **Runtime Settings** | auto_start, logging verbosity, data directories | Low | Existing pattern |
 
-### New Features Required for v2.0
+### Differentiators (Competitive Advantage)
 
-| Feature | Description | Priority |
-|---------|-------------|----------|
-| **Gap Detection Query** | Find missing timestamps in candle sequence | HIGH |
-| **Last Update Timestamp** | Track when cache was last updated per symbol/timeframe | HIGH |
-| **Staleness Detection** | Check if latest candle is older than expected | HIGH |
-| **Cache Warmup Status** | Track if 60-candle minimum is met | HIGH |
-| **Aggregation Support** | Aggregate 1m candles to higher timeframes | HIGH |
-| **Exchange-Agnostic Keys** | Key pattern supports multiple exchanges | Already implemented |
+| Feature | Value Proposition | Complexity | Notes |
+|---------|-------------------|------------|-------|
+| **Partial Updates (PATCH)** | Update single sections without overwriting entire settings | Medium | Use jsonb_set() in Postgres |
+| **Settings Versioning** | Track settings changes with timestamps | Medium | Audit trail for changes |
+| **Settings Export/Import** | Export settings as JSON, import to new instance | Low | Developer convenience |
+| **Settings Validation Feedback** | Real-time validation errors in Admin UI | Medium | Better UX |
+| **Per-Exchange Defaults** | Different risk/strategy settings per exchange | High | Multi-exchange sophistication |
 
-### Gap Detection Strategy
+### Anti-Features (Do NOT Build)
+
+| Anti-Feature | Why Avoid | What to Do Instead |
+|--------------|-----------|-------------------|
+| **Settings History Table** | Overkill for single-user system | Single JSONB with updated_at timestamp |
+| **Settings Sync Across Devices** | Only one Admin instance running | N/A - single instance |
+| **Settings Encryption at Rest** | Credentials in env vars, not in settings | Keep current pattern |
+| **Per-Symbol Settings** | Adds complexity without value | Global risk settings apply to all |
+| **Complex ACL on Settings** | Single admin user | Simple role check sufficient |
+
+---
+
+## Feature Category 2: Admin Runtime Control Panel
+
+### Table Stakes (Must Have)
+
+| Feature | Description | Complexity | Notes |
+|---------|-------------|------------|-------|
+| **Runtime Status Display** | Show API status: running, paused, mode, uptime | Low | WebSocket or polling |
+| **Start/Stop Control** | Start/stop trading operations (not the process) | Medium | Pause mode, not shutdown |
+| **Current Mode Display** | Show active mode: position-monitor, scalper-macdv, etc. | Low | Read from API state |
+| **Mode Switching** | Change mode without restart | Medium | Via pub/sub command |
+| **Active Symbols Display** | Show currently tracked symbols | Low | From scanner/curation |
+| **Exchange Connection Status** | Show connected exchanges and health | Low | Heartbeat-based |
+| **Last Signal Time** | Show when last signal was processed | Low | Observability |
+| **Error Log Summary** | Recent errors in control panel | Low | Tail from logs |
+
+### Differentiators (Competitive Advantage)
+
+| Feature | Value Proposition | Complexity | Notes |
+|---------|-------------------|------------|-------|
+| **Command History** | Log of all commands sent via control panel | Medium | Audit trail |
+| **Command Confirmation** | Confirm destructive commands (clear-cache) | Low | UX safety |
+| **Connection Latency Display** | Show WebSocket latency to exchanges | Medium | Observability |
+| **Cache Statistics** | Show Redis cache hit/miss, memory usage | Medium | Performance insight |
+| **Scheduled Commands** | Schedule mode changes (e.g., night mode) | High | Future consideration |
+
+### Anti-Features (Do NOT Build)
+
+| Anti-Feature | Why Avoid | What to Do Instead |
+|--------------|-----------|-------------------|
+| **Process Kill Button** | Dangerous, lose connection to control | Pause mode instead |
+| **Live Code Deployment** | Security risk, out of scope | Restart for deployments |
+| **Database Admin Panel** | Separate concern | Use Atlas or DBeaver |
+| **Log File Editing** | Read-only is sufficient | View logs only |
+| **Multi-Instance Control** | Single instance deployment | N/A |
+
+---
+
+## Feature Category 3: Symbol Management
+
+### Table Stakes (Must Have)
+
+| Feature | Description | Complexity | Notes |
+|---------|-------------|------------|-------|
+| **Symbol Watchlist Display** | Show all tracked symbols with status | Low | From settings |
+| **Add Symbol Manually** | Add symbol to tracking list | Low | CRUD operation |
+| **Remove Symbol** | Remove from tracking (with confirmation) | Low | Prevent accidents |
+| **Symbol Search** | Search available symbols from exchange | Medium | Fetch from exchange API |
+| **Symbol Enable/Disable** | Toggle tracking without removal | Low | Quick pause |
+| **Scanner Status** | Show if scanner is enabled, last run | Low | From settings |
+| **Scanner Results Preview** | Show what scanner would add before applying | Medium | User approval |
+
+### Differentiators (Competitive Advantage)
+
+| Feature | Value Proposition | Complexity | Notes |
+|---------|-------------------|------------|-------|
+| **Bulk Symbol Import** | Import symbol list from CSV/JSON | Low | Developer convenience |
+| **Symbol Categories** | Tag symbols (high-cap, meme, etc.) | Medium | Organization |
+| **Symbol Metrics Preview** | Show 24h volume, price before adding | Medium | Informed decisions |
+| **Cross-Exchange Symbol Mapping** | Map BTC-USD (Coinbase) to BTCUSDT (Binance) | High | Multi-exchange prep |
+| **Scanner Configuration UI** | Configure scanner criteria in Admin | Medium | Currently file-based |
+
+### Anti-Features (Do NOT Build)
+
+| Anti-Feature | Why Avoid | What to Do Instead |
+|--------------|-----------|-------------------|
+| **Automatic Symbol Discovery** | Could track garbage tokens | Manual curation required |
+| **Symbol Recommendations** | AI/ML complexity unnecessary | Manual selection |
+| **Symbol Performance Tracking** | Different from position tracking | Use position viewer |
+| **Real-Time Symbol Price Grid** | Already have Dashboard | Use existing |
+| **Symbol-Level Settings** | Per-symbol config overkill | Global settings |
+
+---
+
+## Feature Category 4: Runtime Command Protocol
+
+### Table Stakes (Must Have)
+
+| Feature | Description | Complexity | Notes |
+|---------|-------------|------------|-------|
+| **Redis Pub/Sub Channel** | `livermore:commands:{identity_sub}` channel | Low | Standard Redis pattern |
+| **Command: pause** | Pause all trading operations | Low | Stop processing, keep connected |
+| **Command: resume** | Resume trading operations | Low | Restart processing |
+| **Command: reload-settings** | Reload settings from database | Medium | Hot reload |
+| **Command: switch-mode** | Change trading mode | Medium | With payload |
+| **Command: add-symbol** | Add symbol to tracking dynamically | Medium | Without restart |
+| **Command: remove-symbol** | Remove symbol from tracking | Medium | Clean shutdown |
+| **Command: force-backfill** | Force candle backfill for symbol | Medium | Recovery operation |
+| **Command: clear-cache** | Clear Redis cache (with scope) | Medium | Maintenance |
+| **Command ACK** | Acknowledge command receipt | Low | Confirmation |
+| **Command Result** | Return success/failure to Admin | Low | Feedback |
+
+### Command Protocol Specification
 
 ```typescript
-interface GapDetectionResult {
-  hasGaps: boolean;
-  gaps: Array<{
-    expectedTimestamp: number;
-    previousTimestamp: number;
-    timeframeSec: number;
+interface RuntimeCommand {
+  id: string;              // UUID for tracking
+  command: CommandType;    // Enum of valid commands
+  payload?: Record<string, unknown>;  // Command-specific data
+  timestamp: number;       // When sent
+  source: 'admin' | 'system';  // Origin
+}
+
+type CommandType =
+  | 'pause'
+  | 'resume'
+  | 'reload-settings'
+  | 'switch-mode'
+  | 'add-symbol'
+  | 'remove-symbol'
+  | 'force-backfill'
+  | 'clear-cache'
+  | 'status';              // Request current status
+
+interface CommandResult {
+  commandId: string;       // Reference to original command
+  success: boolean;
+  message?: string;
+  data?: Record<string, unknown>;
+  timestamp: number;
+}
+```
+
+### Redis Channel Pattern
+
+```
+Commands (Admin -> API):    livermore:commands:{identity_sub}
+Responses (API -> Admin):   livermore:responses:{identity_sub}
+Status (API broadcast):     livermore:status:{identity_sub}
+```
+
+### Differentiators (Competitive Advantage)
+
+| Feature | Value Proposition | Complexity | Notes |
+|---------|-------------------|------------|-------|
+| **Command Queue Persistence** | Redis Streams instead of Pub/Sub | Medium | Survive disconnection |
+| **Command Priority** | High-priority commands processed first | Low | pause > add-symbol |
+| **Command Timeout** | Commands expire if not processed | Low | Stale prevention |
+| **Batch Commands** | Multiple commands in single message | Medium | Efficiency |
+| **Command Rollback** | Undo last command (where applicable) | High | Safety net |
+
+### Anti-Features (Do NOT Build)
+
+| Anti-Feature | Why Avoid | What to Do Instead |
+|--------------|-----------|-------------------|
+| **Azure Service Bus** | Overkill for single-instance | Redis pub/sub sufficient |
+| **Command Signing** | Internal communication trusted | Identity-based channel isolation |
+| **Complex Routing** | Single consumer | Direct pub/sub |
+| **Command Chaining** | Complexity without benefit | Separate commands |
+| **Persistent Command Log** | Memory sufficient | Ephemeral OK |
+
+---
+
+## Feature Category 5: Settings Admin UI
+
+### Table Stakes (Must Have)
+
+| Feature | Description | Complexity | Notes |
+|---------|-------------|------------|-------|
+| **Form-Based Editor** | Structured forms for common settings | Medium | User-friendly |
+| **Exchange Config Forms** | Add/edit exchange credentials (env var names) | Medium | Per-exchange fields |
+| **JSON Raw Editor** | Advanced editor for power users | Low | Monaco or json-edit-react |
+| **Save/Discard Buttons** | Explicit save action with discard option | Low | Standard pattern |
+| **Validation Errors** | Show field-level validation errors | Medium | UX requirement |
+| **Loading States** | Show loading during save operations | Low | UX polish |
+| **Success/Error Toast** | Feedback on save operations | Low | UX requirement |
+
+### Differentiators (Competitive Advantage)
+
+| Feature | Value Proposition | Complexity | Notes |
+|---------|-------------------|------------|-------|
+| **Side-by-Side Editor** | Form + JSON view simultaneously | Medium | Power user feature |
+| **Settings Diff View** | Show changes before saving | Medium | Safety feature |
+| **Settings Templates** | Quick-apply preset configurations | Medium | Onboarding help |
+| **Keyboard Shortcuts** | Ctrl+S to save, Esc to discard | Low | Developer experience |
+| **Auto-Save Draft** | Save work-in-progress to localStorage | Low | Prevent data loss |
+
+### Anti-Features (Do NOT Build)
+
+| Anti-Feature | Why Avoid | What to Do Instead |
+|--------------|-----------|-------------------|
+| **Full React Admin Framework** | Overkill for single settings page | Custom components |
+| **Schema Auto-Generation** | Static schema sufficient | Manual Zod schema |
+| **Multi-User Conflict Resolution** | Single admin user | N/A |
+| **Settings Approval Workflow** | Solo developer | Direct save |
+| **Comment/Documentation on Fields** | Tooltips sufficient | Inline hints |
+
+---
+
+## Trading Mode Specifications
+
+### Mode: position-monitor (Default)
+
+**Purpose:** Monitor existing positions, fire alerts on price movements
+**Behavior:**
+- Track symbols in positions table only
+- Calculate indicators for position symbols
+- Fire alerts on signal conditions
+- No new position entry
+
+### Mode: scalper-macdv
+
+**Purpose:** Active MACD-V signal hunting across watchlist
+**Behavior:**
+- Track all symbols in watchlist
+- Calculate MACD-V across all timeframes
+- Fire alerts on crossovers and momentum shifts
+- Higher alert volume expected
+
+### Mode: scalper-orderbook (Stub for v4.0)
+
+**Purpose:** Order book imbalance detection (v4.1 implementation)
+**Behavior:**
+- Subscribe to Level2 WebSocket channel
+- Detect bid/ask imbalances
+- Fire alerts on significant imbalances
+- **v4.0: Stub only, returns "not implemented"**
+
+### Mode Configuration
+
+```typescript
+interface ModeConfig {
+  mode: 'position-monitor' | 'scalper-macdv' | 'scalper-orderbook';
+  symbolSource: 'positions' | 'watchlist' | 'scanner';
+  indicatorsEnabled: string[];  // ['macdv', 'rsi', etc.]
+  alertThresholds: {
+    macdvCrossover: boolean;
+    momentumShift: boolean;
+    // ...
+  };
+}
+```
+
+---
+
+## Settings Schema Structure
+
+Based on existing `data/DESKTOP-5FK78SF.settings.json`:
+
+```typescript
+interface UserSettings {
+  // Identity (synced from Clerk)
+  sub: string;
+
+  // User Profile
+  perseus_profile: {
+    public_name: string;
+    description: string;
+    primary_exchange: string;
+    trading_mode: 'paper' | 'live';
+    currency: string;
+    timezone: string;
+    locale: string;
+    date_format: string;
+    time_format: string;
+    risk_tolerance: 'low' | 'medium' | 'high';
+    investment_style: 'conservative' | 'balanced' | 'aggressive';
+    notification_preferences: string;
+    trade_settings: {
+      trading_strategy: string;
+      preferred_geographies: string;
+      blacklisted_geographies: string;
+      trading_hours_utc: string;
+      trading_days: string;
+      max_daily_trades: number;
+      stop_loss_percentage: number;
+      take_profit_percentage: number;
+      preferred_timeframes: string;
+    };
+    discord_integration: {
+      enabled: boolean;
+      webhook_url_environment_variable: string;
+    };
+  };
+
+  // Runtime Configuration
+  livermore_runtime: {
+    auto_start: boolean;
+    logging: {
+      data_directory: string;
+      log_directory: string;
+      verbosity_level: string;
+    };
+  };
+
+  // Exchange Configurations
+  exchanges: Record<string, {
+    enabled: boolean;
+    ApiKeyEnvironmentVariableName: string;
+    SecretEnvironmentVariableName: string;
+    PasswordEnvironmentVariableName?: string;  // For KuCoin
   }>;
-  latestTimestamp: number;
-  oldestTimestamp: number;
-  totalCandles: number;
-}
 
-// Implementation approach:
-// 1. Get all candle timestamps from sorted set
-// 2. Calculate expected interval based on timeframe
-// 3. Walk through timestamps, identify gaps > interval
-// 4. Return gap info for reconciliation
-```
+  // Symbol Management
+  load_positions_from_exchange: boolean;
+  position_symbols: string[];
+  position_min_value_usd: number;
+  position_refresh_hours: number;
+  portfolio_symbols_last_update: string;
 
-### TTL Strategy by Data Type
+  // Scanner
+  scanner_to_maintain_symbols_enabled: boolean;
+  scanner_symbols_last_update: string;
+  scanner_exchange: string;
+  scanner_auto_restart_services: boolean;
 
-| Data Type | TTL | Rationale |
-|-----------|-----|-----------|
-| 1m Candles | 24 hours | High volume, only need recent for aggregation |
-| 5m Candles | 48 hours | Medium volume, aggregation source |
-| 15m+ Candles | 72 hours | Lower volume, longer history useful |
-| Tickers | 5 minutes | Very high volume, only need current |
-| Indicators | 1 hour | Recalculated frequently |
-
-### Staleness Detection
-
-```typescript
-// A candle is stale if:
-// - Latest candle timestamp + timeframe interval + tolerance < now
-// - Tolerance allows for WebSocket latency (e.g., 30 seconds)
-
-function isStale(latestTimestamp: number, timeframeSec: number): boolean {
-  const expectedNextCandle = latestTimestamp + timeframeSec;
-  const tolerance = 30; // seconds
-  return Date.now() / 1000 > expectedNextCandle + tolerance;
+  // Watchlist
+  symbols: string[];
+  sparse_symbols: string[];  // Low-priority symbols
 }
 ```
 
-### Anti-Features for Cache
+---
 
-| Anti-Feature | Why Skip |
-|--------------|----------|
-| **Write-Through to Database** | PostgreSQL for alerts only, not candle persistence |
-| **Multi-Region Replication** | Single-region deployment for now |
-| **Cache Warming on Startup** | Backfill handles this, separate warming unnecessary |
-| **Compression** | Redis handles this, not application concern |
+## Feature Dependencies
+
+```
+Settings JSONB Column
+    |
+    v
+Settings tRPC CRUD  <---> Settings Zod Schema
+    |
+    v
+Admin Settings UI (Form + JSON)
+    |
+    v
+Runtime Command Protocol (reload-settings)
+    |
+    v
+API Command Handler
+```
+
+```
+Symbol Management
+    |
+    +---> Scanner (background)
+    |         |
+    |         v
+    +---> Symbol Watchlist <---> Admin Symbol UI
+              |
+              v
+          add-symbol / remove-symbol commands
+              |
+              v
+          API Symbol Handler
+```
 
 ---
 
-## Reconciliation Features
+## MVP Recommendation
 
-### Table Stakes
+### Phase 1: Foundation
+1. Add `settings` JSONB column to users table (or use existing user_settings table)
+2. Settings tRPC endpoints (get, update)
+3. Basic Admin Settings page with JSON editor
+4. Command channel setup (pub/sub)
 
-| Feature | Description | Priority |
-|---------|-------------|----------|
-| **Periodic Gap Scan** | Scan cache for gaps on schedule | HIGH |
-| **On-Demand Gap Fill** | Fill gaps when detected via WebSocket sequence | HIGH |
-| **REST API Backfill** | Fetch missing candles from Coinbase REST | HIGH |
-| **Rate Limit Respect** | Stagger REST calls to avoid 429s | HIGH |
-| **Gap Event Emission** | Notify indicator service when gaps filled | MEDIUM |
+### Phase 2: Runtime Control
+5. Runtime Control Panel component
+6. Pause/resume commands
+7. Mode switching
+8. Status display
 
-### Reconciliation Strategy
+### Phase 3: Symbol Management
+9. Symbol list component
+10. Add/remove symbol commands
+11. Scanner integration (display only)
 
-**Trigger Conditions:**
-1. **Startup**: Always reconcile on service start
-2. **Sequence Gap**: When WebSocket sequence gap detected
-3. **Periodic**: Every 5 minutes as safety net
-4. **Stale Data**: When staleness detection fires
-
-**Reconciliation Flow:**
-```
-1. For each symbol/timeframe:
-   a. Get latest candle timestamp from cache
-   b. Calculate expected candles since last update
-   c. If gaps exist OR cache count < 60:
-      - Fetch missing candles via REST API (batched)
-      - Write to cache
-      - Emit reconciliation event
-   d. Mark reconciliation timestamp
-
-2. Rate limiting:
-   - Max 5 REST calls per batch
-   - 1 second delay between batches
-   - Prioritize shorter timeframes (1m, 5m) over longer
-```
-
-### Gap Fill Priority Order
-
-| Priority | Timeframe | Rationale |
-|----------|-----------|-----------|
-| 1 | 1m | Building block for all aggregations |
-| 2 | 5m | Native WebSocket granularity, cross-validate |
-| 3 | 15m | First aggregation level |
-| 4 | 1h | Common trading timeframe |
-| 5 | 4h | High-impact signals |
-| 6 | 1d | Lowest frequency, can tolerate delays |
-
-### Coinbase REST API Candle Endpoints
-
-| Timeframe | Granularity Param | Max Candles |
-|-----------|-------------------|-------------|
-| 1m | ONE_MINUTE | 300 per request |
-| 5m | FIVE_MINUTE | 300 per request |
-| 15m | FIFTEEN_MINUTE | 300 per request |
-| 1h | ONE_HOUR | 300 per request |
-| 6h | SIX_HOUR | 300 per request |
-| 1d | ONE_DAY | 300 per request |
-
-**Note:** 4h is not natively supported. Must aggregate from 1h candles.
-
-### Backfill Calculation
-
-For 60-candle minimum:
-| Timeframe | Data Needed | REST Calls |
-|-----------|-------------|------------|
-| 1m | 60 minutes | 1 |
-| 5m | 300 minutes (5h) | 1 |
-| 15m | 900 minutes (15h) | 1 |
-| 1h | 60 hours (2.5d) | 1 |
-| 4h | 240 hours (10d) | 1 (fetch 1h, aggregate) |
-| 1d | 60 days | 1 |
-
-**Total per symbol:** 6 REST calls for full backfill
-**For 25 symbols:** 150 REST calls (batched: 30 batches * 5 calls = 30 seconds)
-
-### Anti-Features for Reconciliation
-
-| Anti-Feature | Why Skip |
-|--------------|----------|
-| **Real-Time REST Fallback** | Defeats purpose of WebSocket-first |
-| **Cross-Exchange Reconciliation** | Each adapter handles its own |
-| **Historical Backfill Beyond 60** | 60 is sufficient for MACD-V |
-| **Reconciliation Persistence** | State in memory, rebuilt on restart |
+### Phase 4: Polish
+12. Form-based settings editor
+13. Settings validation feedback
+14. Command history
 
 ---
 
-## Feature Summary Matrix
+## Risk Assessment
 
-### v2.0 Table Stakes
-
-| Area | Feature | Complexity | Existing? |
-|------|---------|------------|-----------|
-| WebSocket | Candles channel subscription | Low | No |
-| WebSocket | Heartbeat subscription | Low | No |
-| WebSocket | Sequence tracking | Medium | No |
-| Adapter | Unified interface | Medium | No |
-| Adapter | Connection management with backoff | Medium | Partial |
-| Adapter | Event emission (candleClose) | Low | Yes |
-| Adapter | Cache writing | Low | No (key change) |
-| Cache | Gap detection query | Medium | No |
-| Cache | Staleness detection | Low | No |
-| Cache | Timeframe aggregation | Medium | No |
-| Reconciliation | Periodic gap scan | Medium | No |
-| Reconciliation | REST backfill with rate limiting | Medium | Yes (needs refactor) |
-
-### v2.0 Differentiators
-
-| Area | Feature | Complexity | Value |
-|------|---------|------------|-------|
-| Adapter | Connection health metrics | Medium | Observability |
-| Adapter | Circuit breaker | Medium | Stability |
-| Cache | TTL jitter (prevent stampede) | Low | Reliability |
-| Reconciliation | Priority-based gap fill | Low | Efficiency |
-
-### Deferred to Future
-
-| Area | Feature | Why Defer |
-|------|---------|-----------|
-| Adapter | Binance adapter | Architecture only, implementation later |
-| WebSocket | Level2 order book | Not needed for MACD-V |
-| WebSocket | Market trades | Not needed for MACD-V |
-| Cache | Cross-region replication | Single-region sufficient |
-| Reconciliation | Historical analysis beyond 60 | Not required for current use case |
+| Risk | Likelihood | Impact | Mitigation |
+|------|------------|--------|------------|
+| Settings migration from file | Low | Medium | One-time migration script |
+| Pub/sub message loss | Low | Low | Commands are idempotent |
+| Mode switch during active trade | Medium | High | Pause before switch |
+| Invalid settings saved | Medium | Medium | Zod validation before save |
+| Scanner adds unwanted symbols | Low | Low | Require manual approval |
 
 ---
 
 ## Sources
 
-**Official Coinbase Documentation:**
-- [WebSocket Channels](https://docs.cdp.coinbase.com/coinbase-app/advanced-trade-apis/websocket/websocket-channels)
-- [WebSocket Overview](https://docs.cdp.coinbase.com/coinbase-app/advanced-trade-apis/websocket/websocket-overview)
-- [WebSocket Rate Limits](https://docs.cdp.coinbase.com/coinbase-app/advanced-trade-apis/websocket/websocket-rate-limits)
+**Trading Platform Patterns:**
+- [B2COPY Admin Panel (2026)](https://www.globenewswire.com/news-release/2026/01/21/3222491/0/en/B2COPY-Unveils-Completely-Redesigned-Admin-Panel-with-Enhanced-Speed-and-Control.html) - Modern admin panel architecture
+- [3Commas Risk Management](https://3commas.io/blog/ai-trading-bot-risk-management-guide) - Bot settings best practices
+- [Altrady Watchlists](https://www.altrady.com/features/watchlists-and-price-alerts) - Symbol management patterns
+- [Bitsgap Platform](https://bitsgap.com/) - Multi-exchange bot configuration
 
-**Architecture Patterns:**
-- [Adapter Design Pattern in TypeScript](https://medium.com/@robinviktorsson/a-guide-to-the-adapter-design-pattern-in-typescript-and-node-js-with-practical-examples-f11590ace581)
-- [Exchange Architecture Patterns](https://deepwiki.com/akenshaw/flowsurface/5.1-exchange-architecture)
-- [Cache Invalidation Strategies](https://leapcell.io/blog/cache-invalidation-strategies-time-based-vs-event-driven)
-- [WebSocket Reconnection Best Practices](https://ably.com/topic/websocket-architecture-best-practices)
-- [Cryptocurrency Data Reconciliation](https://www.osfin.ai/blog/crypto-reconciliation)
+**Technical Implementation:**
+- [PostgreSQL JSONB Patterns (AWS)](https://aws.amazon.com/blogs/database/postgresql-as-a-json-database-advanced-patterns-and-best-practices/) - JSONB best practices
+- [JSONB Flexible Modeling](https://medium.com/@richardhightower/jsonb-postgresqls-secret-weapon-for-flexible-data-modeling-cf2f5087168f) - Schema patterns
+- [Redis Pub/Sub for Trading](https://medium.com/@sw.lee_41764/harnessing-the-power-of-redis-for-efficient-trading-operations-a-detailed-look-at-redis-pub-sub-2951b3c50c11) - Command protocol patterns
+- [Redis Real-Time Trading](https://redis.io/blog/real-time-trading-platform-with-redis-enterprise/) - Architecture patterns
+
+**React Admin UI:**
+- [React Admin JsonSchemaForm](https://marmelab.com/react-admin/JsonSchemaForm.html) - JSON form editing
+- [json-edit-react](https://github.com/CarlosNZ/json-edit-react) - JSONB editor component
+- [React Admin May 2025 Update](https://marmelab.com/blog/2025/05/21/react-admin-may-2025-update.html) - Latest patterns
 
 **Existing Codebase:**
-- `packages/cache/src/strategies/candle-cache.ts` - Current cache implementation
-- `packages/cache/src/keys.ts` - Cache key patterns
-- `.planning/COINBASE-API-OPTIMIZATION.md` - Problem analysis and architecture proposal
+- `data/DESKTOP-5FK78SF.settings.json` - Current settings structure
+- `packages/database/schema.sql` - Database schema
+- `.planning/PROJECT.md` - v4.0 requirements
