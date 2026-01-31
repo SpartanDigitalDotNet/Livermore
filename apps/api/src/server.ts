@@ -14,6 +14,7 @@ import { CoinbaseRestClient, StartupBackfillService, BoundaryRestService, DEFAUL
 import { IndicatorCalculationService } from './services/indicator-calculation.service';
 import { AlertEvaluationService } from './services/alert-evaluation.service';
 import { getDiscordService } from './services/discord-notification.service';
+import { ControlChannelService } from './services/control-channel.service';
 import { appRouter } from './routers';
 import { clerkWebhookHandler } from './routes/webhooks/clerk';
 import type { Timeframe } from '@livermore/schemas';
@@ -28,6 +29,11 @@ const BLACKLISTED_SYMBOLS = [
 
 // Minimum position value to include in monitoring (USD)
 const MIN_POSITION_VALUE_USD = 2;
+
+// Temporary: hardcode test identity_sub until multi-user support
+// This should match the Clerk user.id of the test user
+// TODO: Replace with dynamic identity from authenticated context
+const TEST_IDENTITY_SUB = 'user_test_001';
 
 // Supported timeframes for indicator calculation
 const SUPPORTED_TIMEFRAMES: Timeframe[] = ['1m', '5m', '15m', '1h', '4h', '1d'];
@@ -200,6 +206,11 @@ async function start() {
     logger.warn('Discord notifications disabled (DISCORD_LIVERMORE_BOT not set)');
   }
 
+  // Start Control Channel Service (must be early - receives runtime commands)
+  const controlChannelService = new ControlChannelService(TEST_IDENTITY_SUB);
+  await controlChannelService.start();
+  logger.info({ identitySub: TEST_IDENTITY_SUB }, 'Control Channel Service started');
+
   // Fetch symbols from Coinbase account holdings (filtered by position value)
   logger.info('Fetching symbols from Coinbase account...');
   const { monitored: monitoredSymbols, excluded: excludedSymbols } = await getAccountSymbols(
@@ -248,6 +259,7 @@ async function start() {
         database: 'connected',
         redis: 'connected',
         discord: discordService.isEnabled() ? 'enabled' : 'disabled',
+        controlChannel: 'active',
       },
     };
   });
@@ -332,6 +344,9 @@ async function start() {
   // Graceful shutdown
   const shutdown = async () => {
     logger.info('Shutting down server...');
+
+    // Stop Control Channel first (no new commands accepted)
+    await controlChannelService.stop();
 
     // Stop services in reverse order
     await alertService.stop();
