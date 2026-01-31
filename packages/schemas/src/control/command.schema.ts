@@ -29,6 +29,7 @@ export const CommandTypeSchema = z.enum([
   // Phase 20 - Symbol management
   'add-symbol',
   'remove-symbol',
+  'bulk-add-symbols',
 ]);
 
 /**

@@ -33,6 +33,7 @@ const PRIORITY: Record<CommandType, number> = {
   'clear-cache': 20,
   'add-symbol': 15,
   'remove-symbol': 15,
+  'bulk-add-symbols': 15,
 };
 
 /**
@@ -301,6 +302,8 @@ export class ControlChannelService {
         return this.handleAddSymbol(payload);
       case 'remove-symbol':
         return this.handleRemoveSymbol(payload);
+      case 'bulk-add-symbols':
+        return this.handleBulkAddSymbols(payload);
       default:
         throw new Error(`Unknown command type: ${type}`);
     }
@@ -827,6 +830,130 @@ export class ControlChannelService {
     return {
       removed: true,
       symbol: normalizedSymbol,
+      totalSymbols: this.services.monitoredSymbols.length,
+      timestamp: Date.now(),
+    };
+  }
+
+  /**
+   * Handle bulk-add-symbols command (SYM-05)
+   * Adds multiple validated symbols in one operation
+   *
+   * Payload:
+   * - symbols: string[] (required) - Array of pre-validated symbols
+   *
+   * Note: Validation should happen in Admin UI via bulkValidate endpoint.
+   * This handler assumes symbols are already validated.
+   */
+  private async handleBulkAddSymbols(payload?: Record<string, unknown>): Promise<Record<string, unknown>> {
+    if (!this.services) {
+      throw new Error('Services not initialized');
+    }
+
+    const symbols = payload?.symbols as string[];
+    if (!symbols || !Array.isArray(symbols) || symbols.length === 0) {
+      throw new Error('symbols array is required in payload');
+    }
+
+    // Normalize all symbols
+    const normalizedSymbols = symbols.map(s => s.toUpperCase().trim());
+
+    logger.info({ count: normalizedSymbols.length }, 'Bulk adding symbols to watchlist');
+
+    // 1. Get current symbols from database
+    const result = await this.services.db
+      .select({ settings: users.settings })
+      .from(users)
+      .where(
+        and(
+          eq(users.identityProvider, 'clerk'),
+          eq(users.identitySub, this.identitySub)
+        )
+      )
+      .limit(1);
+
+    if (result.length === 0) {
+      throw new Error(`User not found: ${this.identitySub}`);
+    }
+
+    const currentSymbols: string[] = (result[0].settings as Record<string, unknown>)?.symbols as string[] ?? [];
+    const existingSet = new Set(currentSymbols);
+
+    // Filter out duplicates
+    const toAdd = normalizedSymbols.filter(s => !existingSet.has(s));
+
+    if (toAdd.length === 0) {
+      return {
+        added: 0,
+        skipped: normalizedSymbols.length,
+        message: 'All symbols already in watchlist',
+        totalSymbols: this.services.monitoredSymbols.length,
+      };
+    }
+
+    // 2. Update database with all new symbols at once
+    const newSymbols = [...currentSymbols, ...toAdd];
+    await this.services.db.execute(sql`
+      UPDATE users
+      SET settings = jsonb_set(
+        COALESCE(settings, '{}'),
+        '{symbols}',
+        ${JSON.stringify(newSymbols)}::jsonb,
+        true
+      ),
+      updated_at = NOW()
+      WHERE identity_provider = 'clerk' AND identity_sub = ${this.identitySub}
+    `);
+
+    // 3. Update in-memory list
+    this.services.monitoredSymbols.push(...toAdd);
+
+    // 4. If not paused, initialize monitoring for new symbols
+    const addedResults: Array<{ symbol: string; backfilled: boolean }> = [];
+
+    if (!this.isPaused) {
+      // Backfill all new symbols
+      const backfillService = new StartupBackfillService(
+        this.services.config.apiKeyId,
+        this.services.config.privateKeyPem,
+        this.services.redis
+      );
+      await backfillService.backfill(toAdd, this.services.timeframes);
+
+      // Add indicator configs for all new symbols
+      for (const symbol of toAdd) {
+        const newConfigs = this.services.timeframes.map(tf => ({
+          symbol,
+          timeframe: tf
+        }));
+        this.services.indicatorConfigs.push(...newConfigs);
+
+        // Force indicator calculation
+        for (const tf of this.services.timeframes) {
+          await this.services.indicatorService.forceRecalculate(symbol, tf);
+        }
+
+        addedResults.push({ symbol, backfilled: true });
+      }
+
+      // Resubscribe WebSocket with all symbols
+      this.services.coinbaseAdapter.subscribe(this.services.monitoredSymbols, '5m');
+    } else {
+      // Paused - just record without backfill
+      for (const symbol of toAdd) {
+        addedResults.push({ symbol, backfilled: false });
+      }
+    }
+
+    logger.info(
+      { added: toAdd.length, skipped: normalizedSymbols.length - toAdd.length, total: this.services.monitoredSymbols.length },
+      'Bulk add symbols complete'
+    );
+
+    return {
+      added: toAdd.length,
+      skipped: normalizedSymbols.length - toAdd.length,
+      symbols: addedResults,
       totalSymbols: this.services.monitoredSymbols.length,
       timestamp: Date.now(),
     };
