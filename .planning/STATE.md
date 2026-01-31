@@ -11,15 +11,15 @@ See: .planning/PROJECT.md
 
 **Milestone:** v4.0 User Settings + Runtime Control
 **Phase:** 18 (Control Channel Foundation)
-**Plan:** 02 of 3 complete
-**Status:** In progress
+**Plan:** 03 of 3 complete
+**Status:** Phase complete
 
 ```
-Progress: [====......] 33%
-Phases:   17 [X] 18 [>] 19 [ ] 20 [ ] 21 [ ] 22 [ ]
+Progress: [=====.....] 40%
+Phases:   17 [X] 18 [X] 19 [ ] 20 [ ] 21 [ ] 22 [ ]
 ```
 
-**Last activity:** 2026-01-31 - Completed 18-02-PLAN.md (ControlChannelService)
+**Last activity:** 2026-01-31 - Completed 18-03-PLAN.md (Server Startup Integration)
 
 ## Milestones
 
@@ -37,7 +37,7 @@ See `.planning/MILESTONES.md` for full history.
 | Phase | Goal | Requirements | Status |
 |-------|------|--------------|--------|
 | 17 | Settings Infrastructure | SET-01 to SET-07 | Complete (SET-01 to SET-07) |
-| 18 | Control Channel Foundation | RUN-01,02,03,10,11,12,13 | In Progress (RUN-01,02,03,10,11,12,13 done) |
+| 18 | Control Channel Foundation | RUN-01,02,03,10,11,12,13 | Complete (RUN-01,02,03,10,11,12,13) |
 | 19 | Runtime Commands | RUN-04 to RUN-09 | Pending |
 | 20 | Symbol Management | SYM-01 to SYM-06 | Pending |
 | 21 | Admin UI - Settings | UI-SET-01 to UI-SET-06 | Pending |
@@ -121,14 +121,14 @@ Alert Evaluation (receives ticker prices)
 ### Last Session
 
 **Date:** 2026-01-31
-**Activity:** Completed plan 18-02 (ControlChannelService)
-**Stopped At:** Plan 18-02 complete, ready for 18-03
+**Activity:** Completed plan 18-03 (Server Startup Integration) - Phase 18 Complete
+**Stopped At:** Phase 18 complete, ready for Phase 19
 
 ### Resume Context
 
-**PHASE 18 IN PROGRESS**
+**PHASE 18 COMPLETE**
 
-Completed:
+Phase 18 delivered Control Channel Foundation:
 - Plan 18-01: Command Schemas and Channel Keys (RUN-10, RUN-11, RUN-12, RUN-13)
   - Created CommandTypeSchema with 8 command types for forward compatibility
   - Created CommandSchema and CommandResponseSchema Zod schemas
@@ -141,9 +141,18 @@ Completed:
   - Priority queue ensures pause/resume processed first
   - Commits: 9ec96d1, 848408b
 
+- Plan 18-03: Server Startup Integration
+  - ControlChannelService integrated into server lifecycle
+  - Starts after pre-flight, stops first in shutdown
+  - TEST_IDENTITY_SUB placeholder for multi-user support
+  - Commits: 480dec3
+
 Next steps:
-1. Execute Plan 18-03 (Pause/Resume Endpoints)
+1. Execute Phase 19 (Runtime Commands)
+   - RUN-04: Pause command implementation
+   - RUN-05: Resume command implementation
+   - RUN-06 to RUN-09: Other runtime commands
 
 ---
 *State initialized: 2026-01-18*
-*Last updated: 2026-01-31 - Completed 18-02-PLAN.md*
+*Last updated: 2026-01-31 - Completed 18-03-PLAN.md (Phase 18 Complete)*
