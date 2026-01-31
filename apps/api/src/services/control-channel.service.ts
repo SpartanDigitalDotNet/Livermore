@@ -5,7 +5,9 @@ import {
   type Command,
   type CommandResponse,
   type CommandType,
+  type Timeframe,
 } from '@livermore/schemas';
+import { StartupBackfillService } from '@livermore/coinbase-client';
 import { eq, and } from 'drizzle-orm';
 import { users } from '@livermore/database';
 import type Redis from 'ioredis';
@@ -476,18 +478,155 @@ export class ControlChannelService {
 
   /**
    * Handle force-backfill command (RUN-08)
-   * Stub - to be implemented in Plan 03
+   * Triggers candle backfill for a specified symbol
+   *
+   * Payload:
+   * - symbol: string (required) - e.g., "BTC-USD"
+   * - timeframes: string[] (optional) - defaults to all supported
    */
-  private async handleForceBackfill(_payload?: Record<string, unknown>): Promise<Record<string, unknown>> {
-    throw new Error('force-backfill not yet implemented');
+  private async handleForceBackfill(payload?: Record<string, unknown>): Promise<Record<string, unknown>> {
+    if (!this.services) {
+      throw new Error('Services not initialized');
+    }
+
+    const symbol = payload?.symbol as string | undefined;
+    if (!symbol) {
+      throw new Error('symbol is required in payload');
+    }
+
+    // Use specified timeframes or default to all
+    const requestedTimeframes = payload?.timeframes as Timeframe[] | undefined;
+    const timeframes: Timeframe[] = requestedTimeframes ?? ['1m', '5m', '15m', '1h', '4h', '1d'];
+
+    logger.info({ symbol, timeframes }, 'Starting force backfill');
+
+    // Create backfill service with credentials from config
+    const backfillService = new StartupBackfillService(
+      this.services.config.apiKeyId,
+      this.services.config.privateKeyPem,
+      this.services.redis
+    );
+
+    // Run backfill for the symbol
+    await backfillService.backfill([symbol], timeframes);
+
+    // Force indicator recalculation after backfill
+    for (const timeframe of timeframes) {
+      await this.services.indicatorService.forceRecalculate(symbol, timeframe);
+    }
+
+    logger.info({ symbol, timeframes }, 'Force backfill complete');
+
+    return {
+      backfilled: true,
+      symbol,
+      timeframes,
+      timestamp: Date.now(),
+    };
   }
 
   /**
    * Handle clear-cache command (RUN-09)
-   * Stub - to be implemented in Plan 03
+   * Clears Redis cache with specified scope
+   *
+   * Payload:
+   * - scope: 'all' | 'symbol' | 'timeframe' (required)
+   * - symbol: string (required if scope='symbol')
+   * - timeframe: string (required if scope='timeframe')
    */
-  private async handleClearCache(_payload?: Record<string, unknown>): Promise<Record<string, unknown>> {
-    throw new Error('clear-cache not yet implemented');
+  private async handleClearCache(payload?: Record<string, unknown>): Promise<Record<string, unknown>> {
+    if (!this.services) {
+      throw new Error('Services not initialized');
+    }
+
+    const scope = payload?.scope as string | undefined;
+    if (!scope) {
+      throw new Error('scope is required in payload (all, symbol, or timeframe)');
+    }
+
+    const symbol = payload?.symbol as string | undefined;
+    const timeframe = payload?.timeframe as Timeframe | undefined;
+
+    // Hardcoded for now - will use identity mapping when multi-user is implemented
+    const userId = 1;
+    const exchangeId = 1;
+
+    let deletedCount = 0;
+
+    switch (scope) {
+      case 'all': {
+        // Delete all candles and indicators for this user
+        const candlePattern = `candles:${userId}:${exchangeId}:*`;
+        const indicatorPattern = `indicator:${userId}:${exchangeId}:*`;
+        const tickerPattern = `ticker:${userId}:${exchangeId}:*`;
+
+        const candleKeys = await this.services.redis.keys(candlePattern);
+        const indicatorKeys = await this.services.redis.keys(indicatorPattern);
+        const tickerKeys = await this.services.redis.keys(tickerPattern);
+
+        const allKeys = [...candleKeys, ...indicatorKeys, ...tickerKeys];
+        if (allKeys.length > 0) {
+          await this.services.redis.del(...allKeys);
+          deletedCount = allKeys.length;
+        }
+        break;
+      }
+
+      case 'symbol': {
+        if (!symbol) {
+          throw new Error('symbol is required when scope=symbol');
+        }
+
+        // Delete all timeframes for this symbol
+        const candlePattern = `candles:${userId}:${exchangeId}:${symbol}:*`;
+        const indicatorPattern = `indicator:${userId}:${exchangeId}:${symbol}:*`;
+        const tickerKey = `ticker:${userId}:${exchangeId}:${symbol}`;
+
+        const candleKeys = await this.services.redis.keys(candlePattern);
+        const indicatorKeys = await this.services.redis.keys(indicatorPattern);
+
+        const allKeys = [...candleKeys, ...indicatorKeys, tickerKey];
+        if (allKeys.length > 0) {
+          await this.services.redis.del(...allKeys);
+          deletedCount = allKeys.length;
+        }
+        break;
+      }
+
+      case 'timeframe': {
+        if (!timeframe) {
+          throw new Error('timeframe is required when scope=timeframe');
+        }
+
+        // Delete all symbols for this timeframe
+        const candlePattern = `candles:${userId}:${exchangeId}:*:${timeframe}`;
+        const indicatorPattern = `indicator:${userId}:${exchangeId}:*:${timeframe}:*`;
+
+        const candleKeys = await this.services.redis.keys(candlePattern);
+        const indicatorKeys = await this.services.redis.keys(indicatorPattern);
+
+        const allKeys = [...candleKeys, ...indicatorKeys];
+        if (allKeys.length > 0) {
+          await this.services.redis.del(...allKeys);
+          deletedCount = allKeys.length;
+        }
+        break;
+      }
+
+      default:
+        throw new Error(`Invalid scope: ${scope}. Must be one of: all, symbol, timeframe`);
+    }
+
+    logger.info({ scope, symbol, timeframe, deletedCount }, 'Cache cleared');
+
+    return {
+      cleared: true,
+      scope,
+      symbol,
+      timeframe,
+      deletedCount,
+      timestamp: Date.now(),
+    };
   }
 
   /**
