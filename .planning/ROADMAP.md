@@ -1,6 +1,6 @@
 # Milestone v4.0: User Settings + Runtime Control
 
-**Status:** Planning
+**Status:** In Progress
 **Phases:** 17-22
 **Total Plans:** TBD
 
@@ -17,9 +17,9 @@ Enables user-specific configuration stored in PostgreSQL with JSONB, establishes
 **Plans**: 3 plans
 
 Plans:
-- [ ] 17-01-PLAN.md — Database column + Zod schema foundation
-- [ ] 17-02-PLAN.md — Core CRUD endpoints (get/update/patch)
-- [ ] 17-03-PLAN.md — Export/Import endpoints
+- [x] 17-01-PLAN.md — Database column + Zod schema foundation
+- [x] 17-02-PLAN.md — Core CRUD endpoints (get/update/patch)
+- [x] 17-03-PLAN.md — Export/Import endpoints
 
 **Requirements:**
 - SET-01: `settings` JSONB column added to users table with version field
@@ -43,7 +43,12 @@ Plans:
 
 **Goal**: Admin UI can send commands to API and receive acknowledgments and results
 **Depends on**: Phase 17 (settings schema informs command payloads)
-**Plans**: TBD
+**Plans**: 3 plans
+
+Plans:
+- [ ] 18-01-PLAN.md — Schemas + channel key helpers
+- [ ] 18-02-PLAN.md — ControlChannelService with pub/sub + priority queue
+- [ ] 18-03-PLAN.md — Server integration (startup/shutdown)
 
 **Requirements:**
 - RUN-01: Redis pub/sub command channel `livermore:commands:{identity_sub}`
@@ -167,8 +172,8 @@ Plans:
 
 | Phase | Name | Status | Plans |
 |-------|------|--------|-------|
-| 17 | Settings Infrastructure | Planned | 0/3 |
-| 18 | Control Channel Foundation | Pending | 0/? |
+| 17 | Settings Infrastructure | Complete | 3/3 |
+| 18 | Control Channel Foundation | Pending | 0/3 |
 | 19 | Runtime Commands | Pending | 0/? |
 | 20 | Symbol Management | Pending | 0/? |
 | 21 | Admin UI - Settings | Pending | 0/? |
