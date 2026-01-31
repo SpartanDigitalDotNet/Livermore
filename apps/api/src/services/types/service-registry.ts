@@ -1,5 +1,6 @@
 import type { CoinbaseAdapter, BoundaryRestService } from '@livermore/coinbase-client';
 import type { Database } from '@livermore/database';
+import type { Timeframe } from '@livermore/schemas';
 import type Redis from 'ioredis';
 import type { IndicatorCalculationService } from '../indicator-calculation.service';
 import type { AlertEvaluationService } from '../alert-evaluation.service';
@@ -49,4 +50,13 @@ export interface ServiceRegistry {
 
   /** Runtime config with API credentials for backfill operations */
   config: RuntimeConfig;
+
+  /** Symbols currently being monitored (for resume resubscription) */
+  monitoredSymbols: string[];
+
+  /** Indicator configs for all symbol/timeframe combinations */
+  indicatorConfigs: Array<{ symbol: string; timeframe: Timeframe }>;
+
+  /** Supported timeframes for alert service */
+  timeframes: Timeframe[];
 }
