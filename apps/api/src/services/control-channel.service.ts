@@ -272,21 +272,168 @@ export class ControlChannelService {
   }
 
   /**
-   * Execute a command
-   * Phase 18: Returns stub, actual handlers implemented in Phase 19
+   * Execute a command by dispatching to the appropriate handler
+   * Dispatches to type-specific handlers for pause/resume and other commands
    */
   private async executeCommand(command: Command): Promise<Record<string, unknown>> {
-    logger.info(
-      { type: command.type, payload: command.payload },
-      'Executing command'
-    );
+    const { type, payload } = command;
 
-    // Phase 18 stub - actual command handlers will be implemented in Phase 19
-    // This allows the infrastructure to be tested end-to-end
+    logger.info({ type, payload }, 'Executing command');
+
+    switch (type) {
+      case 'pause':
+        return this.handlePause();
+      case 'resume':
+        return this.handleResume();
+      case 'reload-settings':
+        return this.handleReloadSettings();
+      case 'switch-mode':
+        return this.handleSwitchMode(payload);
+      case 'force-backfill':
+        return this.handleForceBackfill(payload);
+      case 'clear-cache':
+        return this.handleClearCache(payload);
+      case 'add-symbol':
+        return this.handleAddSymbol(payload);
+      case 'remove-symbol':
+        return this.handleRemoveSymbol(payload);
+      default:
+        throw new Error(`Unknown command type: ${type}`);
+    }
+  }
+
+  /**
+   * Handle pause command (RUN-04)
+   * Stops services in dependency order: downstream first (consumers before producers)
+   */
+  private async handlePause(): Promise<Record<string, unknown>> {
+    if (!this.services) {
+      throw new Error('Services not initialized');
+    }
+
+    if (this.isPaused) {
+      return { status: 'already_paused' };
+    }
+
+    logger.info('Pausing services...');
+
+    // Stop in dependency order (downstream to upstream)
+    // 1. AlertService - consumes indicator events
+    await this.services.alertService.stop();
+    logger.debug('AlertService stopped');
+
+    // 2. CoinbaseAdapter - produces candle events (disconnect WebSocket)
+    this.services.coinbaseAdapter.disconnect();
+    logger.debug('CoinbaseAdapter disconnected');
+
+    // 3. BoundaryRestService - produces candle events from REST
+    await this.services.boundaryRestService.stop();
+    logger.debug('BoundaryRestService stopped');
+
+    // 4. IndicatorService - consumes candle events
+    await this.services.indicatorService.stop();
+    logger.debug('IndicatorService stopped');
+
+    this.isPaused = true;
+    logger.info('All services paused');
+
     return {
-      executed: true,
-      type: command.type,
+      status: 'paused',
+      timestamp: Date.now(),
     };
+  }
+
+  /**
+   * Handle resume command (RUN-05)
+   * Starts services in dependency order: upstream first (producers before consumers)
+   */
+  private async handleResume(): Promise<Record<string, unknown>> {
+    if (!this.services) {
+      throw new Error('Services not initialized');
+    }
+
+    if (!this.isPaused) {
+      return { status: 'already_running' };
+    }
+
+    logger.info('Resuming services...');
+
+    // Start in dependency order (upstream to downstream)
+    // 1. IndicatorService - needs to be listening before events arrive
+    await this.services.indicatorService.start(this.services.indicatorConfigs);
+    logger.debug('IndicatorService started');
+
+    // 2. CoinbaseAdapter - connect WebSocket and subscribe
+    await this.services.coinbaseAdapter.connect();
+    this.services.coinbaseAdapter.subscribe(this.services.monitoredSymbols, '5m');
+    logger.debug('CoinbaseAdapter connected and subscribed');
+
+    // 3. BoundaryRestService - start listening for boundary events
+    await this.services.boundaryRestService.start(this.services.monitoredSymbols);
+    logger.debug('BoundaryRestService started');
+
+    // 4. AlertService - start evaluating alerts
+    await this.services.alertService.start(
+      this.services.monitoredSymbols,
+      this.services.timeframes
+    );
+    logger.debug('AlertService started');
+
+    this.isPaused = false;
+    logger.info('All services resumed');
+
+    return {
+      status: 'resumed',
+      timestamp: Date.now(),
+    };
+  }
+
+  /**
+   * Handle reload-settings command (RUN-06)
+   * Stub - to be implemented in Plan 03
+   */
+  private async handleReloadSettings(): Promise<Record<string, unknown>> {
+    throw new Error('reload-settings not yet implemented');
+  }
+
+  /**
+   * Handle switch-mode command (RUN-07)
+   * Stub - to be implemented in Plan 03
+   */
+  private async handleSwitchMode(_payload?: Record<string, unknown>): Promise<Record<string, unknown>> {
+    throw new Error('switch-mode not yet implemented');
+  }
+
+  /**
+   * Handle force-backfill command (RUN-08)
+   * Stub - to be implemented in Plan 03
+   */
+  private async handleForceBackfill(_payload?: Record<string, unknown>): Promise<Record<string, unknown>> {
+    throw new Error('force-backfill not yet implemented');
+  }
+
+  /**
+   * Handle clear-cache command (RUN-09)
+   * Stub - to be implemented in Plan 03
+   */
+  private async handleClearCache(_payload?: Record<string, unknown>): Promise<Record<string, unknown>> {
+    throw new Error('clear-cache not yet implemented');
+  }
+
+  /**
+   * Handle add-symbol command
+   * Stub - to be implemented in Plan 03
+   */
+  private async handleAddSymbol(_payload?: Record<string, unknown>): Promise<Record<string, unknown>> {
+    throw new Error('add-symbol not yet implemented');
+  }
+
+  /**
+   * Handle remove-symbol command
+   * Stub - to be implemented in Plan 03
+   */
+  private async handleRemoveSymbol(_payload?: Record<string, unknown>): Promise<Record<string, unknown>> {
+    throw new Error('remove-symbol not yet implemented');
   }
 
   /**
