@@ -1,5 +1,6 @@
-import { pgTable, serial, varchar, timestamp, boolean, text, uniqueIndex } from 'drizzle-orm/pg-core';
+import { pgTable, serial, varchar, timestamp, boolean, text, uniqueIndex, jsonb } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
+import type { UserSettings } from '@livermore/schemas';
 
 /**
  * Users table - stores user accounts with OAuth identity fields
@@ -19,6 +20,8 @@ export const users = pgTable('users', {
   identityPictureUrl: text('identity_picture_url'),
   role: varchar('role', { length: 20 }).default('user').notNull(),
   lastLoginAt: timestamp('last_login_at', { mode: 'string' }),
+  /** User settings stored as JSONB with version field for schema evolution */
+  settings: jsonb('settings').$type<UserSettings>().default({ version: 1 }),
 }, (table) => ({
   // Partial unique index for OAuth identity lookup (allows NULL identity_provider)
   identityProviderSubIdx: uniqueIndex('users_identity_provider_sub_idx')

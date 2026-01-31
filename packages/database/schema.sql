@@ -24,6 +24,7 @@ CREATE TABLE "users" (
   "identity_picture_url" text NULL,
   "role" character varying(20) NOT NULL DEFAULT 'user',
   "last_login_at" timestamp NULL,
+  "settings" jsonb DEFAULT '{"version":1}'::jsonb,
   "created_at" timestamp NOT NULL DEFAULT now(),
   "updated_at" timestamp NOT NULL DEFAULT now(),
   PRIMARY KEY ("id"),
