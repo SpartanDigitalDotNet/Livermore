@@ -4,6 +4,7 @@ import { alertRouter } from './alert.router';
 import { positionRouter } from './position.router';
 import { logsRouter } from './logs.router';
 import { userRouter } from './user.router';
+import { settingsRouter } from './settings.router';
 
 /**
  * Main application router
@@ -16,6 +17,7 @@ export const appRouter = router({
   position: positionRouter,
   logs: logsRouter,
   user: userRouter,
+  settings: settingsRouter,
 });
 
 export type AppRouter = typeof appRouter;
@@ -26,3 +28,4 @@ export { alertRouter } from './alert.router';
 export { positionRouter } from './position.router';
 export { logsRouter } from './logs.router';
 export { userRouter } from './user.router';
+export { settingsRouter } from './settings.router';
