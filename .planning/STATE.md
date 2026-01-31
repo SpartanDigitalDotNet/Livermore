@@ -10,16 +10,16 @@ See: .planning/PROJECT.md
 ## Current Position
 
 **Milestone:** v4.0 User Settings + Runtime Control
-**Phase:** 17 (Settings Infrastructure)
-**Plan:** 03 of 3 complete
-**Status:** Phase complete
+**Phase:** 18 (Control Channel Foundation)
+**Plan:** 01 of 3 complete
+**Status:** In progress
 
 ```
-Progress: [==........] 20%
-Phases:   17 [X] 18 [ ] 19 [ ] 20 [ ] 21 [ ] 22 [ ]
+Progress: [===.......] 27%
+Phases:   17 [X] 18 [>] 19 [ ] 20 [ ] 21 [ ] 22 [ ]
 ```
 
-**Last activity:** 2026-01-31 - Completed 17-03-PLAN.md (Settings Export/Import)
+**Last activity:** 2026-01-31 - Completed 18-01-PLAN.md (Command Schemas)
 
 ## Milestones
 
@@ -37,7 +37,7 @@ See `.planning/MILESTONES.md` for full history.
 | Phase | Goal | Requirements | Status |
 |-------|------|--------------|--------|
 | 17 | Settings Infrastructure | SET-01 to SET-07 | Complete (SET-01 to SET-07) |
-| 18 | Control Channel Foundation | RUN-01,02,03,10,11,12,13 | Pending |
+| 18 | Control Channel Foundation | RUN-01,02,03,10,11,12,13 | In Progress (RUN-10,11,12,13 done) |
 | 19 | Runtime Commands | RUN-04 to RUN-09 | Pending |
 | 20 | Symbol Management | SYM-01 to SYM-06 | Pending |
 | 21 | Admin UI - Settings | UI-SET-01 to UI-SET-06 | Pending |
@@ -121,34 +121,24 @@ Alert Evaluation (receives ticker prices)
 ### Last Session
 
 **Date:** 2026-01-31
-**Activity:** Completed plan 17-03 (Settings Export/Import)
-**Stopped At:** Phase 17 complete, ready for Phase 18
+**Activity:** Completed plan 18-01 (Command Schemas and Channel Keys)
+**Stopped At:** Plan 18-01 complete, ready for 18-02
 
 ### Resume Context
 
-**PHASE 17 COMPLETE**
+**PHASE 18 IN PROGRESS**
 
 Completed:
-- Plan 17-01: Settings Column and Schema (SET-01, SET-02)
-  - Added settings JSONB column to users table
-  - Created UserSettingsSchema Zod schema with version field
-  - Commits: da8530e, d68fe4e
-
-- Plan 17-02: Settings tRPC Endpoints (SET-03, SET-04, SET-05)
-  - Created settings.router.ts with get/update/patch endpoints
-  - All endpoints use protectedProcedure for Clerk auth
-  - Patch uses PostgreSQL jsonb_set for atomic updates
-  - Commits: 3e1fa03
-
-- Plan 17-03: Settings Export/Import (SET-06, SET-07)
-  - Added settings.export query with metadata envelope
-  - Added settings.import mutation with Zod validation
-  - Commits: 9568c6c
+- Plan 18-01: Command Schemas and Channel Keys (RUN-10, RUN-11, RUN-12, RUN-13)
+  - Created CommandTypeSchema with 8 command types for forward compatibility
+  - Created CommandSchema and CommandResponseSchema Zod schemas
+  - Added commandChannel() and responseChannel() key helpers
+  - Commits: 73753b6, ff6f9a7
 
 Next steps:
-1. Proceed to Phase 18 (Control Channel Foundation)
-2. Implement Redis pub/sub for runtime control commands
+1. Execute Plan 18-02 (ControlChannelService)
+2. Execute Plan 18-03 (Pause/Resume Endpoints)
 
 ---
 *State initialized: 2026-01-18*
-*Last updated: 2026-01-31 - Completed 17-03-PLAN.md*
+*Last updated: 2026-01-31 - Completed 18-01-PLAN.md*
