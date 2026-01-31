@@ -34,3 +34,6 @@ export * from './env/features.schema';
 
 // User settings schemas
 export * from './settings/user-settings.schema';
+
+// Control channel schemas
+export * from './control/command.schema';

@@ -132,3 +132,21 @@ export function candleClosePattern(
 ): string {
   return `channel:candle:close:${userId}:${exchangeId}:${symbol}:${timeframe}`;
 }
+
+/**
+ * Build Redis pub/sub channel for control commands
+ * Admin UI publishes commands, API subscribes
+ * @param identitySub - Clerk user identity subject (user.id)
+ */
+export function commandChannel(identitySub: string): string {
+  return `livermore:commands:${identitySub}`;
+}
+
+/**
+ * Build Redis pub/sub channel for command responses
+ * API publishes responses, Admin UI subscribes
+ * @param identitySub - Clerk user identity subject (user.id)
+ */
+export function responseChannel(identitySub: string): string {
+  return `livermore:responses:${identitySub}`;
+}
