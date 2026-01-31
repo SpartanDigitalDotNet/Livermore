@@ -441,10 +441,37 @@ export class ControlChannelService {
 
   /**
    * Handle switch-mode command (RUN-07)
-   * Stub - to be implemented in Plan 03
+   * STUB: Validates mode but does not actually switch
+   *
+   * Valid modes:
+   * - position-monitor: Track positions only (current default)
+   * - scalper-macdv: MACD-V based scalping signals
+   * - scalper-orderbook: Orderbook imbalance scalping (v4.1)
    */
-  private async handleSwitchMode(_payload?: Record<string, unknown>): Promise<Record<string, unknown>> {
-    throw new Error('switch-mode not yet implemented');
+  private async handleSwitchMode(payload?: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const mode = payload?.mode as string | undefined;
+
+    const validModes = ['position-monitor', 'scalper-macdv', 'scalper-orderbook'];
+
+    if (!mode) {
+      throw new Error('mode is required in payload');
+    }
+
+    if (!validModes.includes(mode)) {
+      throw new Error(`Invalid mode: ${mode}. Must be one of: ${validModes.join(', ')}`);
+    }
+
+    // RUN-07 specifies this is a stub for now
+    // scalper-orderbook requires orderbook imbalance detection (v4.1)
+    // scalper-macdv requires strategy implementation
+    logger.info({ mode }, 'Mode switch requested (stub - no actual change)');
+
+    return {
+      switched: false,
+      mode,
+      message: 'Mode switching is a stub - actual implementation pending strategy work',
+      validModes,
+    };
   }
 
   /**
