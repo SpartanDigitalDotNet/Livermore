@@ -737,11 +737,124 @@ export class ControlChannelService {
   }
 
   /**
-   * Handle remove-symbol command
-   * Stub - to be implemented in Plan 03
+   * Handle remove-symbol command (SYM-02)
+   * Removes symbol from watchlist and cleans up cache
+   *
+   * Payload:
+   * - symbol: string (required) - e.g., "SOL-USD"
    */
-  private async handleRemoveSymbol(_payload?: Record<string, unknown>): Promise<Record<string, unknown>> {
-    throw new Error('remove-symbol not yet implemented');
+  private async handleRemoveSymbol(payload?: Record<string, unknown>): Promise<Record<string, unknown>> {
+    if (!this.services) {
+      throw new Error('Services not initialized');
+    }
+
+    const symbol = payload?.symbol as string;
+    if (!symbol) {
+      throw new Error('symbol is required in payload');
+    }
+
+    const normalizedSymbol = symbol.toUpperCase().trim();
+
+    logger.info({ symbol: normalizedSymbol }, 'Removing symbol from watchlist');
+
+    // 1. Get current symbols
+    const result = await this.services.db
+      .select({ settings: users.settings })
+      .from(users)
+      .where(
+        and(
+          eq(users.identityProvider, 'clerk'),
+          eq(users.identitySub, this.identitySub)
+        )
+      )
+      .limit(1);
+
+    if (result.length === 0) {
+      throw new Error(`User not found: ${this.identitySub}`);
+    }
+
+    const currentSymbols: string[] = (result[0].settings as Record<string, unknown>)?.symbols as string[] ?? [];
+
+    // 2. Check if exists
+    if (!currentSymbols.includes(normalizedSymbol)) {
+      return {
+        status: 'not_found',
+        symbol: normalizedSymbol,
+        message: 'Symbol not in watchlist',
+      };
+    }
+
+    // 3. Update database
+    const newSymbols = currentSymbols.filter(s => s !== normalizedSymbol);
+    await this.services.db.execute(sql`
+      UPDATE users
+      SET settings = jsonb_set(
+        COALESCE(settings, '{}'),
+        '{symbols}',
+        ${JSON.stringify(newSymbols)}::jsonb,
+        true
+      ),
+      updated_at = NOW()
+      WHERE identity_provider = 'clerk' AND identity_sub = ${this.identitySub}
+    `);
+
+    // 4. Update in-memory list
+    const idx = this.services.monitoredSymbols.indexOf(normalizedSymbol);
+    if (idx > -1) {
+      this.services.monitoredSymbols.splice(idx, 1);
+    }
+
+    // 5. Clean up Redis cache for removed symbol
+    await this.cleanupSymbolCache(normalizedSymbol);
+
+    // 6. If not paused, update running services
+    if (!this.isPaused) {
+      // Remove from indicator configs
+      this.services.indicatorConfigs = this.services.indicatorConfigs.filter(
+        c => c.symbol !== normalizedSymbol
+      );
+
+      // Resubscribe WebSocket without removed symbol
+      // (CoinbaseAdapter handles unsubscribe internally when new list doesn't include symbol)
+      this.services.coinbaseAdapter.subscribe(this.services.monitoredSymbols, '5m');
+    }
+
+    logger.info(
+      { symbol: normalizedSymbol, totalSymbols: this.services.monitoredSymbols.length },
+      'Symbol removed from watchlist'
+    );
+
+    return {
+      removed: true,
+      symbol: normalizedSymbol,
+      totalSymbols: this.services.monitoredSymbols.length,
+      timestamp: Date.now(),
+    };
+  }
+
+  /**
+   * Clean up Redis cache for a removed symbol
+   * Deletes ticker, candles, and indicator keys
+   */
+  private async cleanupSymbolCache(symbol: string): Promise<void> {
+    // Hardcoded userId/exchangeId - will be dynamic in multi-user
+    const userId = 1;
+    const exchangeId = 1;
+    const keysToDelete: string[] = [];
+
+    // Ticker key
+    keysToDelete.push(`ticker:${userId}:${exchangeId}:${symbol}`);
+
+    // Candle and indicator keys for all timeframes
+    for (const tf of this.services!.timeframes) {
+      keysToDelete.push(`candles:${userId}:${exchangeId}:${symbol}:${tf}`);
+      keysToDelete.push(`indicator:${userId}:${exchangeId}:${symbol}:${tf}:macd-v`);
+    }
+
+    if (keysToDelete.length > 0) {
+      const deleted = await this.services!.redis.del(...keysToDelete);
+      logger.debug({ symbol, keysDeleted: deleted }, 'Cleaned up symbol cache');
+    }
   }
 
   /**
