@@ -8,7 +8,7 @@ import {
   type Timeframe,
 } from '@livermore/schemas';
 import { StartupBackfillService } from '@livermore/coinbase-client';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, sql } from 'drizzle-orm';
 import { users } from '@livermore/database';
 import type Redis from 'ioredis';
 import type { ServiceRegistry } from './types/service-registry';
@@ -630,11 +630,110 @@ export class ControlChannelService {
   }
 
   /**
-   * Handle add-symbol command
-   * Stub - to be implemented in Plan 03
+   * Handle add-symbol command (SYM-01)
+   * Adds symbol to user's watchlist and starts monitoring
+   *
+   * Payload:
+   * - symbol: string (required) - e.g., "SOL-USD"
    */
-  private async handleAddSymbol(_payload?: Record<string, unknown>): Promise<Record<string, unknown>> {
-    throw new Error('add-symbol not yet implemented');
+  private async handleAddSymbol(payload?: Record<string, unknown>): Promise<Record<string, unknown>> {
+    if (!this.services) {
+      throw new Error('Services not initialized');
+    }
+
+    const symbol = payload?.symbol as string;
+    if (!symbol) {
+      throw new Error('symbol is required in payload');
+    }
+
+    // Normalize symbol format
+    const normalizedSymbol = symbol.toUpperCase().trim();
+
+    logger.info({ symbol: normalizedSymbol }, 'Adding symbol to watchlist');
+
+    // 1. Get current symbols from database
+    const result = await this.services.db
+      .select({ settings: users.settings })
+      .from(users)
+      .where(
+        and(
+          eq(users.identityProvider, 'clerk'),
+          eq(users.identitySub, this.identitySub)
+        )
+      )
+      .limit(1);
+
+    if (result.length === 0) {
+      throw new Error(`User not found: ${this.identitySub}`);
+    }
+
+    const currentSymbols: string[] = (result[0].settings as Record<string, unknown>)?.symbols as string[] ?? [];
+
+    // 2. Check if already exists
+    if (currentSymbols.includes(normalizedSymbol)) {
+      logger.info({ symbol: normalizedSymbol }, 'Symbol already in watchlist');
+      return {
+        status: 'already_exists',
+        symbol: normalizedSymbol,
+        message: 'Symbol is already in your watchlist',
+      };
+    }
+
+    // 3. Update database (atomic JSONB operation)
+    const newSymbols = [...currentSymbols, normalizedSymbol];
+    await this.services.db.execute(sql`
+      UPDATE users
+      SET settings = jsonb_set(
+        COALESCE(settings, '{}'),
+        '{symbols}',
+        ${JSON.stringify(newSymbols)}::jsonb,
+        true
+      ),
+      updated_at = NOW()
+      WHERE identity_provider = 'clerk' AND identity_sub = ${this.identitySub}
+    `);
+
+    // 4. Update in-memory list
+    this.services.monitoredSymbols.push(normalizedSymbol);
+
+    // 5. If not paused, start monitoring the new symbol
+    if (!this.isPaused) {
+      // 5a. Backfill historical data first
+      const backfillService = new StartupBackfillService(
+        this.services.config.apiKeyId,
+        this.services.config.privateKeyPem,
+        this.services.redis
+      );
+      await backfillService.backfill([normalizedSymbol], this.services.timeframes);
+
+      // 5b. Add indicator configs
+      const newConfigs = this.services.timeframes.map(tf => ({
+        symbol: normalizedSymbol,
+        timeframe: tf
+      }));
+      this.services.indicatorConfigs.push(...newConfigs);
+
+      // 5c. Force indicator calculation from backfilled data
+      for (const tf of this.services.timeframes) {
+        await this.services.indicatorService.forceRecalculate(normalizedSymbol, tf);
+      }
+
+      // 5d. Resubscribe WebSocket with updated symbol list
+      this.services.coinbaseAdapter.subscribe(this.services.monitoredSymbols, '5m');
+    }
+
+    logger.info(
+      { symbol: normalizedSymbol, totalSymbols: this.services.monitoredSymbols.length },
+      'Symbol added to watchlist'
+    );
+
+    return {
+      added: true,
+      symbol: normalizedSymbol,
+      totalSymbols: this.services.monitoredSymbols.length,
+      backfilled: !this.isPaused,
+      timestamp: Date.now(),
+    };
   }
 
   /**
