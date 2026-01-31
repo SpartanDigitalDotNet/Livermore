@@ -18,6 +18,7 @@ import { ControlChannelService } from './services/control-channel.service';
 import { appRouter } from './routers';
 import { clerkWebhookHandler } from './routes/webhooks/clerk';
 import type { Timeframe } from '@livermore/schemas';
+import type { ServiceRegistry, RuntimeConfig } from './services/types/service-registry';
 
 // Blacklisted symbols (delisted, stablecoins, or no valid USD trading pair)
 const BLACKLISTED_SYMBOLS = [
@@ -206,11 +207,6 @@ async function start() {
     logger.warn('Discord notifications disabled (DISCORD_LIVERMORE_BOT not set)');
   }
 
-  // Start Control Channel Service (must be early - receives runtime commands)
-  const controlChannelService = new ControlChannelService(TEST_IDENTITY_SUB);
-  await controlChannelService.start();
-  logger.info({ identitySub: TEST_IDENTITY_SUB }, 'Control Channel Service started');
-
   // Fetch symbols from Coinbase account holdings (filtered by position value)
   logger.info('Fetching symbols from Coinbase account...');
   const { monitored: monitoredSymbols, excluded: excludedSymbols } = await getAccountSymbols(
@@ -320,6 +316,37 @@ async function start() {
   // Start Alert Evaluation Service
   const alertService = new AlertEvaluationService();
   await alertService.start(monitoredSymbols, SUPPORTED_TIMEFRAMES);
+
+  // ============================================
+  // BUILD SERVICE REGISTRY AND START CONTROL CHANNEL
+  // Now that all services are created, build registry and start control channel
+  // ============================================
+
+  // Build RuntimeConfig with API credentials
+  const runtimeConfig: RuntimeConfig = {
+    apiKeyId: config.Coinbase_ApiKeyId,
+    privateKeyPem: config.Coinbase_EcPrivateKeyPem,
+  };
+
+  // Build ServiceRegistry for ControlChannelService command handlers
+  const serviceRegistry: ServiceRegistry = {
+    coinbaseAdapter,
+    indicatorService,
+    alertService,
+    boundaryRestService,
+    redis,
+    db,
+    config: runtimeConfig,
+    // Store symbols and configs for resume
+    monitoredSymbols,
+    indicatorConfigs,
+    timeframes: SUPPORTED_TIMEFRAMES,
+  };
+
+  // Start Control Channel Service with full service access
+  const controlChannelService = new ControlChannelService(TEST_IDENTITY_SUB, serviceRegistry);
+  await controlChannelService.start();
+  logger.info({ identitySub: TEST_IDENTITY_SUB, hasServices: true }, 'Control Channel Service started');
 
   // Send startup notification to Discord
   if (discordService.isEnabled()) {
