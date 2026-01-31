@@ -10,16 +10,16 @@ See: .planning/PROJECT.md
 ## Current Position
 
 **Milestone:** v4.0 User Settings + Runtime Control
-**Phase:** 18 (Control Channel Foundation)
-**Plan:** 03 of 3 complete
-**Status:** Phase complete
+**Phase:** 19 (Runtime Commands)
+**Plan:** 01 of 3 complete
+**Status:** In progress
 
 ```
-Progress: [=====.....] 40%
-Phases:   17 [X] 18 [X] 19 [ ] 20 [ ] 21 [ ] 22 [ ]
+Progress: [=====.....] 45%
+Phases:   17 [X] 18 [X] 19 [.] 20 [ ] 21 [ ] 22 [ ]
 ```
 
-**Last activity:** 2026-01-31 - Completed 18-03-PLAN.md (Server Startup Integration)
+**Last activity:** 2026-01-31 - Completed 19-01-PLAN.md (Service Registry & Constructor)
 
 ## Milestones
 
@@ -38,7 +38,7 @@ See `.planning/MILESTONES.md` for full history.
 |-------|------|--------------|--------|
 | 17 | Settings Infrastructure | SET-01 to SET-07 | Complete (SET-01 to SET-07) |
 | 18 | Control Channel Foundation | RUN-01,02,03,10,11,12,13 | Complete (RUN-01,02,03,10,11,12,13) |
-| 19 | Runtime Commands | RUN-04 to RUN-09 | Pending |
+| 19 | Runtime Commands | RUN-04 to RUN-09 | In Progress (01/03) |
 | 20 | Symbol Management | SYM-01 to SYM-06 | Pending |
 | 21 | Admin UI - Settings | UI-SET-01 to UI-SET-06 | Pending |
 | 22 | Admin UI - Control + Symbols | UI-CTL-*, UI-SYM-* | Pending |
@@ -121,38 +121,27 @@ Alert Evaluation (receives ticker prices)
 ### Last Session
 
 **Date:** 2026-01-31
-**Activity:** Completed plan 18-03 (Server Startup Integration) - Phase 18 Complete
-**Stopped At:** Phase 18 complete, ready for Phase 19
+**Activity:** Completed plan 19-01 (Service Registry & Constructor Update)
+**Stopped At:** Ready for 19-02 (Command Handler Implementation)
 
 ### Resume Context
 
-**PHASE 18 COMPLETE**
+**PHASE 19 IN PROGRESS**
 
-Phase 18 delivered Control Channel Foundation:
-- Plan 18-01: Command Schemas and Channel Keys (RUN-10, RUN-11, RUN-12, RUN-13)
-  - Created CommandTypeSchema with 8 command types for forward compatibility
-  - Created CommandSchema and CommandResponseSchema Zod schemas
-  - Added commandChannel() and responseChannel() key helpers
-  - Commits: 73753b6, ff6f9a7
-
-- Plan 18-02: ControlChannelService (RUN-01, RUN-02, RUN-03, RUN-10, RUN-11, RUN-12, RUN-13)
-  - Created ControlChannelService class with Redis pub/sub handling
-  - Implements command validation, ACK, execution, result publishing
-  - Priority queue ensures pause/resume processed first
-  - Commits: 9ec96d1, 848408b
-
-- Plan 18-03: Server Startup Integration
-  - ControlChannelService integrated into server lifecycle
-  - Starts after pre-flight, stops first in shutdown
-  - TEST_IDENTITY_SUB placeholder for multi-user support
-  - Commits: 480dec3
+Plan 19-01 completed (Service Registry & Constructor Update):
+- Created ServiceRegistry interface with typed service references
+- Added RuntimeConfig interface for API credentials
+- Updated ControlChannelService constructor to accept optional services
+- Added isPaused state field and paused/hasServices getters
+- Backward compatible - server.ts unchanged
+- Commits: 2e0c8b4, ee62597
 
 Next steps:
-1. Execute Phase 19 (Runtime Commands)
-   - RUN-04: Pause command implementation
-   - RUN-05: Resume command implementation
-   - RUN-06 to RUN-09: Other runtime commands
+1. Execute Plan 19-02 (Command Handler Implementation)
+   - Update server.ts to inject ServiceRegistry
+   - Implement pause/resume handlers (RUN-04, RUN-05)
+   - Implement other command handlers (RUN-06 to RUN-09)
 
 ---
 *State initialized: 2026-01-18*
-*Last updated: 2026-01-31 - Completed 18-03-PLAN.md (Phase 18 Complete)*
+*Last updated: 2026-01-31 - Completed 19-01-PLAN.md (Service Registry & Constructor)*
