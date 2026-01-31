@@ -1,9 +1,34 @@
 import { getRedisClient, commandChannel, responseChannel } from '@livermore/cache';
 import { createLogger } from '@livermore/utils';
-import { CommandSchema, type Command, type CommandResponse } from '@livermore/schemas';
+import {
+  CommandSchema,
+  type Command,
+  type CommandResponse,
+  type CommandType,
+} from '@livermore/schemas';
 import type Redis from 'ioredis';
 
 const logger = createLogger({ name: 'control-channel', service: 'control' });
+
+/**
+ * Priority levels for command ordering (RUN-13)
+ * Lower number = higher priority (processed first)
+ *
+ * Priority 1: Critical control commands (pause/resume)
+ * Priority 10: Settings and mode changes
+ * Priority 15: Symbol management
+ * Priority 20: Resource-intensive operations
+ */
+const PRIORITY: Record<CommandType, number> = {
+  pause: 1,
+  resume: 1,
+  'reload-settings': 10,
+  'switch-mode': 10,
+  'force-backfill': 20,
+  'clear-cache': 20,
+  'add-symbol': 15,
+  'remove-symbol': 15,
+};
 
 /**
  * ControlChannelService
@@ -23,6 +48,7 @@ const logger = createLogger({ name: 'control-channel', service: 'control' });
  * - RUN-10: Immediate ACK on command receipt
  * - RUN-11: Result published after execution
  * - RUN-12: Commands older than 30s rejected as expired
+ * - RUN-13: Priority queue for command ordering
  */
 export class ControlChannelService {
   private redis = getRedisClient();
@@ -30,12 +56,14 @@ export class ControlChannelService {
   private identitySub: string;
   private commandChannelKey: string;
   private responseChannelKey: string;
+  private commandQueueKey: string;
   private readonly COMMAND_TIMEOUT_MS = 30_000; // RUN-12: 30 second timeout
 
   constructor(identitySub: string) {
     this.identitySub = identitySub;
     this.commandChannelKey = commandChannel(identitySub);
     this.responseChannelKey = responseChannel(identitySub);
+    this.commandQueueKey = `livermore:command-queue:${identitySub}`;
   }
 
   /**
@@ -111,13 +139,52 @@ export class ControlChannelService {
       return;
     }
 
+    // RUN-13: Get priority from type (use command.priority as override if valid)
+    const priority = command.priority || PRIORITY[command.type] || 50;
+
     logger.debug(
-      { correlationId: command.correlationId, type: command.type },
-      'Valid command received, processing'
+      { correlationId: command.correlationId, type: command.type, priority },
+      'Valid command received, queuing'
     );
 
-    // Process command directly
+    // RUN-13: Queue command by priority in sorted set
+    await this.redis.zadd(
+      this.commandQueueKey,
+      priority,
+      JSON.stringify(command)
+    );
+
+    // Trigger queue processing
+    await this.processQueue();
+  }
+
+  /**
+   * Process commands from priority queue (RUN-13)
+   * Processes one command at a time, lowest priority number first (highest urgency)
+   */
+  private async processQueue(): Promise<void> {
+    // Get lowest priority (highest urgency) command
+    const results = await this.redis.zpopmin(this.commandQueueKey, 1);
+    if (!results || results.length === 0) {
+      return;
+    }
+
+    // zpopmin returns [member, score] pairs
+    const commandJson = results[0];
+    const command = JSON.parse(commandJson) as Command;
+
     await this.handleCommand(command);
+
+    // Process next if queue not empty
+    const remaining = await this.redis.zcard(this.commandQueueKey);
+    if (remaining > 0) {
+      // Use setImmediate to prevent blocking event loop
+      setImmediate(() => {
+        this.processQueue().catch((err) => {
+          logger.error({ error: err }, 'Error processing command queue');
+        });
+      });
+    }
   }
 
   /**
@@ -198,6 +265,13 @@ export class ControlChannelService {
       { correlationId: response.correlationId, status: response.status },
       'Response published'
     );
+  }
+
+  /**
+   * Get current queue depth for monitoring/observability
+   */
+  async getQueueDepth(): Promise<number> {
+    return this.redis.zcard(this.commandQueueKey);
   }
 
   /**
