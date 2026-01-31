@@ -31,3 +31,6 @@ export * from './assets/crypto-icons';
 // Environment and configuration schemas
 export * from './env/config.schema';
 export * from './env/features.schema';
+
+// User settings schemas
+export * from './settings/user-settings.schema';
