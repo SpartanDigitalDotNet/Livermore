@@ -10,20 +10,18 @@ Data accuracy and timely alerts — indicators must calculate on complete, accur
 
 ## Current State
 
-**Status:** v3.0 Admin UI + IAM Foundation — in progress
-**Current focus:** Database-first workflow, IAM tables, admin monitoring UI
+**Status:** v3.0 shipped — ready for v3.1 planning
+**Current focus:** API security hardening, trading contracts for PerseusWeb
 
-## Current Milestone: v3.0 Admin UI + IAM Foundation
+## Current Milestone: v3.1 (Planning)
 
-**Goal:** Establish Atlas-based database workflow, extend users table for OAuth identity, build local admin UI for monitoring, unblock Kaia's UI development on Sandbox database.
+**Goal:** Protect API endpoints with authentication, define trading contracts for PerseusWeb integration.
 
 **Target features:**
-- Database-first workflow (Atlas migrations + Drizzle pull for types)
-- Sandbox deployment scripts for Azure PostgreSQL
-- IAM schema: OAuth identity columns on users table
-- Admin UI: MACD-V viewer, log viewer, trade signals viewer
-- Clerk.com authentication for admin UI
-- Kaia handoff documentation
+- Convert existing routers to protectedProcedure (security debt from v3.0)
+- API key authentication for PerseusWeb
+- Trading contracts (orders, positions)
+- WebSocket contract for real-time data
 
 ## Requirements
 
@@ -43,6 +41,12 @@ Data accuracy and timely alerts — indicators must calculate on complete, accur
 - ✓ Event-driven reconciliation at timeframe boundaries — v2.0
 - ✓ Startup backfill with 60-candle minimum per symbol/timeframe — v2.0
 - ✓ Ticker pub/sub for alert price display — v2.0
+- ✓ Atlas-based database workflow (schema.sql as source of truth) — v3.0
+- ✓ IAM schema with OAuth identity columns — v3.0
+- ✓ Clerk authentication for Admin UI — v3.0
+- ✓ User sync via webhooks and frontend component — v3.0
+- ✓ Admin UI with portfolio, signals, and logs viewers — v3.0
+- ✓ Pre-flight connection validation (database + Redis) — v3.0
 
 ### Next Milestone Goals (v3.1+)
 
@@ -123,4 +127,4 @@ Alert Evaluation (receives ticker prices)
 **Current blocker:** Kaia needs IAM tables deployed to Sandbox to build authentication flows.
 
 ---
-*Last updated: 2026-01-26 after v3.0 milestone started*
+*Last updated: 2026-01-30 — v3.0 shipped, ready for v3.1*

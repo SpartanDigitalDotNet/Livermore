@@ -1,5 +1,38 @@
 # Project Milestones: Livermore
 
+## v3.0 Admin UI + IAM Foundation (Shipped: 2026-01-30)
+
+**Status:** Shipped (2026-01-30)
+
+**Delivered:** Database-first workflow with Atlas migrations, OAuth identity management via Clerk authentication, and Admin UI for monitoring portfolio, signals, and logs.
+
+**Phases completed:** 11-16 (9 plans total)
+
+**Key accomplishments:**
+
+- Atlas-based database workflow (Drizzle migrations banned, schema.sql is source of truth)
+- IAM schema with OAuth identity columns (identity_provider, identity_sub, display_name, role)
+- Clerk authentication integration (@clerk/fastify plugin + protectedProcedure middleware)
+- User sync via webhooks (/webhooks/clerk) and frontend component (UserSync)
+- Admin UI with Vite + React + TailwindCSS + tRPC client
+- Portfolio viewer, trade signals viewer, and log viewer pages
+- Kaia handoff documentation for PerseusWeb integration
+
+**Stats:**
+
+- 6 phases, 9 plans, 20 requirements
+- 5 days from start to ship (2026-01-26 → 2026-01-30)
+
+**Git range:** `2ace5e3` → `HEAD`
+
+**Tech debt accepted:**
+- indicator/alert/position routers use publicProcedure (should be protectedProcedure)
+- Role-based authorization helpers exported but not used
+
+**What's next:** v3.1 - Protect API endpoints, trading contracts for PerseusWeb
+
+---
+
 ## v2.0 Data Pipeline Redesign (Code Complete: 2026-01-24)
 
 **Status:** Shipped (2026-01-24)
