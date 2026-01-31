@@ -7,6 +7,7 @@ import {
   type CommandType,
 } from '@livermore/schemas';
 import type Redis from 'ioredis';
+import type { ServiceRegistry } from './types/service-registry';
 
 const logger = createLogger({ name: 'control-channel', service: 'control' });
 
@@ -59,11 +60,44 @@ export class ControlChannelService {
   private commandQueueKey: string;
   private readonly COMMAND_TIMEOUT_MS = 30_000; // RUN-12: 30 second timeout
 
-  constructor(identitySub: string) {
+  /** Service registry for accessing other services (injected via constructor) */
+  private services: ServiceRegistry | null = null;
+
+  /** Paused state for pause/resume commands (RUN-04, RUN-05) */
+  private isPaused = false;
+
+  /**
+   * Constructor accepts optional services parameter for backward compatibility.
+   * When services are provided, ControlChannelService can execute runtime commands
+   * like pause/resume that require access to other services.
+   *
+   * @param identitySub - User identity (Clerk sub) for scoped channels
+   * @param services - Optional ServiceRegistry for runtime command execution
+   */
+  constructor(identitySub: string, services?: ServiceRegistry) {
     this.identitySub = identitySub;
     this.commandChannelKey = commandChannel(identitySub);
     this.responseChannelKey = responseChannel(identitySub);
     this.commandQueueKey = `livermore:command-queue:${identitySub}`;
+    if (services) {
+      this.services = services;
+    }
+  }
+
+  /**
+   * Get current paused state
+   * @returns true if services are paused, false otherwise
+   */
+  get paused(): boolean {
+    return this.isPaused;
+  }
+
+  /**
+   * Check if service registry is available for runtime commands
+   * @returns true if services were injected, false otherwise
+   */
+  get hasServices(): boolean {
+    return this.services !== null;
   }
 
   /**
