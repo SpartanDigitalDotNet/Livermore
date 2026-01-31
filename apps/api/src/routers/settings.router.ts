@@ -1,4 +1,5 @@
 import { TRPCError } from '@trpc/server';
+import { z } from 'zod';
 import { router, protectedProcedure } from '@livermore/trpc-config';
 import { getDbClient, users } from '@livermore/database';
 import { UserSettingsSchema, UserSettingsPatchSchema } from '@livermore/schemas';
@@ -14,6 +15,8 @@ import { eq, and, sql } from 'drizzle-orm';
  * - get: Retrieve current user settings
  * - update: Replace entire settings document (use for import/reset)
  * - patch: Update specific path via jsonb_set (use for partial updates)
+ * - export: Export settings with metadata (for backup/download)
+ * - import: Import settings from export file (with validation)
  */
 export const settingsRouter = router({
   /**
@@ -169,6 +172,107 @@ export const settingsRouter = router({
       ctx.logger.info(
         { userId: user.id, path: input.path },
         'User settings patched successfully'
+      );
+
+      return updated.settings;
+    }),
+
+  /**
+   * GET /settings.export
+   *
+   * Export user settings with metadata for backup/download.
+   * Returns settings wrapped in export envelope with timestamp.
+   * Client handles file download via Blob/URL.createObjectURL.
+   *
+   * Requirement: SET-06
+   */
+  export: protectedProcedure.query(async ({ ctx }) => {
+    const db = getDbClient();
+    const clerkId = ctx.auth.userId;
+
+    ctx.logger.info({ clerkId }, 'Exporting user settings');
+
+    const [user] = await db
+      .select({ settings: users.settings })
+      .from(users)
+      .where(
+        and(
+          eq(users.identityProvider, 'clerk'),
+          eq(users.identitySub, clerkId)
+        )
+      )
+      .limit(1);
+
+    if (!user) {
+      throw new TRPCError({
+        code: 'NOT_FOUND',
+        message: 'User not found',
+      });
+    }
+
+    return {
+      exportedAt: new Date().toISOString(),
+      exportVersion: '1.0',
+      settings: user.settings ?? { version: 1 },
+    };
+  }),
+
+  /**
+   * POST /settings.import
+   *
+   * Import settings from previously exported file.
+   * Validates settings against UserSettingsSchema before saving.
+   * Accepts export envelope, extracts and validates settings field.
+   *
+   * Requirement: SET-07
+   */
+  import: protectedProcedure
+    .input(
+      z.object({
+        settings: UserSettingsSchema,
+        // Optional metadata fields (ignored, but allowed for export format compatibility)
+        exportedAt: z.string().optional(),
+        exportVersion: z.string().optional(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const db = getDbClient();
+      const clerkId = ctx.auth.userId;
+
+      ctx.logger.info({ clerkId }, 'Importing user settings');
+
+      // Check if user exists
+      const [existing] = await db
+        .select({ id: users.id })
+        .from(users)
+        .where(
+          and(
+            eq(users.identityProvider, 'clerk'),
+            eq(users.identitySub, clerkId)
+          )
+        )
+        .limit(1);
+
+      if (!existing) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'User not found',
+        });
+      }
+
+      // Replace settings with imported data (same as update, semantically for import)
+      const [updated] = await db
+        .update(users)
+        .set({
+          settings: input.settings,
+          updatedAt: new Date().toISOString(),
+        })
+        .where(eq(users.id, existing.id))
+        .returning({ settings: users.settings });
+
+      ctx.logger.info(
+        { userId: existing.id },
+        'User settings imported successfully'
       );
 
       return updated.settings;
