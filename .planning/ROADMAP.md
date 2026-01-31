@@ -100,7 +100,12 @@ Plans:
 
 **Goal**: Users can dynamically add/remove symbols with exchange validation
 **Depends on**: Phase 18 (command channel for add/remove), Phase 17 (settings store symbol list)
-**Plans**: TBD
+**Plans**: 3 plans
+
+Plans:
+- [ ] 20-01-PLAN.md — Symbol router for Admin UI (search, validate, metrics)
+- [ ] 20-02-PLAN.md — Command handlers (add-symbol, remove-symbol)
+- [ ] 20-03-PLAN.md — Bulk import validation and command
 
 **Requirements:**
 - SYM-01: `add-symbol` command adds symbol to watchlist dynamically
@@ -180,7 +185,7 @@ Plans:
 | 17 | Settings Infrastructure | Complete | 3/3 |
 | 18 | Control Channel Foundation | Complete | 3/3 |
 | 19 | Runtime Commands | Complete | 3/3 |
-| 20 | Symbol Management | Pending | 0/? |
+| 20 | Symbol Management | Planned | 0/3 |
 | 21 | Admin UI - Settings | Pending | 0/? |
 | 22 | Admin UI - Control Panel + Symbols | Pending | 0/? |
 
