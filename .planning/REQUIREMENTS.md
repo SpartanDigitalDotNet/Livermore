@@ -22,12 +22,12 @@ Requirements for User Settings + Runtime Control milestone.
 - [x] **RUN-01**: Redis pub/sub command channel `livermore:commands:{identity_sub}`
 - [x] **RUN-02**: Redis pub/sub response channel `livermore:responses:{identity_sub}`
 - [x] **RUN-03**: Command handler in API processes incoming commands
-- [ ] **RUN-04**: `pause` command stops WebSocket connections and indicator processing
-- [ ] **RUN-05**: `resume` command restarts WebSocket and indicator processing
-- [ ] **RUN-06**: `reload-settings` command reloads settings from database
-- [ ] **RUN-07**: `switch-mode` command changes runtime mode (position-monitor, scalper-macdv, scalper-orderbook stub)
-- [ ] **RUN-08**: `force-backfill` command triggers candle backfill for specified symbol
-- [ ] **RUN-09**: `clear-cache` command clears Redis cache with scope (all, symbol, timeframe)
+- [x] **RUN-04**: `pause` command stops WebSocket connections and indicator processing
+- [x] **RUN-05**: `resume` command restarts WebSocket and indicator processing
+- [x] **RUN-06**: `reload-settings` command reloads settings from database
+- [x] **RUN-07**: `switch-mode` command changes runtime mode (position-monitor, scalper-macdv, scalper-orderbook stub)
+- [x] **RUN-08**: `force-backfill` command triggers candle backfill for specified symbol
+- [x] **RUN-09**: `clear-cache` command clears Redis cache with scope (all, symbol, timeframe)
 - [x] **RUN-10**: Command ACK returned immediately on receipt
 - [x] **RUN-11**: Command result returned after execution
 - [x] **RUN-12**: Command timeout — commands expire if not processed within 30s
@@ -116,12 +116,12 @@ Deferred to next milestone.
 | RUN-01 | 18 | Complete |
 | RUN-02 | 18 | Complete |
 | RUN-03 | 18 | Complete |
-| RUN-04 | 19 | Pending |
-| RUN-05 | 19 | Pending |
-| RUN-06 | 19 | Pending |
-| RUN-07 | 19 | Pending |
-| RUN-08 | 19 | Pending |
-| RUN-09 | 19 | Pending |
+| RUN-04 | 19 | Complete |
+| RUN-05 | 19 | Complete |
+| RUN-06 | 19 | Complete |
+| RUN-07 | 19 | Complete |
+| RUN-08 | 19 | Complete |
+| RUN-09 | 19 | Complete |
 | RUN-10 | 18 | Complete |
 | RUN-11 | 18 | Complete |
 | RUN-12 | 18 | Complete |

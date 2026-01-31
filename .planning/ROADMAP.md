@@ -75,9 +75,9 @@ Plans:
 **Plans**: 3 plans
 
 Plans:
-- [ ] 19-01-PLAN.md — ServiceRegistry interface + constructor injection
-- [ ] 19-02-PLAN.md — Server integration + pause/resume handlers (RUN-04, RUN-05)
-- [ ] 19-03-PLAN.md — Remaining handlers: reload-settings, switch-mode, force-backfill, clear-cache (RUN-06 to RUN-09)
+- [x] 19-01-PLAN.md — ServiceRegistry interface + constructor injection
+- [x] 19-02-PLAN.md — Server integration + pause/resume handlers (RUN-04, RUN-05)
+- [x] 19-03-PLAN.md — Remaining handlers: reload-settings, switch-mode, force-backfill, clear-cache (RUN-06 to RUN-09)
 
 **Requirements:**
 - RUN-04: `pause` command stops WebSocket connections and indicator processing
@@ -179,7 +179,7 @@ Plans:
 |-------|------|--------|-------|
 | 17 | Settings Infrastructure | Complete | 3/3 |
 | 18 | Control Channel Foundation | Complete | 3/3 |
-| 19 | Runtime Commands | Planned | 0/3 |
+| 19 | Runtime Commands | Complete | 3/3 |
 | 20 | Symbol Management | Pending | 0/? |
 | 21 | Admin UI - Settings | Pending | 0/? |
 | 22 | Admin UI - Control Panel + Symbols | Pending | 0/? |
