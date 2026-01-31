@@ -11,15 +11,15 @@ See: .planning/PROJECT.md
 
 **Milestone:** v4.0 User Settings + Runtime Control
 **Phase:** 17 (Settings Infrastructure)
-**Plan:** 01 of 2 complete
-**Status:** In progress
+**Plan:** 02 of 2 complete
+**Status:** Phase complete
 
 ```
-Progress: [=.........] 8%
-Phases:   17 [=] 18 [ ] 19 [ ] 20 [ ] 21 [ ] 22 [ ]
+Progress: [==........] 17%
+Phases:   17 [X] 18 [ ] 19 [ ] 20 [ ] 21 [ ] 22 [ ]
 ```
 
-**Last activity:** 2026-01-31 - Completed 17-01-PLAN.md (Settings Column and Schema)
+**Last activity:** 2026-01-31 - Completed 17-02-PLAN.md (Settings tRPC Endpoints)
 
 ## Milestones
 
@@ -36,7 +36,7 @@ See `.planning/MILESTONES.md` for full history.
 
 | Phase | Goal | Requirements | Status |
 |-------|------|--------------|--------|
-| 17 | Settings Infrastructure | SET-01 to SET-07 | In Progress (Plan 01 done) |
+| 17 | Settings Infrastructure | SET-01 to SET-07 | Complete (SET-01 to SET-05) |
 | 18 | Control Channel Foundation | RUN-01,02,03,10,11,12,13 | Pending |
 | 19 | Runtime Commands | RUN-04 to RUN-09 | Pending |
 | 20 | Symbol Management | SYM-01 to SYM-06 | Pending |
@@ -121,12 +121,12 @@ Alert Evaluation (receives ticker prices)
 ### Last Session
 
 **Date:** 2026-01-31
-**Activity:** Completed plan 17-01 (Settings Column and Schema)
-**Stopped At:** Ready for plan 17-02 (Settings tRPC Endpoints)
+**Activity:** Completed plan 17-02 (Settings tRPC Endpoints)
+**Stopped At:** Phase 17 complete, ready for Phase 18
 
 ### Resume Context
 
-**PHASE 17 IN PROGRESS**
+**PHASE 17 COMPLETE**
 
 Completed:
 - Plan 17-01: Settings Column and Schema (SET-01, SET-02)
@@ -134,11 +134,17 @@ Completed:
   - Created UserSettingsSchema Zod schema with version field
   - Commits: da8530e, d68fe4e
 
+- Plan 17-02: Settings tRPC Endpoints (SET-03, SET-04, SET-05)
+  - Created settings.router.ts with get/update/patch endpoints
+  - All endpoints use protectedProcedure for Clerk auth
+  - Patch uses PostgreSQL jsonb_set for atomic updates
+  - Commits: 3e1fa03
+
 Next steps:
-1. Execute plan 17-02: Settings tRPC endpoints (get/update/patch/export/import)
-2. Complete requirements SET-03 through SET-07
-3. Proceed to phase 18 (Control Channel Foundation)
+1. Proceed to Phase 18 (Control Channel Foundation)
+2. Implement Redis pub/sub for runtime control commands
+3. Note: SET-06 and SET-07 (export/import) may be added in Phase 21 Admin UI
 
 ---
 *State initialized: 2026-01-18*
-*Last updated: 2026-01-31 - Completed 17-01-PLAN.md*
+*Last updated: 2026-01-31 - Completed 17-02-PLAN.md*
