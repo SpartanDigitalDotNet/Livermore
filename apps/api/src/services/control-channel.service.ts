@@ -6,6 +6,8 @@ import {
   type CommandResponse,
   type CommandType,
 } from '@livermore/schemas';
+import { eq, and } from 'drizzle-orm';
+import { users } from '@livermore/database';
 import type Redis from 'ioredis';
 import type { ServiceRegistry } from './types/service-registry';
 
@@ -390,10 +392,51 @@ export class ControlChannelService {
 
   /**
    * Handle reload-settings command (RUN-06)
-   * Stub - to be implemented in Plan 03
+   * Fetches user settings from database
+   *
+   * Note: Currently just validates settings exist. Future phases will
+   * apply settings to running services (symbol list, alert thresholds, etc.)
    */
   private async handleReloadSettings(): Promise<Record<string, unknown>> {
-    throw new Error('reload-settings not yet implemented');
+    if (!this.services) {
+      throw new Error('Services not initialized');
+    }
+
+    logger.info({ identitySub: this.identitySub }, 'Reloading settings from database');
+
+    // Fetch settings from database
+    const result = await this.services.db
+      .select({ settings: users.settings })
+      .from(users)
+      .where(
+        and(
+          eq(users.identityProvider, 'clerk'),
+          eq(users.identitySub, this.identitySub)
+        )
+      )
+      .limit(1);
+
+    if (result.length === 0) {
+      throw new Error(`User not found: ${this.identitySub}`);
+    }
+
+    const settings = result[0].settings;
+
+    // Log what was loaded
+    logger.info(
+      { identitySub: this.identitySub, hasSettings: settings !== null },
+      'Settings reloaded from database'
+    );
+
+    // TODO: Apply settings to running services
+    // This will be expanded when symbol management and other
+    // runtime-configurable settings are implemented
+
+    return {
+      reloaded: true,
+      timestamp: Date.now(),
+      hasSettings: settings !== null,
+    };
   }
 
   /**
