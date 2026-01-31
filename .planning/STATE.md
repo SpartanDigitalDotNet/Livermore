@@ -10,16 +10,16 @@ See: .planning/PROJECT.md
 ## Current Position
 
 **Milestone:** v4.0 User Settings + Runtime Control
-**Phase:** 19 (Runtime Commands)
-**Plan:** 02 of 3 complete
-**Status:** In progress
+**Phase:** 19 (Runtime Commands) - COMPLETE
+**Plan:** 03 of 3 complete
+**Status:** Phase complete, ready for Phase 20
 
 ```
-Progress: [======....] 50%
-Phases:   17 [X] 18 [X] 19 [.] 20 [ ] 21 [ ] 22 [ ]
+Progress: [=======...] 66%
+Phases:   17 [X] 18 [X] 19 [X] 20 [ ] 21 [ ] 22 [ ]
 ```
 
-**Last activity:** 2026-01-31 - Completed 19-02-PLAN.md (Command Handler Implementation)
+**Last activity:** 2026-01-31 - Completed 19-03-PLAN.md (Remaining Command Handlers)
 
 ## Milestones
 
@@ -38,7 +38,7 @@ See `.planning/MILESTONES.md` for full history.
 |-------|------|--------------|--------|
 | 17 | Settings Infrastructure | SET-01 to SET-07 | Complete (SET-01 to SET-07) |
 | 18 | Control Channel Foundation | RUN-01,02,03,10,11,12,13 | Complete (RUN-01,02,03,10,11,12,13) |
-| 19 | Runtime Commands | RUN-04 to RUN-09 | In Progress (02/03) |
+| 19 | Runtime Commands | RUN-04 to RUN-09 | Complete (RUN-04 to RUN-09) |
 | 20 | Symbol Management | SYM-01 to SYM-06 | Pending |
 | 21 | Admin UI - Settings | UI-SET-01 to UI-SET-06 | Pending |
 | 22 | Admin UI - Control + Symbols | UI-CTL-*, UI-SYM-* | Pending |
@@ -121,30 +121,27 @@ Alert Evaluation (receives ticker prices)
 ### Last Session
 
 **Date:** 2026-01-31
-**Activity:** Completed plan 19-02 (Command Handler Implementation)
-**Stopped At:** Ready for 19-03 (Remaining Command Handlers)
+**Activity:** Completed plan 19-03 (Remaining Command Handlers)
+**Stopped At:** Phase 19 complete, ready for Phase 20
 
 ### Resume Context
 
-**PHASE 19 IN PROGRESS**
+**PHASE 19 COMPLETE**
 
-Plan 19-02 completed (Command Handler Implementation):
-- Extended ServiceRegistry with runtime state (monitoredSymbols, indicatorConfigs, timeframes)
-- Injected ServiceRegistry into ControlChannelService via server.ts
-- Implemented command dispatcher routing to type-specific handlers
-- Implemented pause handler (RUN-04): stops services downstream-first
-- Implemented resume handler (RUN-05): starts services upstream-first
-- Added stub handlers for remaining commands (throw "not yet implemented")
-- Commits: 91943d9, c5d83d5, 6eadcfc
+Plan 19-03 completed (Remaining Command Handlers):
+- Implemented reload-settings (RUN-06): Fetches settings from database via identitySub
+- Implemented switch-mode (RUN-07): Validates mode, returns stub response
+- Implemented force-backfill (RUN-08): Uses StartupBackfillService + indicator recalculation
+- Implemented clear-cache (RUN-09): Supports all/symbol/timeframe scopes
+- Commits: 00f4d18, cc8efae, 008bf72
+
+All Phase 19 requirements (RUN-04 to RUN-09) are now complete.
 
 Next steps:
-1. Execute Plan 19-03 (Remaining Command Handlers)
-   - Implement reload-settings (RUN-06)
-   - Implement switch-mode (RUN-07)
-   - Implement force-backfill (RUN-08)
-   - Implement clear-cache (RUN-09)
-   - Implement add-symbol / remove-symbol
+1. Execute Phase 20 (Symbol Management)
+   - SYM-01 to SYM-06: Exchange symbol lookup, validation, storage
+   - add-symbol / remove-symbol handlers will be completed here
 
 ---
 *State initialized: 2026-01-18*
-*Last updated: 2026-01-31 - Completed 19-02-PLAN.md (Command Handler Implementation)*
+*Last updated: 2026-01-31 - Completed 19-03-PLAN.md (Remaining Command Handlers)*
