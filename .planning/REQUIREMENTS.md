@@ -44,12 +44,12 @@ Requirements for User Settings + Runtime Control milestone.
 
 ### Admin UI - Settings
 
-- [ ] **UI-SET-01**: Settings page with form-based editor for common settings
-- [ ] **UI-SET-02**: JSON raw editor for power users (Monaco or json-edit-react)
-- [ ] **UI-SET-03**: Side-by-side view (form + JSON simultaneously)
-- [ ] **UI-SET-04**: Settings diff view shows changes before saving
-- [ ] **UI-SET-05**: Save/discard buttons with validation error display
-- [ ] **UI-SET-06**: Loading states and success/error toasts
+- [x] **UI-SET-01**: Settings page with form-based editor for common settings
+- [x] **UI-SET-02**: JSON raw editor for power users (Monaco or json-edit-react)
+- [x] **UI-SET-03**: Side-by-side view (form + JSON simultaneously)
+- [x] **UI-SET-04**: Settings diff view shows changes before saving
+- [x] **UI-SET-05**: Save/discard buttons with validation error display
+- [x] **UI-SET-06**: Loading states and success/error toasts
 
 ### Admin UI - Control Panel
 
@@ -132,12 +132,12 @@ Deferred to next milestone.
 | SYM-04 | 20 | Complete |
 | SYM-05 | 20 | Complete |
 | SYM-06 | 20 | Complete |
-| UI-SET-01 | 21 | Pending |
-| UI-SET-02 | 21 | Pending |
-| UI-SET-03 | 21 | Pending |
-| UI-SET-04 | 21 | Pending |
-| UI-SET-05 | 21 | Pending |
-| UI-SET-06 | 21 | Pending |
+| UI-SET-01 | 21 | Complete |
+| UI-SET-02 | 21 | Complete |
+| UI-SET-03 | 21 | Complete |
+| UI-SET-04 | 21 | Complete |
+| UI-SET-05 | 21 | Complete |
+| UI-SET-06 | 21 | Complete |
 | UI-CTL-01 | 22 | Pending |
 | UI-CTL-02 | 22 | Pending |
 | UI-CTL-03 | 22 | Pending |
