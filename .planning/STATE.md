@@ -11,7 +11,7 @@ See: .planning/PROJECT.md
 
 **Milestone:** v4.0 User Settings + Runtime Control
 **Phase:** 20 (Symbol Management) - Complete
-**Plan:** 02 of 2 complete
+**Plan:** 03 of 3 complete
 **Status:** Phase complete
 
 ```
@@ -19,7 +19,7 @@ Progress: [=========.] 83%
 Phases:   17 [X] 18 [X] 19 [X] 20 [X] 21 [ ] 22 [ ]
 ```
 
-**Last activity:** 2026-01-31 - Completed 20-02-PLAN.md (Symbol CRUD API)
+**Last activity:** 2026-01-31 - Completed 20-03-PLAN.md (Bulk Symbol Import)
 
 ## Milestones
 
@@ -39,7 +39,7 @@ See `.planning/MILESTONES.md` for full history.
 | 17 | Settings Infrastructure | SET-01 to SET-07 | Complete (SET-01 to SET-07) |
 | 18 | Control Channel Foundation | RUN-01,02,03,10,11,12,13 | Complete (RUN-01,02,03,10,11,12,13) |
 | 19 | Runtime Commands | RUN-04 to RUN-09 | Complete (RUN-04 to RUN-09) |
-| 20 | Symbol Management | SYM-01 to SYM-06 | Complete (SYM-01,02,03,04,06) |
+| 20 | Symbol Management | SYM-01 to SYM-06 | Complete (SYM-01,02,03,04,05,06) |
 | 21 | Admin UI - Settings | UI-SET-01 to UI-SET-06 | Pending |
 | 22 | Admin UI - Control + Symbols | UI-CTL-*, UI-SYM-* | Pending |
 
@@ -121,28 +121,27 @@ Alert Evaluation (receives ticker prices)
 ### Last Session
 
 **Date:** 2026-01-31
-**Activity:** Completed plan 20-02 (Symbol CRUD API)
+**Activity:** Completed plan 20-03 (Bulk Symbol Import)
 **Stopped At:** Phase 20 complete, ready for Phase 21
 
 ### Resume Context
 
 **PHASE 20 COMPLETE**
 
-Plan 20-02 completed (Symbol CRUD API):
-- Implemented handleAddSymbol command handler (SYM-01)
-- Implemented handleRemoveSymbol command handler (SYM-02)
-- JSONB atomic updates via jsonb_set
-- Cache cleanup on symbol removal (ticker, candles, indicators)
-- Commits: 7803a52, 934e59b
+Plan 20-03 completed (Bulk Symbol Import):
+- Added bulkValidate endpoint for validating up to 50 symbols
+- Delta-based duplicate detection against user's existing watchlist
+- Added bulk-add-symbols command handler to ControlChannelService
+- Atomic database update with backfill for all new symbols
+- Commits: 99174a4, 78a848d
 
-Phase 20 requirements complete:
-- SYM-01: add-symbol command handler
-- SYM-02: remove-symbol command handler
-- SYM-03: validate endpoint checks against exchange
-- SYM-04: search endpoint queries available symbols
-- SYM-06: metrics preview in validate and metrics endpoints
-
-Note: SYM-05 (bulk import) was not explicitly required in plans - may be addressed in Admin UI phase.
+Phase 20 requirements complete (all SYM-01 to SYM-06):
+- SYM-01: add-symbol command handler (20-02)
+- SYM-02: remove-symbol command handler (20-02)
+- SYM-03: validate endpoint checks against exchange (20-01, enhanced 20-03)
+- SYM-04: search endpoint queries available symbols (20-01)
+- SYM-05: bulk import with bulkValidate + bulk-add-symbols (20-03)
+- SYM-06: metrics preview in validate and metrics endpoints (20-01)
 
 Next steps:
 1. Execute Phase 21 (Admin UI - Settings)
@@ -150,4 +149,4 @@ Next steps:
 
 ---
 *State initialized: 2026-01-18*
-*Last updated: 2026-01-31 - Completed 20-02-PLAN.md (Symbol CRUD API)*
+*Last updated: 2026-01-31 - Completed 20-03-PLAN.md (Bulk Symbol Import)*
