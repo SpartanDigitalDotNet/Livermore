@@ -3,10 +3,13 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { trpc, trpcClient } from '@/lib/trpc';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Upload } from 'lucide-react';
 import {
   SymbolWatchlist,
   ScannerStatus,
   AddSymbolForm,
+  BulkImportModal,
 } from '@/components/symbols';
 import { ConfirmationDialog } from '@/components/control';
 
@@ -19,6 +22,7 @@ import { ConfirmationDialog } from '@/components/control';
  * - UI-SYM-01: Symbol watchlist display with enable/disable toggles
  * - UI-SYM-02: Add symbol with search + validation against exchange
  * - UI-SYM-03: Remove symbol with confirmation
+ * - UI-SYM-04: Bulk import modal (paste JSON, validate, preview)
  * - UI-SYM-05: Scanner status display
  * - UI-SYM-06: Symbol metrics display on hover/expand
  */
@@ -29,6 +33,9 @@ export function Symbols() {
   const [removingSymbol, setRemovingSymbol] = useState<string | null>(null);
   const [showRemoveConfirm, setShowRemoveConfirm] = useState(false);
   const [isRemoving, setIsRemoving] = useState(false);
+
+  // Bulk import modal state
+  const [showBulkImport, setShowBulkImport] = useState(false);
 
   // Fetch user settings
   const {
@@ -43,8 +50,6 @@ export function Symbols() {
   const scanner = (settings as any)?.scanner ?? null;
 
   // Handle symbol toggle (enable/disable)
-  // Note: For v4.0, this is informational only - actual toggle would require
-  // a separate disabledSymbols array in settings and a patch endpoint
   const handleToggle = async (symbol: string, enabled: boolean) => {
     toast.info(
       `Symbol ${symbol} ${enabled ? 'enabled' : 'disabled'} - full toggle support coming in v4.1`
@@ -64,7 +69,6 @@ export function Symbols() {
     setIsRemoving(true);
 
     try {
-      // Execute remove-symbol command
       const result = await trpcClient.control.executeCommand.mutate({
         type: 'remove-symbol',
         payload: { symbol: removingSymbol },
@@ -72,7 +76,6 @@ export function Symbols() {
 
       if (result.success) {
         toast.success(`Symbol ${removingSymbol} removed from watchlist`);
-        // Invalidate settings to refetch updated symbol list
         queryClient.invalidateQueries({ queryKey: ['settings'] });
       } else {
         toast.error(result.message ?? 'Failed to remove symbol');
@@ -86,9 +89,8 @@ export function Symbols() {
     }
   };
 
-  // Handle symbol added callback
-  const handleSymbolAdded = () => {
-    // Invalidate settings to refetch updated symbol list
+  // Handle symbol added callback (single or bulk)
+  const handleSymbolsChanged = () => {
     queryClient.invalidateQueries({ queryKey: ['settings'] });
   };
 
@@ -109,11 +111,35 @@ export function Symbols() {
 
   return (
     <div className="space-y-6">
-      {/* Add Symbol Form */}
-      <AddSymbolForm
-        existingSymbols={symbols}
-        onSymbolAdded={handleSymbolAdded}
-      />
+      {/* Add Symbol Section */}
+      <div className="flex gap-4">
+        <div className="flex-1">
+          <AddSymbolForm
+            existingSymbols={symbols}
+            onSymbolAdded={handleSymbolsChanged}
+          />
+        </div>
+        <div className="flex flex-col justify-start">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Bulk Import</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <Button
+                onClick={() => setShowBulkImport(true)}
+                variant="outline"
+                className="w-full"
+              >
+                <Upload className="h-4 w-4 mr-2" />
+                Import from JSON
+              </Button>
+              <p className="text-xs text-gray-500 mt-2">
+                Import multiple symbols at once
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
 
       {/* Scanner Status */}
       <ScannerStatus scanner={scanner} isLoading={isLoading} />
@@ -142,6 +168,13 @@ export function Symbols() {
         confirmLabel="Remove Symbol"
         onConfirm={handleConfirmRemove}
         isLoading={isRemoving}
+      />
+
+      {/* Bulk Import Modal (UI-SYM-04) */}
+      <BulkImportModal
+        open={showBulkImport}
+        onOpenChange={setShowBulkImport}
+        onImportComplete={handleSymbolsChanged}
       />
     </div>
   );
