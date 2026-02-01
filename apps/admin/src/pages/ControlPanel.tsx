@@ -1,8 +1,15 @@
+import { useState, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { trpc, trpcClient } from '@/lib/trpc';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { RuntimeStatus, ControlButtons } from '@/components/control';
+import {
+  RuntimeStatus,
+  ControlButtons,
+  CommandHistory,
+  ActiveSymbols,
+  type CommandHistoryItem,
+} from '@/components/control';
 
 /**
  * ControlPanel Page
@@ -13,21 +20,77 @@ import { RuntimeStatus, ControlButtons } from '@/components/control';
  * - UI-CTL-01: Runtime status display
  * - UI-CTL-02: Pause/resume buttons
  * - UI-CTL-03: Mode switcher
+ * - UI-CTL-04: Active symbols count and list
  * - UI-CTL-05: Exchange connection status
+ * - UI-CTL-06: Command history panel
  * - UI-CTL-07: Confirmation dialog for destructive commands
  */
 export function ControlPanel() {
   const queryClient = useQueryClient();
 
+  // Command history state (session memory only)
+  const [commandHistory, setCommandHistory] = useState<CommandHistoryItem[]>([]);
+
   // Fetch status with 5-second polling
   const {
     data: status,
-    isLoading,
-    error,
+    isLoading: statusLoading,
+    error: statusError,
   } = useQuery({
     ...trpc.control.getStatus.queryOptions(),
-    refetchInterval: 5000, // Poll every 5 seconds
+    refetchInterval: 5000,
   });
+
+  // Fetch user settings for symbols list
+  const {
+    data: settings,
+    isLoading: settingsLoading,
+  } = useQuery(trpc.settings.get.queryOptions());
+
+  // Get symbols from settings
+  const symbols: string[] = (settings as { symbols?: string[] })?.symbols ?? [];
+
+  // Add command to history
+  const addCommand = useCallback(
+    (
+      id: string,
+      type: string,
+      status: 'pending' | 'success' | 'error',
+      message?: string,
+      duration?: number
+    ) => {
+      setCommandHistory((prev) => {
+        // Find existing command or create new
+        const existingIndex = prev.findIndex((cmd) => cmd.id === id);
+
+        if (existingIndex >= 0) {
+          // Update existing command
+          const updated = [...prev];
+          updated[existingIndex] = {
+            ...updated[existingIndex],
+            status,
+            message,
+            duration,
+          };
+          return updated;
+        }
+
+        // Add new command at the start
+        return [
+          {
+            id,
+            type,
+            timestamp: new Date(),
+            status,
+            message,
+            duration,
+          },
+          ...prev,
+        ].slice(0, 50); // Keep max 50 items
+      });
+    },
+    []
+  );
 
   // Command execution mutation
   const executeCommandMutation = useMutation({
@@ -41,16 +104,46 @@ export function ControlPanel() {
       });
       return result;
     },
-    onSuccess: (result, variables) => {
+    onMutate: (variables) => {
+      // Add pending command to history
+      const id = crypto.randomUUID();
+      addCommand(id, variables.type, 'pending');
+      return { id, startTime: Date.now() };
+    },
+    onSuccess: (result, variables, context) => {
+      const duration = context ? Date.now() - context.startTime : undefined;
+
       if (result.success) {
+        addCommand(
+          context?.id ?? '',
+          variables.type,
+          'success',
+          'Completed',
+          duration
+        );
         toast.success(`Command '${variables.type}' executed successfully`);
       } else {
+        addCommand(
+          context?.id ?? '',
+          variables.type,
+          'error',
+          result.message ?? 'Failed',
+          duration
+        );
         toast.error(result.message ?? 'Command failed');
       }
       // Refetch status immediately after command
       queryClient.invalidateQueries({ queryKey: ['control', 'getStatus'] });
     },
-    onError: (err) => {
+    onError: (err, variables, context) => {
+      const duration = context ? Date.now() - context.startTime : undefined;
+      addCommand(
+        context?.id ?? '',
+        variables.type,
+        'error',
+        err.message,
+        duration
+      );
       toast.error(`Command failed: ${err.message}`);
     },
   });
@@ -81,7 +174,7 @@ export function ControlPanel() {
     });
   };
 
-  if (error) {
+  if (statusError) {
     return (
       <Card>
         <CardHeader>
@@ -89,7 +182,7 @@ export function ControlPanel() {
         </CardHeader>
         <CardContent>
           <div className="rounded-md bg-red-50 p-4 text-red-700">
-            Error loading status: {error.message}
+            Error loading status: {statusError.message}
           </div>
         </CardContent>
       </Card>
@@ -98,8 +191,11 @@ export function ControlPanel() {
 
   return (
     <div className="space-y-6">
-      {/* Runtime Status Card */}
-      <RuntimeStatus status={status ?? null} isLoading={isLoading} />
+      {/* Top Row: Status and Active Symbols */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <RuntimeStatus status={status ?? null} isLoading={statusLoading} />
+        <ActiveSymbols symbols={symbols} isLoading={settingsLoading} />
+      </div>
 
       {/* Controls Card */}
       <Card>
@@ -119,6 +215,9 @@ export function ControlPanel() {
           />
         </CardContent>
       </Card>
+
+      {/* Command History */}
+      <CommandHistory commands={commandHistory} maxItems={10} />
     </div>
   );
 }
