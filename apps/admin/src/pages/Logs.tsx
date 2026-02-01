@@ -2,7 +2,13 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { trpc } from '@/lib/trpc';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Select } from '@/components/ui/select';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { LogViewer, type LogEntry } from '@/components/logs/LogViewer';
 
 type LogLevel = 'ERROR' | 'WARN' | 'INFO' | 'DEBUG';
@@ -63,12 +69,18 @@ export function Logs() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Select
-            options={LEVEL_OPTIONS}
-            value={level}
-            onChange={(e) => setLevel(e.target.value as LogLevel)}
-            className="w-40"
-          />
+          <Select value={level} onValueChange={(value) => setLevel(value as LogLevel)}>
+            <SelectTrigger className="w-40">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {LEVEL_OPTIONS.map((opt) => (
+                <SelectItem key={opt.value} value={opt.value}>
+                  {opt.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <button
             onClick={() => refetch()}
             disabled={isFetching}
