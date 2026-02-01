@@ -11,7 +11,7 @@ See: .planning/PROJECT.md
 
 **Milestone:** v4.0 User Settings + Runtime Control
 **Phase:** 22 (Admin UI - Control + Symbols) - Complete
-**Plan:** 05 of 5 complete
+**Plan:** 06 of 6 complete
 **Status:** Phase Complete
 
 ```
@@ -19,7 +19,7 @@ Progress: [==========] 100%
 Phases:   17 [X] 18 [X] 19 [X] 20 [X] 21 [X] 22 [X]
 ```
 
-**Last activity:** 2026-02-01 - Completed 22-05-PLAN.md (Add Symbol Form)
+**Last activity:** 2026-02-01 - Completed 22-06-PLAN.md (Bulk Import Modal)
 
 ## Milestones
 
@@ -41,7 +41,7 @@ See `.planning/MILESTONES.md` for full history.
 | 19 | Runtime Commands | RUN-04 to RUN-09 | Complete (RUN-04 to RUN-09) |
 | 20 | Symbol Management | SYM-01 to SYM-06 | Complete (SYM-01,02,03,04,05,06) |
 | 21 | Admin UI - Settings | UI-SET-01 to UI-SET-06 | Complete (21-01, 21-02, 21-03, 21-04, 21-05) |
-| 22 | Admin UI - Control + Symbols | UI-CTL-*, UI-SYM-* | Complete (22-01, 22-02, 22-03, 22-04, 22-05) |
+| 22 | Admin UI - Control + Symbols | UI-CTL-*, UI-SYM-* | Complete (22-01, 22-02, 22-03, 22-04, 22-05, 22-06) |
 
 ## Tech Debt from v3.0
 
@@ -128,17 +128,17 @@ Alert Evaluation (receives ticker prices)
 ### Last Session
 
 **Date:** 2026-02-01
-**Activity:** Completed plan 22-05 (Add Symbol Form)
+**Activity:** Completed plan 22-06 (Bulk Import Modal)
 **Stopped At:** Phase 22 complete, v4.0 milestone complete
 
 ### Resume Context
 
 **PHASE 22 COMPLETE - v4.0 MILESTONE COMPLETE**
 
-Plan 22-05 completed (Add Symbol Form):
-- Created AddSymbolForm with debounced search and validation preview
-- Integrated into Symbols page with improved add/remove flow
-- Commits: 531205b, 3305737
+Plan 22-06 completed (Bulk Import Modal):
+- Created BulkImportModal with JSON input and validation preview
+- Integrated into Symbols page with Bulk Import card
+- Commits: f97a32e, 1fcbaf1
 
 v4.0 Milestone Summary:
 - Phase 17: Settings Infrastructure - Complete
@@ -146,8 +146,8 @@ v4.0 Milestone Summary:
 - Phase 19: Runtime Commands - Complete
 - Phase 20: Symbol Management - Complete
 - Phase 21: Admin UI - Settings - Complete
-- Phase 22: Admin UI - Control + Symbols - Complete
+- Phase 22: Admin UI - Control + Symbols - Complete (6 plans)
 
 ---
 *State initialized: 2026-01-18*
-*Last updated: 2026-02-01 - Completed 22-05-PLAN.md (Add Symbol Form)*
+*Last updated: 2026-02-01 - Completed 22-06-PLAN.md (Bulk Import Modal)*
