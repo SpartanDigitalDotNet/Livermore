@@ -53,22 +53,22 @@ Requirements for User Settings + Runtime Control milestone.
 
 ### Admin UI - Control Panel
 
-- [ ] **UI-CTL-01**: Runtime status display (running/paused, current mode, uptime)
-- [ ] **UI-CTL-02**: Pause/resume buttons
-- [ ] **UI-CTL-03**: Mode switcher dropdown
-- [ ] **UI-CTL-04**: Active symbols count and list
-- [ ] **UI-CTL-05**: Exchange connection status indicators
-- [ ] **UI-CTL-06**: Command history panel (recent commands + results)
-- [ ] **UI-CTL-07**: Confirmation dialog for destructive commands (clear-cache)
+- [x] **UI-CTL-01**: Runtime status display (running/paused, current mode, uptime)
+- [x] **UI-CTL-02**: Pause/resume buttons
+- [x] **UI-CTL-03**: Mode switcher dropdown
+- [x] **UI-CTL-04**: Active symbols count and list
+- [x] **UI-CTL-05**: Exchange connection status indicators
+- [x] **UI-CTL-06**: Command history panel (recent commands + results)
+- [x] **UI-CTL-07**: Confirmation dialog for destructive commands (clear-cache)
 
 ### Admin UI - Symbols
 
-- [ ] **UI-SYM-01**: Symbol watchlist display with enable/disable toggles
-- [ ] **UI-SYM-02**: Add symbol with search + validation against exchange
-- [ ] **UI-SYM-03**: Remove symbol with confirmation
-- [ ] **UI-SYM-04**: Bulk import modal (paste JSON, validate, preview)
-- [ ] **UI-SYM-05**: Scanner status display (enabled, last run, exchange)
-- [ ] **UI-SYM-06**: Symbol metrics display (volume, price) on hover/expand
+- [x] **UI-SYM-01**: Symbol watchlist display with enable/disable toggles
+- [x] **UI-SYM-02**: Add symbol with search + validation against exchange
+- [x] **UI-SYM-03**: Remove symbol with confirmation
+- [x] **UI-SYM-04**: Bulk import modal (paste JSON, validate, preview)
+- [x] **UI-SYM-05**: Scanner status display (enabled, last run, exchange)
+- [x] **UI-SYM-06**: Symbol metrics display (volume, price) on hover/expand
 
 ## v4.1 Requirements
 
@@ -138,19 +138,19 @@ Deferred to next milestone.
 | UI-SET-04 | 21 | Complete |
 | UI-SET-05 | 21 | Complete |
 | UI-SET-06 | 21 | Complete |
-| UI-CTL-01 | 22 | Pending |
-| UI-CTL-02 | 22 | Pending |
-| UI-CTL-03 | 22 | Pending |
-| UI-CTL-04 | 22 | Pending |
-| UI-CTL-05 | 22 | Pending |
-| UI-CTL-06 | 22 | Pending |
-| UI-CTL-07 | 22 | Pending |
-| UI-SYM-01 | 22 | Pending |
-| UI-SYM-02 | 22 | Pending |
-| UI-SYM-03 | 22 | Pending |
-| UI-SYM-04 | 22 | Pending |
-| UI-SYM-05 | 22 | Pending |
-| UI-SYM-06 | 22 | Pending |
+| UI-CTL-01 | 22 | Complete |
+| UI-CTL-02 | 22 | Complete |
+| UI-CTL-03 | 22 | Complete |
+| UI-CTL-04 | 22 | Complete |
+| UI-CTL-05 | 22 | Complete |
+| UI-CTL-06 | 22 | Complete |
+| UI-CTL-07 | 22 | Complete |
+| UI-SYM-01 | 22 | Complete |
+| UI-SYM-02 | 22 | Complete |
+| UI-SYM-03 | 22 | Complete |
+| UI-SYM-04 | 22 | Complete |
+| UI-SYM-05 | 22 | Complete |
+| UI-SYM-06 | 22 | Complete |
 
 **Coverage:**
 - v4.0 requirements: 45 total
