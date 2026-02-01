@@ -11,7 +11,7 @@ See: .planning/PROJECT.md
 
 **Milestone:** v4.0 User Settings + Runtime Control
 **Phase:** 21 (Admin UI - Settings) - Complete
-**Plan:** 04 of 4 complete
+**Plan:** 05 of 5 complete
 **Status:** Phase complete
 
 ```
@@ -19,7 +19,7 @@ Progress: [==========] 95%
 Phases:   17 [X] 18 [X] 19 [X] 20 [X] 21 [X] 22 [ ]
 ```
 
-**Last activity:** 2026-02-01 - Completed 21-04-PLAN.md (Settings Split View)
+**Last activity:** 2026-02-01 - Completed 21-05-PLAN.md (Save/Discard with Diff Preview)
 
 ## Milestones
 
@@ -40,7 +40,7 @@ See `.planning/MILESTONES.md` for full history.
 | 18 | Control Channel Foundation | RUN-01,02,03,10,11,12,13 | Complete (RUN-01,02,03,10,11,12,13) |
 | 19 | Runtime Commands | RUN-04 to RUN-09 | Complete (RUN-04 to RUN-09) |
 | 20 | Symbol Management | SYM-01 to SYM-06 | Complete (SYM-01,02,03,04,05,06) |
-| 21 | Admin UI - Settings | UI-SET-01 to UI-SET-06 | Complete (21-01, 21-02, 21-03, 21-04) |
+| 21 | Admin UI - Settings | UI-SET-01 to UI-SET-06 | Complete (21-01, 21-02, 21-03, 21-04, 21-05) |
 | 22 | Admin UI - Control + Symbols | UI-CTL-*, UI-SYM-* | Pending |
 
 ## Tech Debt from v3.0
@@ -113,6 +113,7 @@ Alert Evaluation (receives ticker prices)
 | Credentials in env vars | Settings store env var names, not actual secrets |
 | Cast zodResolver for UserSettings | Zod schemas with defaults create type mismatch between input/output |
 | lastEditSource ref for bidirectional sync | Prevents infinite loops between form and JSON editor |
+| splitViewKey ref for discard | Forces clean remount of SettingsSplitView without complex state reset |
 
 ### Open Items
 
@@ -123,22 +124,23 @@ Alert Evaluation (receives ticker prices)
 ### Last Session
 
 **Date:** 2026-02-01
-**Activity:** Completed plan 21-04 (Settings Split View)
+**Activity:** Completed plan 21-05 (Save/Discard with Diff Preview)
 **Stopped At:** Phase 21 complete, ready for Phase 22
 
 ### Resume Context
 
 **PHASE 21 COMPLETE**
 
-Plan 21-04 completed (Settings Split View):
-- Created SettingsSplitView with form/JSON bidirectional sync
-- Updated Settings page to use split view layout
-- Added "Unsaved changes" indicator for dirty state
-- Commits: 4d5e406, b099f97, 00a5b97
+Plan 21-05 completed (Save/Discard with Diff Preview):
+- Created SettingsDiffModal with confirm/cancel actions
+- Completed Settings page with save/discard and toast notifications
+- Added Zod validation before diff modal display
+- All UI-SET requirements (01-06) satisfied
+- Commits: bbc935b, 1817fb1, 06d49e7
 
 Next steps:
 1. Execute Phase 22 (Admin UI - Control + Symbols)
 
 ---
 *State initialized: 2026-01-18*
-*Last updated: 2026-02-01 - Completed 21-04-PLAN.md (Settings Split View)*
+*Last updated: 2026-02-01 - Completed 21-05-PLAN.md (Save/Discard with Diff Preview)*
