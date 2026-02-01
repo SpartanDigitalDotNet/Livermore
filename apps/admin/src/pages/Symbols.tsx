@@ -3,7 +3,11 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { trpc, trpcClient } from '@/lib/trpc';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { SymbolWatchlist, ScannerStatus } from '@/components/symbols';
+import {
+  SymbolWatchlist,
+  ScannerStatus,
+  AddSymbolForm,
+} from '@/components/symbols';
 import { ConfirmationDialog } from '@/components/control';
 
 /**
@@ -13,10 +17,10 @@ import { ConfirmationDialog } from '@/components/control';
  *
  * Requirements:
  * - UI-SYM-01: Symbol watchlist display with enable/disable toggles
+ * - UI-SYM-02: Add symbol with search + validation against exchange
+ * - UI-SYM-03: Remove symbol with confirmation
  * - UI-SYM-05: Scanner status display
  * - UI-SYM-06: Symbol metrics display on hover/expand
- *
- * Note: Add/Remove functionality will be added in Plan 05.
  */
 export function Symbols() {
   const queryClient = useQueryClient();
@@ -24,6 +28,7 @@ export function Symbols() {
   // Symbol pending removal (for confirmation dialog)
   const [removingSymbol, setRemovingSymbol] = useState<string | null>(null);
   const [showRemoveConfirm, setShowRemoveConfirm] = useState(false);
+  const [isRemoving, setIsRemoving] = useState(false);
 
   // Fetch user settings
   const {
@@ -38,13 +43,12 @@ export function Symbols() {
   const scanner = (settings as any)?.scanner ?? null;
 
   // Handle symbol toggle (enable/disable)
+  // Note: For v4.0, this is informational only - actual toggle would require
+  // a separate disabledSymbols array in settings and a patch endpoint
   const handleToggle = async (symbol: string, enabled: boolean) => {
-    // For now, just show a toast - actual implementation will use settings.patch
     toast.info(
-      `Symbol ${symbol} ${enabled ? 'enabled' : 'disabled'} (save pending)`
+      `Symbol ${symbol} ${enabled ? 'enabled' : 'disabled'} - full toggle support coming in v4.1`
     );
-
-    // TODO: In plan 05, this will call executeCommand to update settings
   };
 
   // Handle remove click (show confirmation)
@@ -57,6 +61,8 @@ export function Symbols() {
   const handleConfirmRemove = async () => {
     if (!removingSymbol) return;
 
+    setIsRemoving(true);
+
     try {
       // Execute remove-symbol command
       const result = await trpcClient.control.executeCommand.mutate({
@@ -65,7 +71,8 @@ export function Symbols() {
       });
 
       if (result.success) {
-        toast.success(`Symbol ${removingSymbol} removed`);
+        toast.success(`Symbol ${removingSymbol} removed from watchlist`);
+        // Invalidate settings to refetch updated symbol list
         queryClient.invalidateQueries({ queryKey: ['settings'] });
       } else {
         toast.error(result.message ?? 'Failed to remove symbol');
@@ -75,7 +82,14 @@ export function Symbols() {
     } finally {
       setShowRemoveConfirm(false);
       setRemovingSymbol(null);
+      setIsRemoving(false);
     }
+  };
+
+  // Handle symbol added callback
+  const handleSymbolAdded = () => {
+    // Invalidate settings to refetch updated symbol list
+    queryClient.invalidateQueries({ queryKey: ['settings'] });
   };
 
   if (error) {
@@ -95,17 +109,11 @@ export function Symbols() {
 
   return (
     <div className="space-y-6">
-      {/* Placeholder for Add Symbol form (Plan 05) */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Add Symbol</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-gray-500 text-sm">
-            Symbol search and add form will be added in the next plan.
-          </p>
-        </CardContent>
-      </Card>
+      {/* Add Symbol Form */}
+      <AddSymbolForm
+        existingSymbols={symbols}
+        onSymbolAdded={handleSymbolAdded}
+      />
 
       {/* Scanner Status */}
       <ScannerStatus scanner={scanner} isLoading={isLoading} />
@@ -120,18 +128,20 @@ export function Symbols() {
         isLoading={isLoading}
       />
 
-      {/* Remove Confirmation Dialog */}
+      {/* Remove Confirmation Dialog (UI-SYM-03) */}
       <ConfirmationDialog
         open={showRemoveConfirm}
         onOpenChange={(open) => {
-          setShowRemoveConfirm(open);
-          if (!open) setRemovingSymbol(null);
+          if (!isRemoving) {
+            setShowRemoveConfirm(open);
+            if (!open) setRemovingSymbol(null);
+          }
         }}
         title="Remove Symbol"
         description={`Are you sure you want to remove ${removingSymbol} from your watchlist? This will stop monitoring and delete cached data for this symbol.`}
-        confirmLabel="Remove"
+        confirmLabel="Remove Symbol"
         onConfirm={handleConfirmRemove}
-        isLoading={removingSymbol !== null && !showRemoveConfirm}
+        isLoading={isRemoving}
       />
     </div>
   );
