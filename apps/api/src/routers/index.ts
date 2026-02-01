@@ -6,6 +6,7 @@ import { logsRouter } from './logs.router';
 import { userRouter } from './user.router';
 import { settingsRouter } from './settings.router';
 import { symbolRouter } from './symbol.router';
+import { controlRouter } from './control.router';
 
 /**
  * Main application router
@@ -20,6 +21,7 @@ export const appRouter = router({
   user: userRouter,
   settings: settingsRouter,
   symbol: symbolRouter,
+  control: controlRouter,
 });
 
 export type AppRouter = typeof appRouter;
@@ -32,3 +34,4 @@ export { logsRouter } from './logs.router';
 export { userRouter } from './user.router';
 export { settingsRouter } from './settings.router';
 export { symbolRouter } from './symbol.router';
+export { controlRouter } from './control.router';
