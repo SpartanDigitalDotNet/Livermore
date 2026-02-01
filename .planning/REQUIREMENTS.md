@@ -35,12 +35,12 @@ Requirements for User Settings + Runtime Control milestone.
 
 ### Symbol Management
 
-- [ ] **SYM-01**: `add-symbol` command adds symbol to watchlist dynamically
-- [ ] **SYM-02**: `remove-symbol` command removes symbol from watchlist
-- [ ] **SYM-03**: Admin verifies symbols against exchange API before saving (delta-based validation)
-- [ ] **SYM-04**: Symbol search endpoint fetches available symbols from user's exchange
-- [ ] **SYM-05**: Bulk symbol import from JSON array
-- [ ] **SYM-06**: Symbol metrics preview (24h volume, price) before adding
+- [x] **SYM-01**: `add-symbol` command adds symbol to watchlist dynamically
+- [x] **SYM-02**: `remove-symbol` command removes symbol from watchlist
+- [x] **SYM-03**: Admin verifies symbols against exchange API before saving (delta-based validation)
+- [x] **SYM-04**: Symbol search endpoint fetches available symbols from user's exchange
+- [x] **SYM-05**: Bulk symbol import from JSON array
+- [x] **SYM-06**: Symbol metrics preview (24h volume, price) before adding
 
 ### Admin UI - Settings
 
@@ -126,12 +126,12 @@ Deferred to next milestone.
 | RUN-11 | 18 | Complete |
 | RUN-12 | 18 | Complete |
 | RUN-13 | 18 | Complete |
-| SYM-01 | 20 | Pending |
-| SYM-02 | 20 | Pending |
-| SYM-03 | 20 | Pending |
-| SYM-04 | 20 | Pending |
-| SYM-05 | 20 | Pending |
-| SYM-06 | 20 | Pending |
+| SYM-01 | 20 | Complete |
+| SYM-02 | 20 | Complete |
+| SYM-03 | 20 | Complete |
+| SYM-04 | 20 | Complete |
+| SYM-05 | 20 | Complete |
+| SYM-06 | 20 | Complete |
 | UI-SET-01 | 21 | Pending |
 | UI-SET-02 | 21 | Pending |
 | UI-SET-03 | 21 | Pending |
