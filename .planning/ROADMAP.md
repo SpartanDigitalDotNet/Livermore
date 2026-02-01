@@ -128,7 +128,14 @@ Plans:
 
 **Goal**: Users can view and edit their settings through intuitive form and JSON interfaces
 **Depends on**: Phase 17 (settings endpoints exist)
-**Plans**: TBD
+**Plans**: 5 plans
+
+Plans:
+- [ ] 21-01-PLAN.md — Foundation: libraries, Settings page shell, loading/error states, Sonner toasts
+- [ ] 21-02-PLAN.md — JSON editor: Monaco editor component and diff view component
+- [ ] 21-03-PLAN.md — Form editor: shadcn components, ProfileSection, RuntimeSection, SettingsForm
+- [ ] 21-04-PLAN.md — Split view: side-by-side layout with bidirectional form/JSON sync
+- [ ] 21-05-PLAN.md — Save/discard: diff modal, save mutation, discard, toast notifications
 
 **Requirements:**
 - UI-SET-01: Settings page with form-based editor for common settings
@@ -186,7 +193,7 @@ Plans:
 | 18 | Control Channel Foundation | Complete | 3/3 |
 | 19 | Runtime Commands | Complete | 3/3 |
 | 20 | Symbol Management | Complete | 3/3 |
-| 21 | Admin UI - Settings | Pending | 0/? |
+| 21 | Admin UI - Settings | Planned | 0/5 |
 | 22 | Admin UI - Control Panel + Symbols | Pending | 0/? |
 
 ---
