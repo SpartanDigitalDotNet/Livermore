@@ -11,15 +11,15 @@ See: .planning/PROJECT.md
 
 **Milestone:** v4.0 User Settings + Runtime Control
 **Phase:** 21 (Admin UI - Settings) - In Progress
-**Plan:** 02 of 4 complete
+**Plan:** 03 of 4 complete
 **Status:** In progress
 
 ```
-Progress: [=========.] 91%
+Progress: [=========.] 93%
 Phases:   17 [X] 18 [X] 19 [X] 20 [X] 21 [.] 22 [ ]
 ```
 
-**Last activity:** 2026-02-01 - Completed 21-02-PLAN.md (Settings JSON Editor Components)
+**Last activity:** 2026-02-01 - Completed 21-03-PLAN.md (Settings Form Section Components)
 
 ## Milestones
 
@@ -40,7 +40,7 @@ See `.planning/MILESTONES.md` for full history.
 | 18 | Control Channel Foundation | RUN-01,02,03,10,11,12,13 | Complete (RUN-01,02,03,10,11,12,13) |
 | 19 | Runtime Commands | RUN-04 to RUN-09 | Complete (RUN-04 to RUN-09) |
 | 20 | Symbol Management | SYM-01 to SYM-06 | Complete (SYM-01,02,03,04,05,06) |
-| 21 | Admin UI - Settings | UI-SET-01 to UI-SET-06 | In Progress (21-01, 21-02 complete) |
+| 21 | Admin UI - Settings | UI-SET-01 to UI-SET-06 | In Progress (21-01, 21-02, 21-03 complete) |
 | 22 | Admin UI - Control + Symbols | UI-CTL-*, UI-SYM-* | Pending |
 
 ## Tech Debt from v3.0
@@ -111,6 +111,7 @@ Alert Evaluation (receives ticker prices)
 | Control plane vs data plane | Control channel always on, data plane pausable |
 | Admin calls exchange API | Delta-based symbol validation from Admin, not API |
 | Credentials in env vars | Settings store env var names, not actual secrets |
+| Cast zodResolver for UserSettings | Zod schemas with defaults create type mismatch between input/output |
 
 ### Open Items
 
@@ -121,23 +122,23 @@ Alert Evaluation (receives ticker prices)
 ### Last Session
 
 **Date:** 2026-02-01
-**Activity:** Completed plan 21-02 (Settings JSON Editor Components)
-**Stopped At:** Phase 21 plan 02 complete, ready for 21-03
+**Activity:** Completed plan 21-03 (Settings Form Section Components)
+**Stopped At:** Phase 21 plan 03 complete, ready for 21-04
 
 ### Resume Context
 
 **PHASE 21 IN PROGRESS**
 
-Plan 21-02 completed (Settings JSON Editor Components):
-- Created SettingsJsonEditor with Monaco syntax highlighting and validation markers
-- Created SettingsDiffView with Monaco DiffEditor for side-by-side comparison
-- Added settings component index for clean imports
-- Commits: 78a9401, a5d4eb9, 6976e1e
+Plan 21-03 completed (Settings Form Section Components):
+- Added shadcn form components (Input, Label, Switch)
+- Created ProfileSection for perseus_profile settings
+- Created RuntimeSection for livermore_runtime settings
+- Created SettingsForm wrapper with zodResolver validation
+- Commits: 17cebca, 0691b1d, fe5b375
 
 Next steps:
-1. Execute 21-03 (Settings Form Section Components)
-2. Execute 21-04 (Settings Split View)
+1. Execute 21-04 (Settings Split View)
 
 ---
 *State initialized: 2026-01-18*
-*Last updated: 2026-02-01 - Completed 21-02-PLAN.md (Settings JSON Editor Components)*
+*Last updated: 2026-02-01 - Completed 21-03-PLAN.md (Settings Form Section Components)*
