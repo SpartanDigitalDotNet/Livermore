@@ -11,15 +11,15 @@ See: .planning/PROJECT.md
 
 **Milestone:** v4.0 User Settings + Runtime Control
 **Phase:** 21 (Admin UI - Settings) - In Progress
-**Plan:** 01 of 4 complete
+**Plan:** 02 of 4 complete
 **Status:** In progress
 
 ```
-Progress: [=========.] 87%
+Progress: [=========.] 91%
 Phases:   17 [X] 18 [X] 19 [X] 20 [X] 21 [.] 22 [ ]
 ```
 
-**Last activity:** 2026-02-01 - Completed 21-01-PLAN.md (Settings Page Shell)
+**Last activity:** 2026-02-01 - Completed 21-02-PLAN.md (Settings JSON Editor Components)
 
 ## Milestones
 
@@ -40,7 +40,7 @@ See `.planning/MILESTONES.md` for full history.
 | 18 | Control Channel Foundation | RUN-01,02,03,10,11,12,13 | Complete (RUN-01,02,03,10,11,12,13) |
 | 19 | Runtime Commands | RUN-04 to RUN-09 | Complete (RUN-04 to RUN-09) |
 | 20 | Symbol Management | SYM-01 to SYM-06 | Complete (SYM-01,02,03,04,05,06) |
-| 21 | Admin UI - Settings | UI-SET-01 to UI-SET-06 | In Progress (21-01 complete) |
+| 21 | Admin UI - Settings | UI-SET-01 to UI-SET-06 | In Progress (21-01, 21-02 complete) |
 | 22 | Admin UI - Control + Symbols | UI-CTL-*, UI-SYM-* | Pending |
 
 ## Tech Debt from v3.0
@@ -121,25 +121,23 @@ Alert Evaluation (receives ticker prices)
 ### Last Session
 
 **Date:** 2026-02-01
-**Activity:** Completed plan 21-01 (Settings Page Shell)
-**Stopped At:** Phase 21 plan 01 complete, ready for 21-02
+**Activity:** Completed plan 21-02 (Settings JSON Editor Components)
+**Stopped At:** Phase 21 plan 02 complete, ready for 21-03
 
 ### Resume Context
 
 **PHASE 21 IN PROGRESS**
 
-Plan 21-01 completed (Settings Page Shell):
-- Installed dependencies: react-hook-form, @hookform/resolvers, @monaco-editor/react, sonner
-- Created Toaster component for toast notifications
-- Created Settings page with loading/error/success states
-- Added Settings nav link and hash route
-- Commits: b375dc8, 942f906, ae41b95
+Plan 21-02 completed (Settings JSON Editor Components):
+- Created SettingsJsonEditor with Monaco syntax highlighting and validation markers
+- Created SettingsDiffView with Monaco DiffEditor for side-by-side comparison
+- Added settings component index for clean imports
+- Commits: 78a9401, a5d4eb9, 6976e1e
 
 Next steps:
-1. Execute 21-02 (Settings Form with react-hook-form)
-2. Execute 21-03 (JSON Editor with Monaco)
-3. Execute 21-04 (Import/Export functionality)
+1. Execute 21-03 (Settings Form Section Components)
+2. Execute 21-04 (Settings Split View)
 
 ---
 *State initialized: 2026-01-18*
-*Last updated: 2026-02-01 - Completed 21-01-PLAN.md (Settings Page Shell)*
+*Last updated: 2026-02-01 - Completed 21-02-PLAN.md (Settings JSON Editor Components)*
