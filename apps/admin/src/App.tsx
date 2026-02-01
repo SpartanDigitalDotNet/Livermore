@@ -3,7 +3,9 @@ import { SignedIn, SignedOut, SignIn, UserButton } from '@clerk/clerk-react';
 import { Dashboard } from './pages/Dashboard';
 import { Signals } from './pages/Signals';
 import { Logs } from './pages/Logs';
+import { Settings } from './pages/Settings';
 import { UserSync } from './components/UserSync';
+import { Toaster } from '@/components/ui/sonner';
 
 function App() {
   const [hash, setHash] = useState(window.location.hash || '#/');
@@ -46,6 +48,12 @@ function App() {
                   >
                     Logs
                   </a>
+                  <a
+                    href="#/settings"
+                    className={`${hash === '#/settings' ? 'text-gray-900 font-medium' : 'text-gray-600'} hover:text-gray-900`}
+                  >
+                    Settings
+                  </a>
                   <UserButton
                     afterSignOutUrl="/"
                     appearance={{
@@ -62,6 +70,7 @@ function App() {
             </main>
           </div>
         </UserSync>
+        <Toaster />
       </SignedIn>
     </>
   );
@@ -73,6 +82,8 @@ function HashRouter({ hash }: { hash: string }) {
       return <Signals />;
     case '#/logs':
       return <Logs />;
+    case '#/settings':
+      return <Settings />;
     default:
       return <Dashboard />;
   }

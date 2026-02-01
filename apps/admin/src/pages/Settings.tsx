@@ -1,10 +1,9 @@
 import { useQuery } from '@tanstack/react-query';
 import { trpc } from '@/lib/trpc';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import type { UserSettings } from '@livermore/schemas';
 
 export function Settings() {
-  const { data, isLoading, error, refetch, isFetching } = useQuery(
+  const { data: settings, isLoading, error, refetch, isFetching } = useQuery(
     trpc.settings.get.queryOptions()
   );
 
@@ -37,8 +36,6 @@ export function Settings() {
       </Card>
     );
   }
-
-  const settings = data as UserSettings;
 
   return (
     <Card>
