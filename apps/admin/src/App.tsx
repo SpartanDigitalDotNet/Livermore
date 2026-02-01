@@ -3,6 +3,8 @@ import { SignedIn, SignedOut, SignIn, UserButton } from '@clerk/clerk-react';
 import { Dashboard } from './pages/Dashboard';
 import { Signals } from './pages/Signals';
 import { Logs } from './pages/Logs';
+import { ControlPanel } from './pages/ControlPanel';
+import { Symbols } from './pages/Symbols';
 import { Settings } from './pages/Settings';
 import { UserSync } from './components/UserSync';
 import { Toaster } from '@/components/ui/sonner';
@@ -49,6 +51,18 @@ function App() {
                     Logs
                   </a>
                   <a
+                    href="#/control"
+                    className={`${hash === '#/control' ? 'text-gray-900 font-medium' : 'text-gray-600'} hover:text-gray-900`}
+                  >
+                    Control
+                  </a>
+                  <a
+                    href="#/symbols"
+                    className={`${hash === '#/symbols' ? 'text-gray-900 font-medium' : 'text-gray-600'} hover:text-gray-900`}
+                  >
+                    Symbols
+                  </a>
+                  <a
                     href="#/settings"
                     className={`${hash === '#/settings' ? 'text-gray-900 font-medium' : 'text-gray-600'} hover:text-gray-900`}
                   >
@@ -82,6 +96,10 @@ function HashRouter({ hash }: { hash: string }) {
       return <Signals />;
     case '#/logs':
       return <Logs />;
+    case '#/control':
+      return <ControlPanel />;
+    case '#/symbols':
+      return <Symbols />;
     case '#/settings':
       return <Settings />;
     default:
