@@ -11,15 +11,15 @@ See: .planning/PROJECT.md
 
 **Milestone:** v4.0 User Settings + Runtime Control
 **Phase:** 22 (Admin UI - Control + Symbols) - In Progress
-**Plan:** 01 of 5 complete
+**Plan:** 04 of 5 complete
 **Status:** In Progress
 
 ```
-Progress: [==========] 96%
+Progress: [==========] 98%
 Phases:   17 [X] 18 [X] 19 [X] 20 [X] 21 [X] 22 [~]
 ```
 
-**Last activity:** 2026-02-01 - Completed 22-01-PLAN.md (Foundation)
+**Last activity:** 2026-02-01 - Completed 22-04-PLAN.md (Symbol Watchlist UI)
 
 ## Milestones
 
@@ -41,7 +41,7 @@ See `.planning/MILESTONES.md` for full history.
 | 19 | Runtime Commands | RUN-04 to RUN-09 | Complete (RUN-04 to RUN-09) |
 | 20 | Symbol Management | SYM-01 to SYM-06 | Complete (SYM-01,02,03,04,05,06) |
 | 21 | Admin UI - Settings | UI-SET-01 to UI-SET-06 | Complete (21-01, 21-02, 21-03, 21-04, 21-05) |
-| 22 | Admin UI - Control + Symbols | UI-CTL-*, UI-SYM-* | In Progress (22-01) |
+| 22 | Admin UI - Control + Symbols | UI-CTL-*, UI-SYM-* | In Progress (22-01, 22-02, 22-03, 22-04) |
 
 ## Tech Debt from v3.0
 
@@ -127,22 +127,22 @@ Alert Evaluation (receives ticker prices)
 ### Last Session
 
 **Date:** 2026-02-01
-**Activity:** Completed plan 22-01 (Foundation)
-**Stopped At:** Plan 22-01 complete, ready for 22-02
+**Activity:** Completed plan 22-04 (Symbol Watchlist UI)
+**Stopped At:** Plan 22-04 complete, ready for 22-05
 
 ### Resume Context
 
-**PLAN 22-01 COMPLETE**
+**PLAN 22-04 COMPLETE**
 
-Plan 22-01 completed (Foundation):
-- Installed shadcn Badge, Dialog, Tooltip, Button components
-- Created controlRouter with getStatus and executeCommand endpoints
-- Added ControlPanel and Symbols page shells with navigation
-- Commits: 0c87e60, 6b36021, a0136bc
+Plan 22-04 completed (Symbol Watchlist UI):
+- Created SymbolRow with expandable metrics display
+- Created SymbolWatchlist and ScannerStatus components
+- Integrated all into Symbols page with remove confirmation
+- Commits: a362f57, 25c3787, ffcd1a5
 
 Next steps:
-1. Execute plan 22-02 (Status Display Card)
+1. Execute plan 22-05 (Add Symbol Form)
 
 ---
 *State initialized: 2026-01-18*
-*Last updated: 2026-02-01 - Completed 22-01-PLAN.md (Foundation)*
+*Last updated: 2026-02-01 - Completed 22-04-PLAN.md (Symbol Watchlist UI)*
