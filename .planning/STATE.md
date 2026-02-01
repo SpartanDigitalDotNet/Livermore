@@ -10,16 +10,16 @@ See: .planning/PROJECT.md
 ## Current Position
 
 **Milestone:** v4.0 User Settings + Runtime Control
-**Phase:** 21 (Admin UI - Settings) - Complete
-**Plan:** 05 of 5 complete
-**Status:** Phase complete
+**Phase:** 22 (Admin UI - Control + Symbols) - In Progress
+**Plan:** 01 of 5 complete
+**Status:** In Progress
 
 ```
-Progress: [==========] 95%
-Phases:   17 [X] 18 [X] 19 [X] 20 [X] 21 [X] 22 [ ]
+Progress: [==========] 96%
+Phases:   17 [X] 18 [X] 19 [X] 20 [X] 21 [X] 22 [~]
 ```
 
-**Last activity:** 2026-02-01 - Completed 21-05-PLAN.md (Save/Discard with Diff Preview)
+**Last activity:** 2026-02-01 - Completed 22-01-PLAN.md (Foundation)
 
 ## Milestones
 
@@ -41,7 +41,7 @@ See `.planning/MILESTONES.md` for full history.
 | 19 | Runtime Commands | RUN-04 to RUN-09 | Complete (RUN-04 to RUN-09) |
 | 20 | Symbol Management | SYM-01 to SYM-06 | Complete (SYM-01,02,03,04,05,06) |
 | 21 | Admin UI - Settings | UI-SET-01 to UI-SET-06 | Complete (21-01, 21-02, 21-03, 21-04, 21-05) |
-| 22 | Admin UI - Control + Symbols | UI-CTL-*, UI-SYM-* | Pending |
+| 22 | Admin UI - Control + Symbols | UI-CTL-*, UI-SYM-* | In Progress (22-01) |
 
 ## Tech Debt from v3.0
 
@@ -114,6 +114,9 @@ Alert Evaluation (receives ticker prices)
 | Cast zodResolver for UserSettings | Zod schemas with defaults create type mismatch between input/output |
 | lastEditSource ref for bidirectional sync | Prevents infinite loops between form and JSON editor |
 | splitViewKey ref for discard | Forces clean remount of SettingsSplitView without complex state reset |
+| Manual shadcn component creation | Project doesn't use shadcn CLI; components created manually with CVA |
+| controlRouter uses protectedProcedure | Auth required for control commands |
+| Mock getStatus endpoint | Full implementation requires ControlChannelService in tRPC context |
 
 ### Open Items
 
@@ -124,23 +127,22 @@ Alert Evaluation (receives ticker prices)
 ### Last Session
 
 **Date:** 2026-02-01
-**Activity:** Completed plan 21-05 (Save/Discard with Diff Preview)
-**Stopped At:** Phase 21 complete, ready for Phase 22
+**Activity:** Completed plan 22-01 (Foundation)
+**Stopped At:** Plan 22-01 complete, ready for 22-02
 
 ### Resume Context
 
-**PHASE 21 COMPLETE**
+**PLAN 22-01 COMPLETE**
 
-Plan 21-05 completed (Save/Discard with Diff Preview):
-- Created SettingsDiffModal with confirm/cancel actions
-- Completed Settings page with save/discard and toast notifications
-- Added Zod validation before diff modal display
-- All UI-SET requirements (01-06) satisfied
-- Commits: bbc935b, 1817fb1, 06d49e7
+Plan 22-01 completed (Foundation):
+- Installed shadcn Badge, Dialog, Tooltip, Button components
+- Created controlRouter with getStatus and executeCommand endpoints
+- Added ControlPanel and Symbols page shells with navigation
+- Commits: 0c87e60, 6b36021, a0136bc
 
 Next steps:
-1. Execute Phase 22 (Admin UI - Control + Symbols)
+1. Execute plan 22-02 (Status Display Card)
 
 ---
 *State initialized: 2026-01-18*
-*Last updated: 2026-02-01 - Completed 21-05-PLAN.md (Save/Discard with Diff Preview)*
+*Last updated: 2026-02-01 - Completed 22-01-PLAN.md (Foundation)*
