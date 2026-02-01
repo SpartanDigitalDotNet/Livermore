@@ -158,7 +158,15 @@ Plans:
 
 **Goal**: Users can monitor and control API runtime and manage their symbol watchlist
 **Depends on**: Phase 19 (runtime commands), Phase 20 (symbol management)
-**Plans**: TBD
+**Plans**: 6 plans
+
+Plans:
+- [ ] 22-01-PLAN.md — Foundation: shadcn components, controlRouter, page shells, navigation
+- [ ] 22-02-PLAN.md — Control Panel: RuntimeStatus, ControlButtons, ConfirmationDialog
+- [ ] 22-03-PLAN.md — Command history and active symbols display
+- [ ] 22-04-PLAN.md — Symbol watchlist with metrics display
+- [ ] 22-05-PLAN.md — Add/remove symbol functionality
+- [ ] 22-06-PLAN.md — Bulk import modal
 
 **Requirements:**
 - UI-CTL-01: Runtime status display (running/paused, current mode, uptime)
@@ -194,7 +202,7 @@ Plans:
 | 19 | Runtime Commands | Complete | 3/3 |
 | 20 | Symbol Management | Complete | 3/3 |
 | 21 | Admin UI - Settings | Complete | 5/5 |
-| 22 | Admin UI - Control Panel + Symbols | Pending | 0/? |
+| 22 | Admin UI - Control Panel + Symbols | Pending | 0/6 |
 
 ---
 
