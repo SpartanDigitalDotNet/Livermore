@@ -10,16 +10,16 @@ See: .planning/PROJECT.md
 ## Current Position
 
 **Milestone:** v4.0 User Settings + Runtime Control
-**Phase:** 22 (Admin UI - Control + Symbols) - In Progress
-**Plan:** 04 of 5 complete
-**Status:** In Progress
+**Phase:** 22 (Admin UI - Control + Symbols) - Complete
+**Plan:** 05 of 5 complete
+**Status:** Phase Complete
 
 ```
-Progress: [==========] 98%
-Phases:   17 [X] 18 [X] 19 [X] 20 [X] 21 [X] 22 [~]
+Progress: [==========] 100%
+Phases:   17 [X] 18 [X] 19 [X] 20 [X] 21 [X] 22 [X]
 ```
 
-**Last activity:** 2026-02-01 - Completed 22-03-PLAN.md (Command History & Active Symbols)
+**Last activity:** 2026-02-01 - Completed 22-05-PLAN.md (Add Symbol Form)
 
 ## Milestones
 
@@ -41,7 +41,7 @@ See `.planning/MILESTONES.md` for full history.
 | 19 | Runtime Commands | RUN-04 to RUN-09 | Complete (RUN-04 to RUN-09) |
 | 20 | Symbol Management | SYM-01 to SYM-06 | Complete (SYM-01,02,03,04,05,06) |
 | 21 | Admin UI - Settings | UI-SET-01 to UI-SET-06 | Complete (21-01, 21-02, 21-03, 21-04, 21-05) |
-| 22 | Admin UI - Control + Symbols | UI-CTL-*, UI-SYM-* | In Progress (22-01, 22-02, 22-03, 22-04) |
+| 22 | Admin UI - Control + Symbols | UI-CTL-*, UI-SYM-* | Complete (22-01, 22-02, 22-03, 22-04, 22-05) |
 
 ## Tech Debt from v3.0
 
@@ -128,22 +128,26 @@ Alert Evaluation (receives ticker prices)
 ### Last Session
 
 **Date:** 2026-02-01
-**Activity:** Completed plan 22-03 (Command History & Active Symbols)
-**Stopped At:** Plan 22-03 complete, ready for 22-05
+**Activity:** Completed plan 22-05 (Add Symbol Form)
+**Stopped At:** Phase 22 complete, v4.0 milestone complete
 
 ### Resume Context
 
-**PLAN 22-03 COMPLETE**
+**PHASE 22 COMPLETE - v4.0 MILESTONE COMPLETE**
 
-Plan 22-03 completed (Command History & Active Symbols):
-- Created CommandHistory component with pending/success/error states
-- Created ActiveSymbols component showing symbol count and list
-- Integrated both into ControlPanel with command tracking
-- Commits: b59d472, 00b9405, 498644b
+Plan 22-05 completed (Add Symbol Form):
+- Created AddSymbolForm with debounced search and validation preview
+- Integrated into Symbols page with improved add/remove flow
+- Commits: 531205b, 3305737
 
-Next steps:
-1. Execute plan 22-05 (Add Symbol Form)
+v4.0 Milestone Summary:
+- Phase 17: Settings Infrastructure - Complete
+- Phase 18: Control Channel Foundation - Complete
+- Phase 19: Runtime Commands - Complete
+- Phase 20: Symbol Management - Complete
+- Phase 21: Admin UI - Settings - Complete
+- Phase 22: Admin UI - Control + Symbols - Complete
 
 ---
 *State initialized: 2026-01-18*
-*Last updated: 2026-02-01 - Completed 22-03-PLAN.md (Command History & Active Symbols)*
+*Last updated: 2026-02-01 - Completed 22-05-PLAN.md (Add Symbol Form)*
