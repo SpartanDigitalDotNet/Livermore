@@ -41,7 +41,7 @@ See `.planning/MILESTONES.md` for full history.
 | 19 | Runtime Commands | RUN-04 to RUN-09 | Complete (RUN-04 to RUN-09) |
 | 20 | Symbol Management | SYM-01 to SYM-06 | Complete (SYM-01,02,03,04,05,06) |
 | 21 | Admin UI - Settings | UI-SET-01 to UI-SET-06 | Complete (21-01, 21-02, 21-03, 21-04, 21-05) |
-| 22 | Admin UI - Control + Symbols | UI-CTL-*, UI-SYM-* | In Progress (22-01, 22-02, 22-03, 22-04) |
+| 22 | Admin UI - Control + Symbols | UI-CTL-*, UI-SYM-* | In Progress (22-01, 22-02, 22-04) |
 
 ## Tech Debt from v3.0
 
@@ -117,6 +117,7 @@ Alert Evaluation (receives ticker prices)
 | Manual shadcn component creation | Project doesn't use shadcn CLI; components created manually with CVA |
 | controlRouter uses protectedProcedure | Auth required for control commands |
 | Mock getStatus endpoint | Full implementation requires ControlChannelService in tRPC context |
+| Upgraded Select to Radix-based | Better UX/accessibility; required updating Logs.tsx |
 
 ### Open Items
 
