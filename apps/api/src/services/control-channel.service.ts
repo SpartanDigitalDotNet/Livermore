@@ -1,4 +1,4 @@
-import { getRedisClient, commandChannel, responseChannel } from '@livermore/cache';
+import { getRedisClient, commandChannel, responseChannel, deleteKeysClusterSafe, type RedisClient } from '@livermore/cache';
 import { createLogger } from '@livermore/utils';
 import {
   CommandSchema,
@@ -10,8 +10,8 @@ import {
 import { StartupBackfillService } from '@livermore/coinbase-client';
 import { eq, and, sql } from 'drizzle-orm';
 import { users } from '@livermore/database';
-import type Redis from 'ioredis';
 import type { ServiceRegistry } from './types/service-registry';
+import { updateRuntimeState } from './runtime-state';
 
 const logger = createLogger({ name: 'control-channel', service: 'control' });
 
@@ -58,7 +58,7 @@ const PRIORITY: Record<CommandType, number> = {
  */
 export class ControlChannelService {
   private redis = getRedisClient();
-  private subscriber: Redis | null = null;
+  private subscriber: RedisClient | null = null;
   private identitySub: string;
   private commandChannelKey: string;
   private responseChannelKey: string;
@@ -342,6 +342,7 @@ export class ControlChannelService {
     logger.debug('IndicatorService stopped');
 
     this.isPaused = true;
+    updateRuntimeState({ isPaused: true, exchangeConnected: false });
     logger.info('All services paused');
 
     return {
@@ -387,6 +388,7 @@ export class ControlChannelService {
     logger.debug('AlertService started');
 
     this.isPaused = false;
+    updateRuntimeState({ isPaused: false, exchangeConnected: true });
     logger.info('All services resumed');
 
     return {
@@ -469,12 +471,14 @@ export class ControlChannelService {
     // RUN-07 specifies this is a stub for now
     // scalper-orderbook requires orderbook imbalance detection (v4.1)
     // scalper-macdv requires strategy implementation
-    logger.info({ mode }, 'Mode switch requested (stub - no actual change)');
+    // Update runtime state so UI reflects the selection (even though strategy doesn't change)
+    updateRuntimeState({ mode });
+    logger.info({ mode }, 'Mode switched (stub - strategy implementation pending)');
 
     return {
-      switched: false,
+      switched: true,
       mode,
-      message: 'Mode switching is a stub - actual implementation pending strategy work',
+      message: `Mode set to ${mode} (strategy implementation pending)`,
       validModes,
     };
   }
@@ -569,8 +573,7 @@ export class ControlChannelService {
 
         const allKeys = [...candleKeys, ...indicatorKeys, ...tickerKeys];
         if (allKeys.length > 0) {
-          await this.services.redis.del(...allKeys);
-          deletedCount = allKeys.length;
+          deletedCount = await deleteKeysClusterSafe(this.services.redis, allKeys);
         }
         break;
       }
@@ -590,8 +593,7 @@ export class ControlChannelService {
 
         const allKeys = [...candleKeys, ...indicatorKeys, tickerKey];
         if (allKeys.length > 0) {
-          await this.services.redis.del(...allKeys);
-          deletedCount = allKeys.length;
+          deletedCount = await deleteKeysClusterSafe(this.services.redis, allKeys);
         }
         break;
       }
@@ -610,8 +612,7 @@ export class ControlChannelService {
 
         const allKeys = [...candleKeys, ...indicatorKeys];
         if (allKeys.length > 0) {
-          await this.services.redis.del(...allKeys);
-          deletedCount = allKeys.length;
+          deletedCount = await deleteKeysClusterSafe(this.services.redis, allKeys);
         }
         break;
       }
@@ -979,7 +980,7 @@ export class ControlChannelService {
     }
 
     if (keysToDelete.length > 0) {
-      const deleted = await this.services!.redis.del(...keysToDelete);
+      const deleted = await deleteKeysClusterSafe(this.services!.redis, keysToDelete);
       logger.debug({ symbol, keysDeleted: deleted }, 'Cleaned up symbol cache');
     }
   }

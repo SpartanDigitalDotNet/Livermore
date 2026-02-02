@@ -1,6 +1,5 @@
-import type { Redis } from 'ioredis';
 import type { Timeframe, UnifiedCandle } from '@livermore/schemas';
-import { CandleCacheStrategy, candleClosePattern } from '@livermore/cache';
+import { CandleCacheStrategy, candleClosePattern, type RedisClient } from '@livermore/cache';
 import { logger } from '@livermore/utils';
 import { CoinbaseRestClient } from '../rest/client';
 import { BoundaryRestConfig, DEFAULT_BOUNDARY_CONFIG } from './types';
@@ -29,7 +28,7 @@ import { detectBoundaries } from './boundary-detector';
 export class BoundaryRestService {
   private restClient: CoinbaseRestClient;
   private candleCache: CandleCacheStrategy;
-  private subscriber: Redis;
+  private subscriber: RedisClient;
   private config: BoundaryRestConfig;
   private symbols: string[] = [];
   private isRunning = false;
@@ -45,8 +44,8 @@ export class BoundaryRestService {
   constructor(
     apiKeyId: string,
     privateKeyPem: string,
-    redis: Redis,
-    subscriberRedis: Redis, // Separate connection for psubscribe
+    redis: RedisClient,
+    subscriberRedis: RedisClient, // Separate connection for psubscribe
     config: Partial<BoundaryRestConfig> = {}
   ) {
     this.restClient = new CoinbaseRestClient(apiKeyId, privateKeyPem);

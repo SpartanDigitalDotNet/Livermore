@@ -10,18 +10,22 @@ Data accuracy and timely alerts — indicators must calculate on complete, accur
 
 ## Current State
 
-**Status:** v3.0 shipped — ready for v3.1 planning
-**Current focus:** API security hardening, trading contracts for PerseusWeb
+**Status:** v4.0 planning
+**Current focus:** User settings infrastructure, Admin→API runtime control
 
-## Current Milestone: v3.1 (Planning)
+## Current Milestone: v4.0 User Settings + Runtime Control
 
-**Goal:** Protect API endpoints with authentication, define trading contracts for PerseusWeb integration.
+**Goal:** Enable user-specific configuration stored in PostgreSQL, with Admin UI for editing settings and Redis pub/sub for Admin→API command communication.
 
 **Target features:**
-- Convert existing routers to protectedProcedure (security debt from v3.0)
-- API key authentication for PerseusWeb
-- Trading contracts (orders, positions)
-- WebSocket contract for real-time data
+- User settings as JSONB column on users table (mirrors current file structure)
+- Settings tRPC endpoints (CRUD)
+- Admin Settings UI (form-based editor + JSON editor for power users)
+- Redis pub/sub channel for Admin→API commands
+- API command handling: pause, resume, reload-settings, switch-mode, add/remove-symbol, force-backfill, clear-cache
+- Runtime modes: position-monitor, scalper-macdv, scalper-orderbook (stub)
+- Hybrid symbol management: scanner fetches from exchange, user curates in Admin
+- Per-user exchange credential env var names (credentials stay in env vars, not DB)
 
 ## Requirements
 
@@ -48,12 +52,13 @@ Data accuracy and timely alerts — indicators must calculate on complete, accur
 - ✓ Admin UI with portfolio, signals, and logs viewers — v3.0
 - ✓ Pre-flight connection validation (database + Redis) — v3.0
 
-### Next Milestone Goals (v3.1+)
+### Next Milestone Goals (v4.1+)
 
-- Trading contracts (orders, positions, paper trading) — requires exchange model research
-- Multi-exchange support (Binance.us, Binance.com adapters)
-- Observability improvements (connection health metrics, circuit breaker)
-- Additional indicators for confluence stacking
+- Orderbook imbalance detection (scalper-orderbook mode implementation)
+- Trading contracts (orders, positions, paper trading)
+- Multi-exchange adapters (Binance.us, Binance.com)
+- Azure pub/sub for multi-instance deployment (identity_sub as channel)
+- Router auth tech debt (convert publicProcedure to protectedProcedure)
 
 ### Out of Scope
 
@@ -61,6 +66,9 @@ Data accuracy and timely alerts — indicators must calculate on complete, accur
 - Trade Execution — monitoring only
 - CCXT Library — performance overhead unnecessary
 - Cross-Region Replication — single-region sufficient
+- Orderbook imbalance implementation — stub only in v4.0, full implementation v4.1
+- Azure pub/sub — Redis pub/sub sufficient for single-instance, Azure deferred
+- Router auth hardening — tech debt accepted, defer to v4.1
 
 ## Context
 
@@ -111,20 +119,27 @@ Alert Evaluation (receives ticker prices)
 | Boundary-triggered REST | Higher timeframes fetched at 5m boundaries (no cron) | ✓ Shipped v2.0 |
 | Exchange adapter pattern | Multi-exchange support without indicator changes | ✓ Shipped v2.0 |
 | Preserve legacy service | Deprecated but kept for rollback during observation | ✓ Shipped v2.0 |
-| Atlas-only migrations | Database schema (schema.sql) is source of truth; Drizzle migrations BANNED | — v3.0 |
-| Database-first ORM | Use `drizzle-kit pull` to generate TypeScript from database (like EF scaffolding) | — v3.0 |
-| Sandbox as shared DB | Azure PostgreSQL (Sandbox) shared between Livermore and Kaia's UI | — v3.0 |
+| Atlas-only migrations | Database schema (schema.sql) is source of truth; Drizzle migrations BANNED | ✓ Shipped v3.0 |
+| Database-first ORM | Use `drizzle-kit pull` to generate TypeScript from database (like EF scaffolding) | ✓ Shipped v3.0 |
+| Sandbox as shared DB | Azure PostgreSQL (Sandbox) shared between Livermore and Kaia's UI | ✓ Shipped v3.0 |
+| Settings as JSONB | Single JSONB column on users table for flexible settings schema | — v4.0 |
+| Redis pub/sub for control | Admin→API commands via Redis, future Azure pub/sub | — v4.0 |
+| Pause mode not shutdown | API stays running but idles; keeps pub/sub channel open | — v4.0 |
+| Credentials in env vars | Settings store env var names, not actual secrets | — v4.0 |
+| Hybrid symbol management | Scanner from exchange + user curation in Admin | — v4.0 |
 
 ## Partnership Context
 
 **Kaia's UI (PerseusWeb):** Frontend trading platform that connects to Livermore as backend service.
 
 **Integration points:**
-- Sandbox PostgreSQL: Shared database for IAM and future trading data
+- Sandbox PostgreSQL: Shared database for IAM and user settings
 - WebSocket: Real-time data feed (candles, indicators, signals) — future milestone
 - Contracts: Shared TypeScript models for API communication — future milestone
 
-**Current blocker:** Kaia needs IAM tables deployed to Sandbox to build authentication flows.
+**v3.0 unblocked Kaia:** IAM tables deployed, KAIA-IAM-HANDOFF.md delivered.
+
+**v4.0 adds:** User settings schema that Kaia's PerseusWeb can also leverage for her Binance.com configuration.
 
 ---
-*Last updated: 2026-01-30 — v3.0 shipped, ready for v3.1*
+*Last updated: 2026-01-31 — v4.0 milestone started*

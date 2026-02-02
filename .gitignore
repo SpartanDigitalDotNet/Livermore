@@ -19,6 +19,12 @@ out
 .env.test.local
 .env.production.local
 
+# Test scripts with secrets (never commit)
+scripts/test-redis-*.ps1
+scripts/test-redis-*.ts
+scripts/load-positions-*.ps1
+scripts/load-positions-*.ts
+
 # Testing
 coverage
 *.log

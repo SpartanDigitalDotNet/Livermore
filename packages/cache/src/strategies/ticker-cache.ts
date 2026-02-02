@@ -1,6 +1,6 @@
-import type { Redis } from 'ioredis';
 import { TickerSchema, type Ticker, HARDCODED_CONFIG } from '@livermore/schemas';
 import { tickerKey, tickerChannel } from '../keys';
+import type { RedisClient } from '../client';
 
 /**
  * Ticker caching strategy using Redis strings
@@ -10,7 +10,7 @@ import { tickerKey, tickerChannel } from '../keys';
  * All tickers are scoped by userId and exchangeId for multi-user support.
  */
 export class TickerCacheStrategy {
-  constructor(private redis: Redis) {}
+  constructor(private redis: RedisClient) {}
 
   /**
    * Set ticker data in cache
@@ -50,7 +50,8 @@ export class TickerCacheStrategy {
 
     const keys = symbols.map((symbol) => tickerKey(userId, exchangeId, symbol));
 
-    const values = await this.redis.mget(...keys);
+    // Use individual GET calls for Azure Redis Cluster compatibility (avoids CROSSSLOT errors)
+    const values = await Promise.all(keys.map((key) => this.redis.get(key)));
 
     const tickers = new Map<string, Ticker>();
 

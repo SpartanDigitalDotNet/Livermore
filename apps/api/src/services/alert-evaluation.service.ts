@@ -1,5 +1,4 @@
-import Redis from 'ioredis';
-import { getRedisClient, tickerChannel, indicatorChannel, IndicatorCacheStrategy, CandleCacheStrategy, type CachedIndicatorValue } from '@livermore/cache';
+import { getRedisClient, tickerChannel, indicatorChannel, IndicatorCacheStrategy, CandleCacheStrategy, type CachedIndicatorValue, type RedisClient } from '@livermore/cache';
 import { getDbClient, alertHistory } from '@livermore/database';
 import { logger } from '@livermore/utils';
 import type { Ticker, Timeframe } from '@livermore/schemas';
@@ -20,7 +19,7 @@ import { getDiscordService, type MACDVTimeframeData } from './discord-notificati
 export class AlertEvaluationService {
   private db = getDbClient();
   private redis = getRedisClient();
-  private subscriber: Redis | null = null;
+  private subscriber: RedisClient | null = null;
   private discordService = getDiscordService();
   private indicatorCache: IndicatorCacheStrategy;
   private candleCache: CandleCacheStrategy;

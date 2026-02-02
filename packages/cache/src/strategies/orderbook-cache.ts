@@ -1,6 +1,6 @@
-import type { Redis } from 'ioredis';
 import { OrderbookSchema, type Orderbook, HARDCODED_CONFIG } from '@livermore/schemas';
 import { orderbookKey, orderbookChannel } from '../keys';
+import type { RedisClient } from '../client';
 
 /**
  * Orderbook caching strategy using Redis strings
@@ -10,7 +10,7 @@ import { orderbookKey, orderbookChannel } from '../keys';
  * All orderbooks are scoped by userId and exchangeId for multi-user support.
  */
 export class OrderbookCacheStrategy {
-  constructor(private redis: Redis) {}
+  constructor(private redis: RedisClient) {}
 
   /**
    * Set orderbook snapshot in cache
@@ -50,7 +50,8 @@ export class OrderbookCacheStrategy {
 
     const keys = symbols.map((symbol) => orderbookKey(userId, exchangeId, symbol));
 
-    const values = await this.redis.mget(...keys);
+    // Use individual GET calls for Azure Redis Cluster compatibility (avoids CROSSSLOT errors)
+    const values = await Promise.all(keys.map((key) => this.redis.get(key)));
 
     const orderbooks = new Map<string, Orderbook>();
 

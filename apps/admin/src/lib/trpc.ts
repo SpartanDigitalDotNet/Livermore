@@ -4,10 +4,30 @@ import { createTRPCOptionsProxy } from '@trpc/tanstack-react-query';
 import type { AppRouter } from '../../../../apps/api/src/routers';
 
 /**
+ * Token getter function - set by ClerkTokenProvider.
+ * This allows us to use Clerk's React hooks which handle
+ * token refresh properly, unlike window.Clerk.session.getToken().
+ */
+let tokenGetter: (() => Promise<string | null>) | null = null;
+
+/**
+ * Set the token getter function. Called by ClerkTokenProvider.
+ */
+export function setTokenGetter(getter: () => Promise<string | null>): void {
+  tokenGetter = getter;
+}
+
+/**
  * Get Clerk token for authenticated API requests.
- * Clerk exposes session on window after ClerkProvider initializes.
+ * Uses the token getter set by ClerkTokenProvider (preferred)
+ * or falls back to window.Clerk.session.getToken().
  */
 const getAuthToken = async (): Promise<string | null> => {
+  // Use React hook-based getter if available (handles refresh properly)
+  if (tokenGetter) {
+    return tokenGetter();
+  }
+  // Fallback to window.Clerk (may return stale tokens)
   if (typeof window !== 'undefined' && window.Clerk?.session) {
     return window.Clerk.session.getToken();
   }

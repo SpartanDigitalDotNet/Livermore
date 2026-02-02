@@ -1,7 +1,6 @@
-import type { Redis } from 'ioredis';
 import type { Timeframe } from '@livermore/schemas';
 import { timeframeToMs, getCandleTimestamp } from '@livermore/utils';
-import { candleKey } from '@livermore/cache';
+import { candleKey, type RedisClient } from '@livermore/cache';
 import type { GapInfo } from './types';
 
 /**
@@ -15,7 +14,7 @@ import type { GapInfo } from './types';
  * @returns Array of timestamps
  */
 export async function getTimestampsOnly(
-  redis: Redis,
+  redis: RedisClient,
   key: string,
   start: number,
   end: number
@@ -108,7 +107,7 @@ export function detectGaps(
  * @returns Array of detected gaps
  */
 export async function detectGapsForSymbol(
-  redis: Redis,
+  redis: RedisClient,
   userId: number,
   exchangeId: number,
   symbol: string,

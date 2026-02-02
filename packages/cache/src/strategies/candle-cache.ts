@@ -1,6 +1,6 @@
-import type { Redis } from 'ioredis';
 import { CandleSchema, UnifiedCandleSchema, type Candle, type UnifiedCandle, type Timeframe, HARDCODED_CONFIG } from '@livermore/schemas';
 import { candleKey, candleChannel } from '../keys';
+import type { RedisClient } from '../client';
 
 /**
  * Candle caching strategy using Redis sorted sets
@@ -10,7 +10,7 @@ import { candleKey, candleChannel } from '../keys';
  * All candles are scoped by userId and exchangeId for multi-user support.
  */
 export class CandleCacheStrategy {
-  constructor(private redis: Redis) {}
+  constructor(private redis: RedisClient) {}
 
   /**
    * Add a single candle to the cache

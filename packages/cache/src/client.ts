@@ -7,13 +7,22 @@ const logger = createLogger('redis');
 /**
  * Create a Redis client instance
  *
+ * For Azure Redis (including clustered), we use a single-node client through
+ * Azure's proxy endpoint. Azure handles cluster routing internally.
+ * Multi-key operations across slots still need to be avoided (use deleteKeysClusterSafe).
+ *
  * @param config - Validated environment configuration
  * @returns Redis client instance
  */
 export function createRedisClient(config: EnvConfig): Redis {
   logger.info('Connecting to Redis...');
 
+  // Parse host from URL for TLS servername
+  const urlMatch = config.REDIS_URL.match(/@([^:]+):/);
+  const host = urlMatch?.[1];
+
   const redis = new Redis(config.REDIS_URL, {
+    tls: host ? { servername: host } : undefined,
     maxRetriesPerRequest: HARDCODED_CONFIG.redis.maxRetries,
     retryStrategy: (times) => {
       if (times > HARDCODED_CONFIG.redis.maxRetries) {
@@ -84,6 +93,27 @@ export async function testRedisConnection(redis: Redis): Promise<void> {
     logger.error({ error: message }, 'Redis connection test FAILED');
     throw new Error(`Redis connection failed: ${message}`);
   }
+}
+
+/**
+ * Delete multiple keys safely for Azure Redis Cluster
+ *
+ * Azure Redis Cluster doesn't allow multi-key DEL when keys hash to different slots.
+ * This function deletes keys one at a time to avoid CROSSSLOT errors.
+ *
+ * @param redis - Redis client instance
+ * @param keys - Array of keys to delete
+ * @returns Number of keys deleted
+ */
+export async function deleteKeysClusterSafe(redis: Redis, keys: string[]): Promise<number> {
+  if (keys.length === 0) return 0;
+
+  let deleted = 0;
+  for (const key of keys) {
+    const result = await redis.del(key);
+    deleted += result;
+  }
+  return deleted;
 }
 
 /**

@@ -49,7 +49,12 @@
       "WebFetch(domain:github.com)",
       "Bash(ls:*)",
       "Bash(Select-String -Pattern \"sslmode\" -Context 0,2)",
-      "Bash(npx tsc:*)"
+      "Bash(npx tsc:*)",
+      "Bash(npx @anthropic-ai/context7-mcp@latest resolve-library-id:*)",
+      "WebFetch(domain:react-hook-form.com)",
+      "Bash(git status:*)",
+      "WebFetch(domain:www.npmjs.com)",
+      "WebFetch(domain:ui.shadcn.com)"
     ]
   }
 }

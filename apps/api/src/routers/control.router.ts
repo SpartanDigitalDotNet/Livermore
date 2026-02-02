@@ -3,6 +3,7 @@ import { TRPCError } from '@trpc/server';
 import { router, protectedProcedure } from '@livermore/trpc-config';
 import { getRedisClient, commandChannel, responseChannel } from '@livermore/cache';
 import { CommandTypeSchema, type CommandResponse } from '@livermore/schemas';
+import { getRuntimeState } from '../services/runtime-state';
 import crypto from 'crypto';
 
 /**
@@ -44,15 +45,14 @@ export const controlRouter = router({
   getStatus: protectedProcedure.query(async ({ ctx }) => {
     ctx.logger.debug('Fetching API status');
 
-    // Return mock status for now - will be wired to actual service state
-    // when ControlChannelService is accessible from tRPC context
+    const state = getRuntimeState();
     return {
-      isPaused: false,
-      mode: 'position-monitor',
-      uptime: Math.floor(process.uptime()),
-      startTime: Date.now() - Math.floor(process.uptime()) * 1000,
-      exchangeConnected: true,
-      queueDepth: 0,
+      isPaused: state.isPaused,
+      mode: state.mode,
+      uptime: Math.floor((Date.now() - state.startTime) / 1000),
+      startTime: state.startTime,
+      exchangeConnected: state.exchangeConnected,
+      queueDepth: state.queueDepth,
     };
   }),
 

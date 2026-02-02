@@ -3,6 +3,7 @@ import {
   CandleCacheStrategy,
   IndicatorCacheStrategy,
   type CachedIndicatorValue,
+  type RedisClient,
 } from '@livermore/cache';
 import { createLogger, getCandleTimestamp, fillCandleGaps, calculateZeroRangeRatio } from '@livermore/utils';
 
@@ -14,7 +15,6 @@ import {
   MACD_V_DEFAULTS,
   type OHLCWithSynthetic,
 } from '@livermore/indicators';
-import type { Redis } from 'ioredis';
 
 /**
  * Configuration for a symbol/timeframe pair to calculate indicators for
@@ -42,7 +42,7 @@ export class IndicatorCalculationService {
   private candleCache: CandleCacheStrategy;
   private indicatorCache: IndicatorCacheStrategy;
   private redis = getRedisClient();
-  private subscriber: Redis | null = null;
+  private subscriber: RedisClient | null = null;
 
   // Active calculation configs
   private configs: IndicatorConfig[] = [];

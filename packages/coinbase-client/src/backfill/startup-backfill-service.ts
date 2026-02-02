@@ -1,6 +1,5 @@
-import type { Redis } from 'ioredis';
 import type { Timeframe } from '@livermore/schemas';
-import { CandleCacheStrategy } from '@livermore/cache';
+import { CandleCacheStrategy, type RedisClient } from '@livermore/cache';
 import { logger } from '@livermore/utils';
 import { CoinbaseRestClient } from '../rest/client';
 import { BackfillConfig, DEFAULT_BACKFILL_CONFIG, TIMEFRAME_PRIORITY } from './types';
@@ -26,7 +25,7 @@ export class StartupBackfillService {
   constructor(
     apiKeyId: string,
     privateKeyPem: string,
-    redis: Redis,
+    redis: RedisClient,
     config: Partial<BackfillConfig> = {}
   ) {
     this.restClient = new CoinbaseRestClient(apiKeyId, privateKeyPem);

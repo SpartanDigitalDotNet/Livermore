@@ -1,6 +1,6 @@
-import type { Redis } from 'ioredis';
 import type { Timeframe } from '@livermore/schemas';
 import { indicatorKey, indicatorChannel } from '../keys';
+import type { RedisClient } from '../client';
 
 /**
  * Indicator value stored in cache
@@ -23,7 +23,7 @@ export interface CachedIndicatorValue {
 export class IndicatorCacheStrategy {
   private defaultTtlSeconds = 90000; // 25 hours - must exceed longest timeframe (1d)
 
-  constructor(private redis: Redis) {}
+  constructor(private redis: RedisClient) {}
 
   /**
    * Store an indicator value in cache
@@ -161,8 +161,8 @@ export class IndicatorCacheStrategy {
       indicatorKey(userId, exchangeId, r.symbol, r.timeframe, r.type || 'macd-v')
     );
 
-    // Use MGET for efficient bulk fetch
-    const results = await this.redis.mget(...keys);
+    // Use individual GET calls for Azure Redis Cluster compatibility (avoids CROSSSLOT errors)
+    const results = await Promise.all(keys.map((key) => this.redis.get(key)));
 
     const map = new Map<string, CachedIndicatorValue>();
     for (let i = 0; i < requests.length; i++) {

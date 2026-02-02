@@ -8,13 +8,14 @@ import { clerkPlugin } from '@clerk/fastify';
 import { fastifyTRPCPlugin } from '@trpc/server/adapters/fastify';
 import { logger, validateEnv } from '@livermore/utils';
 import { getDbClient, testDatabaseConnection } from '@livermore/database';
-import { getRedisClient, testRedisConnection } from '@livermore/cache';
+import { getRedisClient, testRedisConnection, deleteKeysClusterSafe } from '@livermore/cache';
 import { createContext } from '@livermore/trpc-config';
 import { CoinbaseRestClient, StartupBackfillService, BoundaryRestService, DEFAULT_BOUNDARY_CONFIG, CoinbaseAdapter } from '@livermore/coinbase-client';
 import { IndicatorCalculationService } from './services/indicator-calculation.service';
 import { AlertEvaluationService } from './services/alert-evaluation.service';
 import { getDiscordService } from './services/discord-notification.service';
 import { ControlChannelService } from './services/control-channel.service';
+import { initRuntimeState } from './services/runtime-state';
 import { appRouter } from './routers';
 import { clerkWebhookHandler } from './routes/webhooks/clerk';
 import type { Timeframe } from '@livermore/schemas';
@@ -31,10 +32,17 @@ const BLACKLISTED_SYMBOLS = [
 // Minimum position value to include in monitoring (USD)
 const MIN_POSITION_VALUE_USD = 2;
 
-// Temporary: hardcode test identity_sub until multi-user support
-// This should match the Clerk user.id of the test user
-// TODO: Replace with dynamic identity from authenticated context
-const TEST_IDENTITY_SUB = 'user_test_001';
+// User identity for control channel - determines which Redis channel to subscribe to
+// Single-user deployment: set CLERK_USER_ID in environment
+// Multi-user: would need pattern subscription or dynamic service instances
+const CLERK_USER_ID = process.env.CLERK_USER_ID;
+if (!CLERK_USER_ID) {
+  throw new Error(
+    'CLERK_USER_ID environment variable is required. ' +
+    'Set it to your Clerk user ID (e.g., user_xxxxx). ' +
+    'Find it in Clerk Dashboard > Users or run window.Clerk.user.id in browser console.'
+  );
+}
 
 // Supported timeframes for indicator calculation
 const SUPPORTED_TIMEFRAMES: Timeframe[] = ['1m', '5m', '15m', '1h', '4h', '1d'];
@@ -137,7 +145,7 @@ async function cleanupExcludedSymbols(
   }
 
   if (keysToDelete.length > 0) {
-    const deleted = await redis.del(...keysToDelete);
+    const deleted = await deleteKeysClusterSafe(redis, keysToDelete);
     logger.info(
       { excludedCount: excludedSymbols.length, keysDeleted: deleted, symbols: excludedSymbols },
       'Cleaned up Redis cache for excluded symbols'
@@ -317,6 +325,14 @@ async function start() {
   const alertService = new AlertEvaluationService();
   await alertService.start(monitoredSymbols, SUPPORTED_TIMEFRAMES);
 
+  // Initialize runtime state for status endpoint
+  initRuntimeState({
+    isPaused: false,
+    mode: 'position-monitor',
+    exchangeConnected: true,
+    queueDepth: 0,
+  });
+
   // ============================================
   // BUILD SERVICE REGISTRY AND START CONTROL CHANNEL
   // Now that all services are created, build registry and start control channel
@@ -344,9 +360,10 @@ async function start() {
   };
 
   // Start Control Channel Service with full service access
-  const controlChannelService = new ControlChannelService(TEST_IDENTITY_SUB, serviceRegistry);
+  // CLERK_USER_ID is validated at module load - will throw before reaching here if undefined
+  const controlChannelService = new ControlChannelService(CLERK_USER_ID!, serviceRegistry);
   await controlChannelService.start();
-  logger.info({ identitySub: TEST_IDENTITY_SUB, hasServices: true }, 'Control Channel Service started');
+  logger.info({ identitySub: CLERK_USER_ID, hasServices: true }, 'Control Channel Service started');
 
   // Send startup notification to Discord
   if (discordService.isEnabled()) {

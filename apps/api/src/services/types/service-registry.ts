@@ -1,7 +1,7 @@
 import type { CoinbaseAdapter, BoundaryRestService } from '@livermore/coinbase-client';
 import type { Database } from '@livermore/database';
 import type { Timeframe } from '@livermore/schemas';
-import type Redis from 'ioredis';
+import type { RedisClient } from '@livermore/cache';
 import type { IndicatorCalculationService } from '../indicator-calculation.service';
 import type { AlertEvaluationService } from '../alert-evaluation.service';
 
@@ -43,7 +43,7 @@ export interface ServiceRegistry {
   boundaryRestService: BoundaryRestService;
 
   /** Redis client for cache operations (clearing, pattern deletion) */
-  redis: Redis;
+  redis: RedisClient;
 
   /** Database client for settings reload and queries */
   db: Database;

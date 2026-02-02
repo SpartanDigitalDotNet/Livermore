@@ -8,11 +8,10 @@
  * Extends BaseExchangeAdapter for standardized event emission and reconnection logic.
  */
 import WebSocket from 'ws';
-import type { Redis } from 'ioredis';
 import { BaseExchangeAdapter } from './base-adapter';
 import { CoinbaseAuth } from '../rest/auth';
 import { CoinbaseRestClient } from '../rest/client';
-import { CandleCacheStrategy, candleCloseChannel, TickerCacheStrategy } from '@livermore/cache';
+import { CandleCacheStrategy, candleCloseChannel, TickerCacheStrategy, type RedisClient } from '@livermore/cache';
 import type { Timeframe, UnifiedCandle, Ticker, Candle } from '@livermore/schemas';
 import { logger, getCandleTimestamp } from '@livermore/utils';
 
@@ -154,7 +153,7 @@ export interface CoinbaseAdapterOptions {
   /** Coinbase private key in PEM format */
   privateKeyPem: string;
   /** Redis client for caching and pub/sub */
-  redis: Redis;
+  redis: RedisClient;
   /** User ID for cache key scoping */
   userId: number;
   /** Exchange ID (numeric) for cache key scoping */
@@ -198,7 +197,7 @@ export class CoinbaseAdapter extends BaseExchangeAdapter {
   protected tickerCache: TickerCacheStrategy;
 
   /** Redis client for pub/sub (used in Plan 02 for handleMessage) */
-  protected redis: Redis;
+  protected redis: RedisClient;
 
   /** User ID for cache key scoping (used in Plan 02 for handleMessage) */
   protected userId: number;
@@ -776,8 +775,15 @@ export class CoinbaseAdapter extends BaseExchangeAdapter {
 
   /**
    * Force reconnection due to watchdog timeout or other issue
+   * Respects isIntentionalClose flag to prevent reconnect after pause
    */
   private forceReconnect(): void {
+    // Don't reconnect if this was an intentional disconnect (e.g., pause command)
+    if (this.isIntentionalClose) {
+      logger.debug({ exchangeId: this.exchangeId }, 'Skipping reconnect - intentional close');
+      return;
+    }
+
     logger.info({ exchangeId: this.exchangeId }, 'Forcing reconnect');
 
     // Close existing connection without triggering normal disconnect
