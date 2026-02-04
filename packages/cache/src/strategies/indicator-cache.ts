@@ -50,6 +50,8 @@ export class IndicatorCacheStrategy {
   /**
    * Store multiple indicator values (for historical data)
    * Note: params are stored in the value but NOT included in the key
+   *
+   * Uses individual SET commands instead of pipeline for Azure Redis Cluster compatibility.
    */
   async setIndicators(
     userId: number,
@@ -58,8 +60,7 @@ export class IndicatorCacheStrategy {
   ): Promise<void> {
     if (indicators.length === 0) return;
 
-    const pipeline = this.redis.pipeline();
-
+    // Process each indicator separately (Azure Redis Cluster compatible)
     for (const indicator of indicators) {
       // Key excludes params for consistent lookup
       const key = indicatorKey(
@@ -70,10 +71,8 @@ export class IndicatorCacheStrategy {
         indicator.type
       );
 
-      pipeline.set(key, JSON.stringify(indicator), 'EX', this.defaultTtlSeconds);
+      await this.redis.set(key, JSON.stringify(indicator), 'EX', this.defaultTtlSeconds);
     }
-
-    await pipeline.exec();
   }
 
   /**

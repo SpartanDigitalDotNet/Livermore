@@ -75,8 +75,18 @@ export class PositionSyncService {
       throw new Error(`Unsupported exchange: ${exchange.exchangeName}`);
     }
 
-    // Create Coinbase client with stored credentials
-    const client = new CoinbaseRestClient(exchange.apiKey, exchange.apiSecret);
+    // Read credentials from environment variables (NEVER stored in DB)
+    const apiKey = process.env[exchange.apiKeyEnvVar];
+    const apiSecret = process.env[exchange.apiSecretEnvVar];
+
+    if (!apiKey || !apiSecret) {
+      throw new Error(
+        `Missing credentials: Environment variables ${exchange.apiKeyEnvVar} and/or ${exchange.apiSecretEnvVar} not set`
+      );
+    }
+
+    // Create Coinbase client with credentials from environment
+    const client = new CoinbaseRestClient(apiKey, apiSecret);
 
     // Fetch accounts with balances from Coinbase
     const accounts = await client.getAccountsWithBalance();

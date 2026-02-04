@@ -1,33 +1,123 @@
-import Redis from 'ioredis';
+import Redis, { Cluster } from 'ioredis';
 import { HARDCODED_CONFIG, type EnvConfig } from '@livermore/schemas';
 import { createLogger, validateEnv } from '@livermore/utils';
 
 const logger = createLogger('redis');
 
 /**
+ * Check if hostname is Azure Redis (requires TLS and cluster mode)
+ */
+function isAzureRedis(host: string): boolean {
+  return host.endsWith('.redis.azure.net') || host.endsWith('.redis.cache.windows.net');
+}
+
+/**
+ * Parse Redis URL into components
+ * Handles formats:
+ *   redis://host:port
+ *   redis://:password@host:port
+ *   rediss://:password@host:port
+ */
+function parseRedisUrl(url: string): { host: string; port: number; password?: string; useTls: boolean } {
+  try {
+    // Use URL parser for reliable parsing
+    const parsed = new URL(url);
+
+    const host = parsed.hostname;
+    const port = parseInt(parsed.port, 10) || 6379;
+    // Password is in the "password" field of URL - decode it (URL API returns encoded)
+    const password = parsed.password ? decodeURIComponent(parsed.password) : undefined;
+
+    // Force TLS for Azure Redis regardless of URL scheme
+    const useTls = parsed.protocol === 'rediss:' || isAzureRedis(host);
+
+    return { host, port, password, useTls };
+  } catch {
+    throw new Error(`Invalid Redis URL format: ${url}`);
+  }
+}
+
+/**
  * Create a Redis client instance
  *
- * For Azure Redis (including clustered), we use a single-node client through
- * Azure's proxy endpoint. Azure handles cluster routing internally.
- * Multi-key operations across slots still need to be avoided (use deleteKeysClusterSafe).
+ * For Azure Redis with OSS Cluster enabled, we use ioredis Cluster mode.
+ * For local/non-clustered Redis, we use a regular Redis client.
  *
  * @param config - Validated environment configuration
  * @returns Redis client instance
  */
-export function createRedisClient(config: EnvConfig): Redis {
+export function createRedisClient(config: EnvConfig): Redis | Cluster {
   logger.info('Connecting to Redis...');
 
-  // Parse host from URL for TLS servername
-  const urlMatch = config.REDIS_URL.match(/@([^:]+):/);
-  const host = urlMatch?.[1];
+  const { host, port, password, useTls } = parseRedisUrl(config.REDIS_URL);
 
-  const redis = new Redis(config.REDIS_URL, {
-    tls: host ? { servername: host } : undefined,
+  // Use Cluster mode for Azure Redis (which has OSS Cluster enabled)
+  if (isAzureRedis(host)) {
+    logger.info(`Using Redis Cluster mode with TLS for ${host}:${port}`);
+
+    const cluster = new Cluster(
+      [{ host, port }],
+      {
+        redisOptions: {
+          password,
+          tls: { servername: host },
+          connectTimeout: 10000,
+        },
+        scaleReads: 'master',
+        maxRedirections: 16,
+        retryDelayOnMoved: 100,
+        retryDelayOnClusterDown: 300,
+        clusterRetryStrategy: (times) => {
+          if (times > HARDCODED_CONFIG.redis.maxRetries) {
+            logger.error('Redis Cluster max retries reached');
+            return null;
+          }
+          const delay = Math.min(times * HARDCODED_CONFIG.redis.retryDelayMs, 5000);
+          logger.warn(`Redis Cluster retry attempt ${times}, waiting ${delay}ms`);
+          return delay;
+        },
+        slotsRefreshTimeout: 10000,
+        enableReadyCheck: true,
+        // Don't use DNS lookup override - let it resolve naturally
+      }
+    );
+
+    cluster.on('connect', () => {
+      logger.info('Redis Cluster client connected');
+    });
+
+    cluster.on('ready', () => {
+      logger.info('Redis Cluster client ready');
+    });
+
+    cluster.on('error', (error) => {
+      logger.error({ err: error }, 'Redis Cluster client error');
+    });
+
+    cluster.on('close', () => {
+      logger.warn('Redis Cluster connection closed');
+    });
+
+    return cluster;
+  }
+
+  // Regular Redis client for local development
+  if (useTls) {
+    logger.info(`Using Redis with TLS for ${host}:${port}`);
+  } else {
+    logger.info(`Using Redis (no TLS) for ${host}:${port}`);
+  }
+
+  const redis = new Redis({
+    host,
+    port,
+    password,
+    tls: useTls ? { servername: host } : undefined,
     maxRetriesPerRequest: HARDCODED_CONFIG.redis.maxRetries,
     retryStrategy: (times) => {
       if (times > HARDCODED_CONFIG.redis.maxRetries) {
         logger.error('Redis max retries reached');
-        return null; // Stop retrying
+        return null;
       }
       const delay = Math.min(times * HARDCODED_CONFIG.redis.retryDelayMs, 5000);
       logger.warn(`Redis retry attempt ${times}, waiting ${delay}ms`);
@@ -66,22 +156,22 @@ export function createRedisClient(config: EnvConfig): Redis {
  * @param config - Validated environment configuration
  * @returns Redis client instance for pub/sub
  */
-export function createRedisPubSubClient(config: EnvConfig): Redis {
+export function createRedisPubSubClient(config: EnvConfig): Redis | Cluster {
   const redis = createRedisClient(config);
   logger.info('Redis pub/sub client created');
   return redis;
 }
 
 /**
- * Helper type for Redis client
+ * Helper type for Redis client (can be regular Redis or Cluster)
  */
-export type RedisClient = Redis;
+export type RedisClient = Redis | Cluster;
 
 /**
  * Test Redis connection with PING command
  * Throws an error if connection fails
  */
-export async function testRedisConnection(redis: Redis): Promise<void> {
+export async function testRedisConnection(redis: Redis | Cluster): Promise<void> {
   try {
     const result = await redis.ping();
     if (result !== 'PONG') {
@@ -96,16 +186,16 @@ export async function testRedisConnection(redis: Redis): Promise<void> {
 }
 
 /**
- * Delete multiple keys safely for Azure Redis Cluster
+ * Delete multiple keys safely for Redis Cluster
  *
- * Azure Redis Cluster doesn't allow multi-key DEL when keys hash to different slots.
+ * Redis Cluster doesn't allow multi-key DEL when keys hash to different slots.
  * This function deletes keys one at a time to avoid CROSSSLOT errors.
  *
  * @param redis - Redis client instance
  * @param keys - Array of keys to delete
  * @returns Number of keys deleted
  */
-export async function deleteKeysClusterSafe(redis: Redis, keys: string[]): Promise<number> {
+export async function deleteKeysClusterSafe(redis: Redis | Cluster, keys: string[]): Promise<number> {
   if (keys.length === 0) return 0;
 
   let deleted = 0;
@@ -119,14 +209,14 @@ export async function deleteKeysClusterSafe(redis: Redis, keys: string[]): Promi
 /**
  * Singleton Redis client instance
  */
-let redisInstance: Redis | null = null;
+let redisInstance: Redis | Cluster | null = null;
 
 /**
  * Get or create the Redis client instance
  *
  * Uses singleton pattern to ensure only one connection exists
  */
-export function getRedisClient(): Redis {
+export function getRedisClient(): Redis | Cluster {
   if (!redisInstance) {
     const config = validateEnv();
     redisInstance = createRedisClient(config);

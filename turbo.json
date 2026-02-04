@@ -23,7 +23,8 @@
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
-      "outputs": ["dist/**", ".next/**", "build/**"]
+      "outputs": ["dist/**", ".next/**", "build/**"],
+      "outputLogs": "errors-only"
     },
     "dev": {
       "dependsOn": ["^build"],

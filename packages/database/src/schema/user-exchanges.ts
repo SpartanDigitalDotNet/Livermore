@@ -4,6 +4,10 @@ import { users } from './users';
 /**
  * User exchanges table - stores user connections to different exchanges
  * Each user can connect multiple exchanges (Coinbase, Binance, Kraken, etc.)
+ *
+ * SECURITY: Credentials are NEVER stored in the database.
+ * Instead, we store the NAMES of environment variables that contain the secrets.
+ * At runtime, the service reads process.env[apiKeyEnvVar] to get the actual key.
  */
 export const userExchanges = pgTable(
   'user_exchanges',
@@ -16,12 +20,12 @@ export const userExchanges = pgTable(
     exchangeName: varchar('exchange_name', { length: 50 }).notNull(),
     /** Display name for this connection (user-defined) */
     displayName: varchar('display_name', { length: 100 }),
-    /** API key or key ID */
-    apiKey: varchar('api_key', { length: 500 }).notNull(),
-    /** API secret or private key (encrypted/hashed in production) */
-    apiSecret: text('api_secret').notNull(),
-    /** Additional credentials (e.g., passphrase for Coinbase) as JSON */
-    additionalCredentials: text('additional_credentials'),
+    /** Name of environment variable containing the API key (e.g., 'COINBASE_API_KEY') */
+    apiKeyEnvVar: varchar('api_key_env_var', { length: 100 }).notNull(),
+    /** Name of environment variable containing the API secret (e.g., 'COINBASE_API_SECRET') */
+    apiSecretEnvVar: varchar('api_secret_env_var', { length: 100 }).notNull(),
+    /** Additional credentials env var names as JSON (e.g., {"passphrase": "COINBASE_PASSPHRASE"}) */
+    additionalCredentialsEnvVars: text('additional_credentials_env_vars'),
     /** Whether this exchange connection is active */
     isActive: boolean('is_active').default(true).notNull(),
     /** Whether this is the user's default exchange */

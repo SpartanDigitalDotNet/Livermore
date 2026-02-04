@@ -39,6 +39,9 @@ export class CandleCacheStrategy {
   /**
    * Add multiple candles to the cache (bulk operation)
    * Removes existing candles with same timestamps to prevent duplicates
+   *
+   * Note: Uses individual commands instead of pipeline for Azure Redis Cluster compatibility.
+   * Pipeline batches commands across different keys which causes MOVED errors in cluster mode.
    */
   async addCandles(userId: number, exchangeId: number, candles: Candle[]): Promise<void> {
     if (candles.length === 0) return;
@@ -56,29 +59,25 @@ export class CandleCacheStrategy {
       grouped.get(key)!.push(validated);
     }
 
-    // Use pipeline for bulk operations
-    const pipeline = this.redis.pipeline();
-
+    // Process each key group separately (Azure Redis Cluster compatible)
     for (const [key, candleGroup] of grouped) {
       // Remove existing candles with same timestamps first (prevents duplicates)
       for (const candle of candleGroup) {
-        pipeline.zremrangebyscore(key, candle.timestamp, candle.timestamp);
+        await this.redis.zremrangebyscore(key, candle.timestamp, candle.timestamp);
       }
 
       // Add all candles to sorted set
       for (const candle of candleGroup) {
-        pipeline.zadd(key, candle.timestamp, JSON.stringify(candle));
+        await this.redis.zadd(key, candle.timestamp, JSON.stringify(candle));
       }
 
       // Set expiration
       const ttlSeconds = HARDCODED_CONFIG.cache.candleTtlHours * 3600;
-      pipeline.expire(key, ttlSeconds);
+      await this.redis.expire(key, ttlSeconds);
 
       // Keep only recent candles
-      pipeline.zremrangebyrank(key, 0, -1001);
+      await this.redis.zremrangebyrank(key, 0, -1001);
     }
-
-    await pipeline.exec();
   }
 
   /**
