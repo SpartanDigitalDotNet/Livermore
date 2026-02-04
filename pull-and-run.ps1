@@ -23,8 +23,8 @@ Write-Host "  Livermore - Pull and Run" -ForegroundColor Cyan
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
 
-# Step 0: Check environment variables
-Write-Host "[0/5] Checking environment variables..." -ForegroundColor Yellow
+# Step 1: Check environment variables
+Write-Host "[1/6] Checking environment variables..." -ForegroundColor Yellow
 & "$projectRoot\check-env-vars.ps1"
 if ($LASTEXITCODE -ne 0) {
     Write-Host ""
@@ -33,8 +33,8 @@ if ($LASTEXITCODE -ne 0) {
 }
 Write-Host ""
 
-# Step 1: Git pull
-Write-Host "[1/5] Pulling latest from GitHub..." -ForegroundColor Yellow
+# Step 2: Git pull
+Write-Host "[2/6] Pulling latest from GitHub..." -ForegroundColor Yellow
 Set-Location $projectRoot
 git pull
 if ($LASTEXITCODE -ne 0) {
@@ -44,8 +44,8 @@ if ($LASTEXITCODE -ne 0) {
 Write-Host "      Done." -ForegroundColor Green
 Write-Host ""
 
-# Step 2: Install dependencies (triggers build via postinstall)
-Write-Host "[2/5] Installing dependencies and building..." -ForegroundColor Yellow
+# Step 3: Install dependencies (triggers build via postinstall)
+Write-Host "[3/6] Installing dependencies and building..." -ForegroundColor Yellow
 pnpm install
 if ($LASTEXITCODE -ne 0) {
     Write-Host "pnpm install failed!" -ForegroundColor Red
@@ -54,15 +54,15 @@ if ($LASTEXITCODE -ne 0) {
 Write-Host "      Done." -ForegroundColor Green
 Write-Host ""
 
-# Step 3: Start API in new window
-Write-Host "[3/5] Starting API server..." -ForegroundColor Yellow
+# Step 4: Start API in new window
+Write-Host "[4/6] Starting API server..." -ForegroundColor Yellow
 $apiScript = Join-Path $projectRoot "scripts\run-api-dev.ps1"
 Start-Process pwsh -ArgumentList "-NoExit", "-File", $apiScript -WorkingDirectory $projectRoot
 Write-Host "      API starting in new window." -ForegroundColor Green
 Write-Host ""
 
-# Step 4: Wait for API to be ready
-Write-Host "[4/5] Waiting for API to be ready..." -ForegroundColor Yellow
+# Step 5: Wait for API to be ready
+Write-Host "[5/6] Waiting for API to be ready..." -ForegroundColor Yellow
 $apiUrl = "http://localhost:4000/health"
 $maxAttempts = 30
 $attempt = 0
@@ -86,9 +86,9 @@ if ($attempt -ge $maxAttempts) {
     Write-Host "      API did not start in time. Starting Admin anyway..." -ForegroundColor Yellow
 }
 
-# Step 5: Start Admin
+# Step 6: Start Admin
 Write-Host ""
-Write-Host "[5/5] Starting Admin server..." -ForegroundColor Yellow
+Write-Host "[6/6] Starting Admin server..." -ForegroundColor Yellow
 $adminScript = Join-Path $projectRoot "scripts\run-admin-dev.ps1"
 Start-Process pwsh -ArgumentList "-NoExit", "-File", $adminScript -WorkingDirectory $projectRoot
 Write-Host "      Admin starting in new window." -ForegroundColor Green
