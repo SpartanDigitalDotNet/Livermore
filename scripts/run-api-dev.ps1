@@ -13,7 +13,6 @@ $env:DISCORD_LIVERMORE_BOT = [Environment]::GetEnvironmentVariable('DISCORD_LIVE
 $env:CLERK_PUBLISHABLE_KEY = [Environment]::GetEnvironmentVariable('CLERK_PUBLISHABLE_KEY', 'User')
 $env:CLERK_SECRET_KEY = [Environment]::GetEnvironmentVariable('CLERK_SECRET_KEY', 'User')
 $env:CLERK_WEBHOOK_SIGNING_SECRET = [Environment]::GetEnvironmentVariable('CLERK_WEBHOOK_SIGNING_SECRET', 'User')
-$env:CLERK_USER_ID = [Environment]::GetEnvironmentVariable('CLERK_USER_ID', 'User')
 
 # Override API port to avoid conflicts with PerseusWeb (which uses 3000-3002)
 $env:API_PORT = '4000'
@@ -33,7 +32,6 @@ Write-Host "Loaded Coinbase_EcPrivateKeyPem: $(if ($env:Coinbase_EcPrivateKeyPem
 Write-Host "Loaded CLERK_PUBLISHABLE_KEY: $(if ($env:CLERK_PUBLISHABLE_KEY) { 'set' } else { 'NOT SET' })"
 Write-Host "Loaded CLERK_SECRET_KEY: $(if ($env:CLERK_SECRET_KEY) { 'set' } else { 'NOT SET' })"
 Write-Host "Loaded CLERK_WEBHOOK_SIGNING_SECRET: $(if ($env:CLERK_WEBHOOK_SIGNING_SECRET) { 'set' } else { 'NOT SET' })"
-Write-Host "Loaded CLERK_USER_ID: $(if ($env:CLERK_USER_ID) { $env:CLERK_USER_ID } else { 'NOT SET' })"
 
 # Change to project directory and run dev server
 Set-Location (Split-Path -Path $PSScriptRoot -Parent)

@@ -23,15 +23,25 @@ Write-Host "  Livermore - Run Dev Servers" -ForegroundColor Cyan
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
 
+# Step 0: Check environment variables
+Write-Host "[0/3] Checking environment variables..." -ForegroundColor Yellow
+& "$projectRoot\check-env-vars.ps1"
+if ($LASTEXITCODE -ne 0) {
+    Write-Host ""
+    Write-Host "Please set the missing environment variables and try again." -ForegroundColor Red
+    exit 1
+}
+Write-Host ""
+
 # Step 1: Start API in new window
-Write-Host "[1/2] Starting API server..." -ForegroundColor Yellow
+Write-Host "[1/3] Starting API server..." -ForegroundColor Yellow
 $apiScript = Join-Path $projectRoot "scripts\run-api-dev.ps1"
 Start-Process pwsh -ArgumentList "-NoExit", "-File", $apiScript -WorkingDirectory $projectRoot
 Write-Host "      API starting in new window." -ForegroundColor Green
 Write-Host ""
 
-# Step 2: Wait for API to be ready, then start Admin
-Write-Host "[2/2] Waiting for API to be ready..." -ForegroundColor Yellow
+# Step 2: Wait for API to be ready
+Write-Host "[2/3] Waiting for API to be ready..." -ForegroundColor Yellow
 $apiUrl = "http://localhost:4000/health"
 $maxAttempts = 30
 $attempt = 0
@@ -55,8 +65,9 @@ if ($attempt -ge $maxAttempts) {
     Write-Host "      API did not start in time. Starting Admin anyway..." -ForegroundColor Yellow
 }
 
+# Step 3: Start Admin
 Write-Host ""
-Write-Host "      Starting Admin server..." -ForegroundColor Yellow
+Write-Host "[3/3] Starting Admin server..." -ForegroundColor Yellow
 $adminScript = Join-Path $projectRoot "scripts\run-admin-dev.ps1"
 Start-Process pwsh -ArgumentList "-NoExit", "-File", $adminScript -WorkingDirectory $projectRoot
 Write-Host "      Admin starting in new window." -ForegroundColor Green
