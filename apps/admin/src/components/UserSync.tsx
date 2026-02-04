@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, createContext, useContext } from 'react';
+import { useEffect, useRef, useState, createContext, useContext, useCallback } from 'react';
 import { useUser } from '@clerk/clerk-react';
 import { trpcClient } from '../lib/trpc';
 
@@ -35,6 +35,23 @@ export function useLivermoreUser() {
 }
 
 /**
+ * Check if an error is a network/connection error (API offline)
+ */
+function isNetworkError(error: unknown): boolean {
+  if (error instanceof Error) {
+    const message = error.message.toLowerCase();
+    return (
+      message.includes('failed to fetch') ||
+      message.includes('network') ||
+      message.includes('econnrefused') ||
+      message.includes('connection refused') ||
+      message.includes('timeout')
+    );
+  }
+  return false;
+}
+
+/**
  * UserSync component - syncs Clerk user to Livermore database on sign-in
  *
  * This ensures users are onboarded seamlessly during Admin login.
@@ -45,7 +62,50 @@ export function UserSync({ children }: { children: React.ReactNode }) {
   const [livermoreUser, setLivermoreUser] = useState<LivermoreUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isApiOffline, setIsApiOffline] = useState(false);
+  const [retryCount, setRetryCount] = useState(0);
   const syncedRef = useRef(false);
+  const retryTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  const syncUser = useCallback(async () => {
+    if (!clerkUser) return;
+
+    try {
+      const primaryEmail = clerkUser.primaryEmailAddress?.emailAddress;
+      if (!primaryEmail) {
+        throw new Error('No email address found for user');
+      }
+
+      const result = await trpcClient.user.syncFromClerk.mutate({
+        clerkId: clerkUser.id,
+        email: primaryEmail,
+        displayName: clerkUser.fullName || undefined,
+        pictureUrl: clerkUser.imageUrl || undefined,
+      });
+
+      setLivermoreUser(result);
+      setError(null);
+      setIsApiOffline(false);
+      console.log('[UserSync] User synced:', result.id, result.email);
+    } catch (err) {
+      if (isNetworkError(err)) {
+        setIsApiOffline(true);
+        setError(null);
+        console.log('[UserSync] API offline, will retry...');
+        // Schedule retry
+        retryTimeoutRef.current = setTimeout(() => {
+          setRetryCount((c) => c + 1);
+        }, 3000);
+      } else {
+        const message = err instanceof Error ? err.message : 'Failed to sync user';
+        setError(message);
+        setIsApiOffline(false);
+        console.error('[UserSync] Error syncing user:', message);
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  }, [clerkUser]);
 
   useEffect(() => {
     // Wait for Clerk to load
@@ -57,38 +117,18 @@ export function UserSync({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    // Prevent double sync in React strict mode
-    if (syncedRef.current) return;
+    // Prevent double sync in React strict mode (only on initial mount)
+    if (syncedRef.current && retryCount === 0) return;
     syncedRef.current = true;
 
-    const syncUser = async () => {
-      try {
-        const primaryEmail = clerkUser.primaryEmailAddress?.emailAddress;
-        if (!primaryEmail) {
-          throw new Error('No email address found for user');
-        }
+    syncUser();
 
-        const result = await trpcClient.user.syncFromClerk.mutate({
-          clerkId: clerkUser.id,
-          email: primaryEmail,
-          displayName: clerkUser.fullName || undefined,
-          pictureUrl: clerkUser.imageUrl || undefined,
-        });
-
-        setLivermoreUser(result);
-        setError(null);
-        console.log('[UserSync] User synced:', result.id, result.email);
-      } catch (err) {
-        const message = err instanceof Error ? err.message : 'Failed to sync user';
-        setError(message);
-        console.error('[UserSync] Error syncing user:', message);
-      } finally {
-        setIsLoading(false);
+    return () => {
+      if (retryTimeoutRef.current) {
+        clearTimeout(retryTimeoutRef.current);
       }
     };
-
-    syncUser();
-  }, [clerkUser, clerkLoaded]);
+  }, [clerkUser, clerkLoaded, retryCount, syncUser]);
 
   // Show loading state while syncing
   if (isLoading) {
@@ -102,7 +142,21 @@ export function UserSync({ children }: { children: React.ReactNode }) {
     );
   }
 
-  // Show error state if sync failed
+  // Show waiting state when API is offline
+  if (isApiOffline) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-gray-100">
+        <div className="text-center max-w-md mx-auto p-6 bg-white rounded-lg shadow">
+          <div className="mb-4 h-8 w-8 animate-spin rounded-full border-4 border-gray-300 border-t-yellow-500 mx-auto"></div>
+          <h2 className="text-lg font-semibold text-yellow-600 mb-2">Waiting for API</h2>
+          <p className="text-gray-600 mb-2">The API server is starting up...</p>
+          <p className="text-gray-400 text-sm">Retrying automatically ({retryCount} attempts)</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show error state if sync failed (non-network error)
   if (error) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-gray-100">
