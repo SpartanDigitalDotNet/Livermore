@@ -23,4 +23,6 @@ if (-not $env:VITE_CLERK_PUBLISHABLE_KEY) {
 
 # Change to project directory and run dev server
 Set-Location (Split-Path -Path $PSScriptRoot -Parent)
-pnpm --filter @livermore/admin dev
+
+# Uses turbo which builds dependencies first (cached if unchanged)
+pnpm dev:admin

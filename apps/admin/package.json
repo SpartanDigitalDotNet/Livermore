@@ -36,6 +36,7 @@
     "tailwindcss": "^4.0.0"
   },
   "devDependencies": {
+    "@livermore/api": "workspace:*",
     "@types/node": "^22.10.5",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
