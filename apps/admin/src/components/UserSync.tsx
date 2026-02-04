@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, createContext, useContext, useCallback } from 'react';
 import { useUser } from '@clerk/clerk-react';
 import { trpcClient } from '../lib/trpc';
+import chartBackground from '../assets/chart-background.svg';
 
 /**
  * User context type - the synced Livermore user record
@@ -133,10 +134,17 @@ export function UserSync({ children }: { children: React.ReactNode }) {
   // Show loading state while syncing
   if (isLoading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-gray-100">
-        <div className="text-center">
-          <div className="mb-4 h-8 w-8 animate-spin rounded-full border-4 border-gray-300 border-t-blue-600 mx-auto"></div>
-          <p className="text-gray-600">Setting up your account...</p>
+      <div
+        className="flex min-h-screen items-center justify-center"
+        style={{
+          backgroundImage: `url(${chartBackground})`,
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
+        }}
+      >
+        <div className="text-center max-w-md mx-auto p-8 bg-gray-900/80 backdrop-blur-sm rounded-xl border border-gray-700/50 shadow-2xl">
+          <div className="mb-4 h-10 w-10 animate-spin rounded-full border-3 border-gray-600 border-t-blue-500 mx-auto"></div>
+          <p className="text-gray-300">Setting up your account...</p>
         </div>
       </div>
     );
@@ -145,12 +153,32 @@ export function UserSync({ children }: { children: React.ReactNode }) {
   // Show waiting state when API is offline
   if (isApiOffline) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-gray-100">
-        <div className="text-center max-w-md mx-auto p-6 bg-white rounded-lg shadow">
-          <div className="mb-4 h-8 w-8 animate-spin rounded-full border-4 border-gray-300 border-t-yellow-500 mx-auto"></div>
-          <h2 className="text-lg font-semibold text-yellow-600 mb-2">Waiting for API</h2>
-          <p className="text-gray-600 mb-2">The API server is starting up...</p>
-          <p className="text-gray-400 text-sm">Retrying automatically ({retryCount} attempts)</p>
+      <div
+        className="flex min-h-screen items-center justify-center"
+        style={{
+          backgroundImage: `url(${chartBackground})`,
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
+        }}
+      >
+        <div className="text-center max-w-md mx-auto p-8 bg-gray-900/80 backdrop-blur-sm rounded-xl border border-gray-700/50 shadow-2xl">
+          {/* Pulsing ring animation */}
+          <div className="relative mx-auto mb-6 w-16 h-16">
+            <div className="absolute inset-0 rounded-full border-2 border-amber-500/30 animate-ping"></div>
+            <div className="absolute inset-2 rounded-full border-2 border-amber-500/50 animate-pulse"></div>
+            <div className="absolute inset-4 rounded-full bg-amber-500/20 flex items-center justify-center">
+              <div className="w-4 h-4 rounded-full bg-amber-500 animate-pulse"></div>
+            </div>
+          </div>
+          <h2 className="text-xl font-semibold text-amber-400 mb-3">Waiting for API</h2>
+          <p className="text-gray-300 mb-2">The API server is starting up...</p>
+          <p className="text-gray-500 text-sm">Retrying automatically ({retryCount} attempts)</p>
+          {/* Subtle progress indicator */}
+          <div className="mt-6 flex justify-center gap-1">
+            <div className="w-2 h-2 rounded-full bg-amber-500/60 animate-bounce" style={{ animationDelay: '0ms' }}></div>
+            <div className="w-2 h-2 rounded-full bg-amber-500/60 animate-bounce" style={{ animationDelay: '150ms' }}></div>
+            <div className="w-2 h-2 rounded-full bg-amber-500/60 animate-bounce" style={{ animationDelay: '300ms' }}></div>
+          </div>
         </div>
       </div>
     );
@@ -159,13 +187,25 @@ export function UserSync({ children }: { children: React.ReactNode }) {
   // Show error state if sync failed (non-network error)
   if (error) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-gray-100">
-        <div className="text-center max-w-md mx-auto p-6 bg-white rounded-lg shadow">
-          <h2 className="text-lg font-semibold text-red-600 mb-2">Account Setup Error</h2>
-          <p className="text-gray-600 mb-4">{error}</p>
+      <div
+        className="flex min-h-screen items-center justify-center"
+        style={{
+          backgroundImage: `url(${chartBackground})`,
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
+        }}
+      >
+        <div className="text-center max-w-md mx-auto p-8 bg-gray-900/80 backdrop-blur-sm rounded-xl border border-red-900/50 shadow-2xl">
+          <div className="mx-auto mb-4 w-12 h-12 rounded-full bg-red-500/20 flex items-center justify-center">
+            <svg className="w-6 h-6 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </div>
+          <h2 className="text-lg font-semibold text-red-400 mb-2">Account Setup Error</h2>
+          <p className="text-gray-300 mb-4">{error}</p>
           <button
             onClick={() => window.location.reload()}
-            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+            className="px-5 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
           >
             Try Again
           </button>

@@ -87,6 +87,8 @@ export class BoundaryRestService {
    */
   async stop(): Promise<void> {
     this.isRunning = false;
+    // Remove event listener before unsubscribing to prevent handlers firing during shutdown
+    this.subscriber.removeAllListeners('pmessage');
     await this.subscriber.punsubscribe();
     logger.info({ event: 'boundary_rest_service_stopped' }, 'BoundaryRestService stopped');
   }

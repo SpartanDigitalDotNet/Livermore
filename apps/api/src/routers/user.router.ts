@@ -3,6 +3,7 @@ import { TRPCError } from '@trpc/server';
 import { router, publicProcedure, protectedProcedure } from '@livermore/trpc-config';
 import { getDbClient, users, type User } from '@livermore/database';
 import { eq, and } from 'drizzle-orm';
+import { initControlChannelService } from '../server';
 
 /**
  * Input schema for Google OAuth login (PerseusWeb)
@@ -171,6 +172,11 @@ export const userRouter = router({
           'Updated user from Clerk OAuth'
         );
 
+        // Initialize control channel service for this user (lazy init, no-op if already initialized)
+        initControlChannelService(clerkId).catch((err) => {
+          ctx.logger.error({ err }, 'Failed to initialize control channel service');
+        });
+
         return updated;
       }
 
@@ -193,6 +199,11 @@ export const userRouter = router({
         { userId: created.id, clerkId, email },
         'Created user from Clerk OAuth'
       );
+
+      // Initialize control channel service for this user (lazy init, no-op if already initialized)
+      initControlChannelService(clerkId).catch((err) => {
+        ctx.logger.error({ err }, 'Failed to initialize control channel service');
+      });
 
       return created;
     }),

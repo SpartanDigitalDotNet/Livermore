@@ -21,10 +21,13 @@ export abstract class BaseExchangeAdapter
   protected reconnectAttempts = 0;
 
   /** Maximum reconnection attempts before giving up */
-  protected maxReconnectAttempts = 10;
+  protected maxReconnectAttempts = 100;
 
   /** Base delay between reconnection attempts (ms) */
   protected reconnectDelay = 5000;
+
+  /** Maximum delay between reconnection attempts (ms) - caps exponential backoff */
+  protected maxReconnectDelay = 300000; // 5 minutes
 
   /** Exchange identifier for logging and UnifiedCandle.exchange field */
   protected abstract readonly exchangeId: string;
@@ -82,12 +85,18 @@ export abstract class BaseExchangeAdapter
         `Max reconnection attempts (${this.maxReconnectAttempts}) reached for ${this.exchangeId}`
       );
       logger.error({ exchangeId: this.exchangeId }, error.message);
-      this.emit('error', error);
+      // Only emit error if there are listeners (prevents unhandled error crash)
+      if (this.listenerCount('error') > 0) {
+        this.emit('error', error);
+      }
       return;
     }
 
     this.reconnectAttempts++;
-    const delay = this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1);
+    const delay = Math.min(
+      this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1),
+      this.maxReconnectDelay
+    );
 
     logger.info(
       { exchangeId: this.exchangeId, attempt: this.reconnectAttempts, delay },

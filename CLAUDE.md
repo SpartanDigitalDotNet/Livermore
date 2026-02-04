@@ -4,14 +4,36 @@ Notes for Claude to avoid repeating mistakes.
 
 ## Redis Connection
 
-**DO NOT GUESS. Use these exact details:**
+**Production: Azure Managed Redis**
 
+The codebase uses Azure Managed Redis with OSS Cluster mode. Connection is handled via `REDIS_URL` environment variable.
+
+**Required environment variable:**
+```
+REDIS_URL=rediss://:PASSWORD@HOST:PORT
+```
+
+**To connect programmatically, use the cache package:**
+```typescript
+import { getRedisClient } from '@livermore/cache';
+
+const redis = getRedisClient();  // Auto-detects Azure and uses Cluster mode
+```
+
+The `createRedisClient()` function in `packages/cache/src/client.ts`:
+- Parses `REDIS_URL` to extract host, port, password
+- Detects Azure Redis by hostname (`*.redis.azure.net` or `*.redis.cache.windows.net`)
+- Uses ioredis Cluster mode with TLS for Azure
+- Falls back to regular Redis for local development
+
+**Local development (optional):**
+
+If using a local Docker Redis container:
 - **Container name:** `Hermes`
 - **Host:** `127.0.0.1`
 - **Port:** `6400`
-- **Password:** From `REDIS_PASSWORD` environment variable (User scope)
 
-**To query Redis, use the existing PowerShell scripts:**
+**Debug scripts (use REDIS_URL):**
 
 ```powershell
 # Check candles
@@ -24,9 +46,9 @@ powershell -File scripts/debug-redis-full.ps1
 powershell -File scripts/debug-redis-keys.ps1
 ```
 
-**Direct Docker command (if needed):**
+**TypeScript script for fetching data:**
 ```bash
-docker exec Hermes redis-cli -a $REDIS_PASSWORD --no-auth-warning ZRANGE "candles:1:1:BTC-USD:1m" -5 -1
+npx tsx scripts/fetch-btc-candles.ts
 ```
 
 ## Key Patterns

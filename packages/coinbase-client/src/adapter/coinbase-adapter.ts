@@ -283,8 +283,18 @@ export class CoinbaseAdapter extends BaseExchangeAdapter {
 
       this.ws.on('error', (error) => {
         logger.error({ error, exchangeId: this.exchangeId }, 'WebSocket error');
-        this.emit('error', error);
-        reject(error);
+
+        // Only emit error if there are listeners (prevents unhandled error crash)
+        // Network errors are expected during outages - let reconnection handle them
+        if (this.listenerCount('error') > 0) {
+          this.emit('error', error);
+        }
+
+        // Reject only if connection was never established
+        // Runtime errors will trigger close event -> handleReconnect()
+        if (!this.isConnected()) {
+          reject(error);
+        }
       });
 
       this.ws.on('close', (code, reason) => {

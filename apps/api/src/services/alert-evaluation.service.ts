@@ -101,6 +101,8 @@ export class AlertEvaluationService {
     logger.info('Stopping Alert Evaluation Service');
 
     if (this.subscriber) {
+      // Remove event listener before disconnecting to prevent handlers firing during shutdown
+      this.subscriber.removeAllListeners('message');
       await this.subscriber.unsubscribe();
       this.subscriber.disconnect();
       this.subscriber = null;

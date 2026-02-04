@@ -32,16 +32,44 @@ const BLACKLISTED_SYMBOLS = [
 // Minimum position value to include in monitoring (USD)
 const MIN_POSITION_VALUE_USD = 2;
 
-// User identity for control channel - determines which Redis channel to subscribe to
-// Single-user deployment: set CLERK_USER_ID in environment
-// Multi-user: would need pattern subscription or dynamic service instances
-const CLERK_USER_ID = process.env.CLERK_USER_ID;
-if (!CLERK_USER_ID) {
-  throw new Error(
-    'CLERK_USER_ID environment variable is required. ' +
-    'Set it to your Clerk user ID (e.g., user_xxxxx). ' +
-    'Find it in Clerk Dashboard > Users or run window.Clerk.user.id in browser console.'
-  );
+// Control channel service is initialized lazily on first authenticated request
+// The user ID comes from the Clerk authentication context, not an environment variable
+let controlChannelService: ControlChannelService | null = null;
+let controlChannelInitPromise: Promise<void> | null = null;
+let globalServiceRegistry: ServiceRegistry | null = null;
+
+/**
+ * Initialize the Control Channel Service lazily with the authenticated user's ID
+ * Called on first authenticated request - subsequent calls are no-ops
+ *
+ * @param clerkUserId - The Clerk user ID from authenticated request (e.g., user_xxxxx)
+ */
+export async function initControlChannelService(clerkUserId: string): Promise<void> {
+  // Already initialized
+  if (controlChannelService) {
+    return;
+  }
+
+  // Already initializing - wait for it
+  if (controlChannelInitPromise) {
+    return controlChannelInitPromise;
+  }
+
+  // No service registry yet (server still starting)
+  if (!globalServiceRegistry) {
+    logger.warn('Control Channel init called before server ready, skipping');
+    return;
+  }
+
+  // Start initialization
+  controlChannelInitPromise = (async () => {
+    logger.info({ clerkUserId }, 'Initializing Control Channel Service for user');
+    controlChannelService = new ControlChannelService(clerkUserId, globalServiceRegistry!);
+    await controlChannelService.start();
+    logger.info({ clerkUserId, hasServices: true }, 'Control Channel Service started');
+  })();
+
+  return controlChannelInitPromise;
 }
 
 // Supported timeframes for indicator calculation
@@ -359,11 +387,12 @@ async function start() {
     timeframes: SUPPORTED_TIMEFRAMES,
   };
 
-  // Start Control Channel Service with full service access
-  // CLERK_USER_ID is validated at module load - will throw before reaching here if undefined
-  const controlChannelService = new ControlChannelService(CLERK_USER_ID!, serviceRegistry);
-  await controlChannelService.start();
-  logger.info({ identitySub: CLERK_USER_ID, hasServices: true }, 'Control Channel Service started');
+  // Store service registry globally for lazy control channel initialization
+  globalServiceRegistry = serviceRegistry;
+
+  // Control Channel Service will be started lazily on first authenticated request
+  // This avoids requiring CLERK_USER_ID environment variable at startup
+  logger.info('Control Channel Service will start on first authenticated request');
 
   // Send startup notification to Discord
   if (discordService.isEnabled()) {
@@ -390,7 +419,9 @@ async function start() {
     logger.info('Shutting down server...');
 
     // Stop Control Channel first (no new commands accepted)
-    await controlChannelService.stop();
+    if (controlChannelService) {
+      await controlChannelService.stop();
+    }
 
     // Stop services in reverse order
     await alertService.stop();

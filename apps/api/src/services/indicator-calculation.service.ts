@@ -238,6 +238,8 @@ export class IndicatorCalculationService {
     logger.info('Stopping Indicator Calculation Service');
 
     if (this.subscriber) {
+      // Remove event listener before unsubscribing to prevent handlers firing during shutdown
+      this.subscriber.removeAllListeners('pmessage');
       await this.subscriber.punsubscribe();
       await this.subscriber.quit();
       this.subscriber = null;

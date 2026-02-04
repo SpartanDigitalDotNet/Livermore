@@ -533,7 +533,8 @@ export class DiscordNotificationService {
     formData.append('payload_json', JSON.stringify(jsonPayload));
 
     // Add the image as a file attachment
-    const blob = new Blob([imageBuffer], { type: 'image/png' });
+    // Convert Buffer to Uint8Array for Blob compatibility
+    const blob = new Blob([new Uint8Array(imageBuffer)], { type: 'image/png' });
     formData.append('files[0]', blob, filename);
 
     const response = await fetch(this.webhookUrl, {

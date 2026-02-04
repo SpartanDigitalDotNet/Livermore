@@ -1015,6 +1015,8 @@ export class ControlChannelService {
     );
 
     if (this.subscriber) {
+      // Remove event listener before unsubscribing to prevent handlers firing during shutdown
+      this.subscriber.removeAllListeners('message');
       await this.subscriber.unsubscribe(this.commandChannelKey);
       await this.subscriber.quit();
       this.subscriber = null;
