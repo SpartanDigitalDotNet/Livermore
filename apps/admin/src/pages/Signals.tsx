@@ -1,12 +1,35 @@
 import { useQuery } from '@tanstack/react-query';
+import { useState, useEffect, useRef } from 'react';
 import { trpc } from '@/lib/trpc';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { SignalsTable, type Signal } from '@/components/signals/SignalsTable';
+import { useAlertContext } from '@/contexts/AlertContext';
 
 export function Signals() {
   const { data, isLoading, error, refetch, isFetching } = useQuery(
     trpc.alert.recent.queryOptions({ limit: 50 })
   );
+
+  const { lastAlert, highlightedIds, isConnected, clearLastAlert } = useAlertContext();
+  const [realtimeSignals, setRealtimeSignals] = useState<Signal[]>([]);
+  const processedIdsRef = useRef<Set<number>>(new Set());
+
+  // Prepend new alerts from WebSocket
+  useEffect(() => {
+    if (lastAlert && !processedIdsRef.current.has(lastAlert.id)) {
+      processedIdsRef.current.add(lastAlert.id);
+      setRealtimeSignals((prev) => [lastAlert, ...prev]);
+      clearLastAlert();
+    }
+  }, [lastAlert, clearLastAlert]);
+
+  // Reset realtime signals when data refreshes (to avoid duplicates)
+  useEffect(() => {
+    if (data?.data) {
+      const fetchedIds = new Set(data.data.map((s) => s.id));
+      setRealtimeSignals((prev) => prev.filter((s) => !fetchedIds.has(s.id)));
+    }
+  }, [data]);
 
   if (isLoading) {
     return (
@@ -38,7 +61,7 @@ export function Signals() {
     );
   }
 
-  const signals: Signal[] = (data?.data ?? []).map((s) => ({
+  const fetchedSignals: Signal[] = (data?.data ?? []).map((s) => ({
     id: s.id,
     symbol: s.symbol,
     alertType: s.alertType,
@@ -48,10 +71,19 @@ export function Signals() {
     triggeredAt: s.triggeredAt,
   }));
 
+  // Combine realtime (prepended) with fetched signals
+  const signals = [...realtimeSignals, ...fetchedSignals];
+
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
-        <CardTitle>Trade Signals</CardTitle>
+        <div className="flex items-center gap-3">
+          <CardTitle>Trade Signals</CardTitle>
+          <span
+            className={`inline-flex h-2 w-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`}
+            title={isConnected ? 'Live updates connected' : 'Live updates disconnected'}
+          />
+        </div>
         <button
           onClick={() => refetch()}
           disabled={isFetching}
@@ -61,7 +93,7 @@ export function Signals() {
         </button>
       </CardHeader>
       <CardContent>
-        <SignalsTable data={signals} />
+        <SignalsTable data={signals} highlightedIds={highlightedIds} />
       </CardContent>
     </Card>
   );

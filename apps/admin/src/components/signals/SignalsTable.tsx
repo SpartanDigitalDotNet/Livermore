@@ -19,6 +19,7 @@ interface Signal {
 
 interface SignalsTableProps {
   data: Signal[];
+  highlightedIds?: Set<number>;
 }
 
 function formatAlertType(type: string): { label: string; color: string } {
@@ -40,7 +41,7 @@ function formatAlertType(type: string): { label: string; color: string } {
   }
 }
 
-export function SignalsTable({ data }: SignalsTableProps) {
+export function SignalsTable({ data, highlightedIds }: SignalsTableProps) {
   return (
     <Table>
       <TableHeader>
@@ -63,8 +64,12 @@ export function SignalsTable({ data }: SignalsTableProps) {
         ) : (
           data.map((signal) => {
             const { label, color } = formatAlertType(signal.alertType);
+            const isHighlighted = highlightedIds?.has(signal.id);
             return (
-              <TableRow key={signal.id}>
+              <TableRow
+                key={signal.id}
+                className={isHighlighted ? 'animate-highlight-fade' : ''}
+              >
                 <TableCell className="font-mono text-sm">
                   {new Date(signal.triggeredAt).toLocaleString()}
                 </TableCell>

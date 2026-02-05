@@ -54,7 +54,8 @@
       "WebFetch(domain:react-hook-form.com)",
       "Bash(git status:*)",
       "WebFetch(domain:www.npmjs.com)",
-      "WebFetch(domain:ui.shadcn.com)"
+      "WebFetch(domain:ui.shadcn.com)",
+      "Bash(find:*)"
     ]
   }
 }

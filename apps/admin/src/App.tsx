@@ -8,6 +8,8 @@ import { Symbols } from './pages/Symbols';
 import { Settings } from './pages/Settings';
 import { UserSync } from './components/UserSync';
 import { Toaster } from '@/components/ui/sonner';
+import { AlertProvider } from '@/contexts/AlertContext';
+import { AlertToastHandler } from '@/components/AlertToastHandler';
 
 function App() {
   const [hash, setHash] = useState(window.location.hash || '#/');
@@ -27,8 +29,10 @@ function App() {
       </SignedOut>
       <SignedIn>
         <UserSync>
-          <div className="min-h-screen bg-gray-100">
-            <header className="bg-white shadow">
+          <AlertProvider currentHash={hash}>
+            <AlertToastHandler />
+            <div className="min-h-screen bg-gray-100">
+              <header className="bg-white shadow">
               <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4">
                 <h1 className="text-xl font-bold text-gray-900">Livermore Admin</h1>
                 <nav className="flex items-center gap-6">
@@ -79,10 +83,11 @@ function App() {
                 </nav>
               </div>
             </header>
-            <main className="mx-auto max-w-7xl px-4 py-8">
-              <HashRouter hash={hash} />
-            </main>
-          </div>
+              <main className="mx-auto max-w-7xl px-4 py-8">
+                <HashRouter hash={hash} />
+              </main>
+            </div>
+          </AlertProvider>
         </UserSync>
         <Toaster />
       </SignedIn>

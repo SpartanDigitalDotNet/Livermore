@@ -25,3 +25,17 @@ body {
   background-color: hsl(var(--background));
   color: hsl(var(--foreground));
 }
+
+/* Highlight animation for new signal rows */
+@keyframes highlight-fade {
+  0% {
+    background-color: rgb(254 243 199); /* amber-100 */
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+
+.animate-highlight-fade {
+  animation: highlight-fade 5s ease-out forwards;
+}

@@ -4,6 +4,7 @@ import { logger } from '@livermore/utils';
 import type { Ticker, Timeframe } from '@livermore/schemas';
 import { generateMacdVChart, type AlertMarker } from '@livermore/charts';
 import { getDiscordService, type MACDVTimeframeData } from './discord-notification.service';
+import { broadcastAlert } from '../server';
 
 /**
  * Alert Evaluation Service
@@ -451,7 +452,7 @@ export class AlertEvaluationService {
     // Record to database
     const now = new Date();
     try {
-      await this.db.insert(alertHistory).values({
+      const [inserted] = await this.db.insert(alertHistory).values({
         exchangeId: this.TEST_EXCHANGE_ID,
         symbol,
         timeframe,
@@ -473,6 +474,17 @@ export class AlertEvaluationService {
         },
         notificationSent,
         notificationError,
+      }).returning({ id: alertHistory.id });
+
+      // Broadcast to WebSocket clients
+      broadcastAlert({
+        id: inserted.id,
+        symbol,
+        alertType: 'macdv',
+        timeframe,
+        price,
+        triggerValue: currentMacdV,
+        triggeredAt: now.toISOString(),
       });
     } catch (dbError) {
       logger.error({ error: dbError, symbol, timeframe }, 'Failed to record alert to database');
@@ -538,7 +550,7 @@ export class AlertEvaluationService {
     // Record to database
     const now = new Date();
     try {
-      await this.db.insert(alertHistory).values({
+      const [inserted] = await this.db.insert(alertHistory).values({
         exchangeId: this.TEST_EXCHANGE_ID,
         symbol,
         timeframe,
@@ -561,6 +573,17 @@ export class AlertEvaluationService {
         },
         notificationSent,
         notificationError,
+      }).returning({ id: alertHistory.id });
+
+      // Broadcast to WebSocket clients
+      broadcastAlert({
+        id: inserted.id,
+        symbol,
+        alertType: 'macdv',
+        timeframe,
+        price,
+        triggerValue: currentMacdV,
+        triggeredAt: now.toISOString(),
       });
     } catch (dbError) {
       logger.error({ error: dbError, symbol, timeframe }, 'Failed to record alert to database');

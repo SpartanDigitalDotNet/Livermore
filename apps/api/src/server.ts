@@ -20,6 +20,33 @@ import { appRouter } from './routers';
 import { clerkWebhookHandler } from './routes/webhooks/clerk';
 import type { Timeframe } from '@livermore/schemas';
 import type { ServiceRegistry, RuntimeConfig } from './services/types/service-registry';
+import type { WebSocket } from 'ws';
+
+// WebSocket clients for alert broadcasts
+const alertClients = new Set<WebSocket>();
+
+/**
+ * Broadcast an alert to all connected WebSocket clients
+ */
+export function broadcastAlert(alert: {
+  id: number;
+  symbol: string;
+  alertType: string;
+  timeframe: string | null;
+  price: number;
+  triggerValue: number | null;
+  triggeredAt: string;
+}): void {
+  const message = JSON.stringify({ type: 'alert_trigger', data: alert });
+  for (const client of alertClients) {
+    if (client.readyState === 1) { // WebSocket.OPEN
+      client.send(message);
+    }
+  }
+  if (alertClients.size > 0) {
+    logger.debug({ clientCount: alertClients.size, symbol: alert.symbol }, 'Broadcasted alert to WebSocket clients');
+  }
+}
 
 // Blacklisted symbols (delisted, stablecoins, or no valid USD trading pair)
 const BLACKLISTED_SYMBOLS = [
@@ -294,6 +321,22 @@ async function start() {
         controlChannel: 'active',
       },
     };
+  });
+
+  // WebSocket route for real-time alert notifications
+  fastify.get('/ws/alerts', { websocket: true }, (socket) => {
+    alertClients.add(socket);
+    logger.info({ clientCount: alertClients.size }, 'Alert WebSocket client connected');
+
+    socket.on('close', () => {
+      alertClients.delete(socket);
+      logger.info({ clientCount: alertClients.size }, 'Alert WebSocket client disconnected');
+    });
+
+    socket.on('error', (error) => {
+      logger.error({ error }, 'Alert WebSocket error');
+      alertClients.delete(socket);
+    });
   });
 
   // Step 2: Start Indicator Calculation Service (must start before WebSocket)
