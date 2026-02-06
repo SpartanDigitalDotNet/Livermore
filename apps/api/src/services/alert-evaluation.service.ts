@@ -484,6 +484,7 @@ export class AlertEvaluationService {
         timeframe,
         price,
         triggerValue: currentMacdV,
+        signalDelta: histogram,
         triggeredAt: now.toISOString(),
       });
     } catch (dbError) {
@@ -583,6 +584,7 @@ export class AlertEvaluationService {
         timeframe,
         price,
         triggerValue: currentMacdV,
+        signalDelta: histogram,
         triggeredAt: now.toISOString(),
       });
     } catch (dbError) {

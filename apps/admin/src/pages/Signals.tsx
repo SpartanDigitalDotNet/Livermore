@@ -68,6 +68,7 @@ export function Signals() {
     timeframe: s.timeframe,
     price: s.price,
     triggerValue: s.triggerValue,
+    signalDelta: s.signalDelta,
     triggeredAt: s.triggeredAt,
   }));
 

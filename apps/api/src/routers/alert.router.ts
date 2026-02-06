@@ -38,11 +38,16 @@ export const alertRouter = router({
 
       return {
         success: true,
-        data: triggers.map((t: AlertHistoryEntry) => ({
-          ...t,
-          price: parseFloat(t.price),
-          triggerValue: t.triggerValue ? parseFloat(t.triggerValue) : null,
-        })),
+        data: triggers.map((t: AlertHistoryEntry) => {
+          const details = t.details as Record<string, unknown> | null;
+          return {
+            ...t,
+            price: parseFloat(t.price),
+            triggerValue: t.triggerValue ? parseFloat(t.triggerValue) : null,
+            /** signalDelta = macdV - signal; positive = recovering/bullish momentum */
+            signalDelta: typeof details?.histogram === 'number' ? details.histogram : null,
+          };
+        }),
       };
     }),
 
@@ -73,11 +78,16 @@ export const alertRouter = router({
 
       return {
         success: true,
-        data: triggers.map((t: AlertHistoryEntry) => ({
-          ...t,
-          price: parseFloat(t.price),
-          triggerValue: t.triggerValue ? parseFloat(t.triggerValue) : null,
-        })),
+        data: triggers.map((t: AlertHistoryEntry) => {
+          const details = t.details as Record<string, unknown> | null;
+          return {
+            ...t,
+            price: parseFloat(t.price),
+            triggerValue: t.triggerValue ? parseFloat(t.triggerValue) : null,
+            /** signalDelta = macdV - signal; positive = recovering/bullish momentum */
+            signalDelta: typeof details?.histogram === 'number' ? details.histogram : null,
+          };
+        }),
       };
     }),
 
@@ -108,11 +118,16 @@ export const alertRouter = router({
 
       return {
         success: true,
-        data: triggers.map((t: AlertHistoryEntry) => ({
-          ...t,
-          price: parseFloat(t.price),
-          triggerValue: t.triggerValue ? parseFloat(t.triggerValue) : null,
-        })),
+        data: triggers.map((t: AlertHistoryEntry) => {
+          const details = t.details as Record<string, unknown> | null;
+          return {
+            ...t,
+            price: parseFloat(t.price),
+            triggerValue: t.triggerValue ? parseFloat(t.triggerValue) : null,
+            /** signalDelta = macdV - signal; positive = recovering/bullish momentum */
+            signalDelta: typeof details?.histogram === 'number' ? details.histogram : null,
+          };
+        }),
       };
     }),
 
@@ -139,6 +154,7 @@ export const alertRouter = router({
         };
       }
 
+      const details = trigger.details as Record<string, unknown> | null;
       return {
         success: true,
         error: null,
@@ -146,6 +162,8 @@ export const alertRouter = router({
           ...trigger,
           price: parseFloat(trigger.price),
           triggerValue: trigger.triggerValue ? parseFloat(trigger.triggerValue) : null,
+          /** signalDelta = macdV - signal; positive = recovering/bullish momentum */
+            signalDelta: typeof details?.histogram === 'number' ? details.histogram : null,
         },
       };
     }),

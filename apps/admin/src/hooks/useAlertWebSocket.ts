@@ -10,6 +10,12 @@ interface AlertWebSocketMessage {
     timeframe: string | null;
     price: number;
     triggerValue: number | null;
+    /**
+     * signalDelta = macdV - signal (where signal = EMA(macdV, 9))
+     * - Positive: macdV above signal line (bullish momentum / recovering)
+     * - Negative: macdV below signal line (bearish momentum / falling)
+     */
+    signalDelta: number | null;
     triggeredAt: string;
   };
 }
@@ -72,6 +78,7 @@ export function useAlertWebSocket(): UseAlertWebSocketReturn {
               timeframe: message.data.timeframe,
               price: message.data.price,
               triggerValue: message.data.triggerValue,
+              signalDelta: message.data.signalDelta,
               triggeredAt: message.data.triggeredAt,
             };
             setLastAlert(signal);

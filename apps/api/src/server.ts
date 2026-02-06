@@ -35,6 +35,12 @@ export function broadcastAlert(alert: {
   timeframe: string | null;
   price: number;
   triggerValue: number | null;
+  /**
+   * signalDelta = macdV - signal (where signal = EMA(macdV, 9))
+   * - Positive: macdV is above its signal line (bullish momentum / recovering)
+   * - Negative: macdV is below its signal line (bearish momentum / falling)
+   */
+  signalDelta: number | null;
   triggeredAt: string;
 }): void {
   const message = JSON.stringify({ type: 'alert_trigger', data: alert });
