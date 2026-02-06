@@ -2,86 +2,60 @@
 
 ## Project Reference
 
-See: .planning/PROJECT.md
+See: .planning/PROJECT.md (updated 2026-02-06)
 
 **Core value:** Data accuracy and timely alerts
-**Current focus:** v4.0 User Settings + Runtime Control
+**Current focus:** Planning next milestone
 
 ## Current Position
 
-**Milestone:** v4.0 User Settings + Runtime Control
-**Phase:** 22 (Admin UI - Control + Symbols) - Complete
-**Plan:** 06 of 6 complete
-**Status:** Phase Complete
+**Milestone:** v4.0 User Settings + Runtime Control — SHIPPED
+**Phase:** Complete
+**Status:** Ready for next milestone
 
 ```
 Progress: [==========] 100%
-Phases:   17 [X] 18 [X] 19 [X] 20 [X] 21 [X] 22 [X]
+v1.0 [X]  v2.0 [X]  v3.0 [X]  v4.0 [X]
 ```
 
-**Last activity:** 2026-02-01 - Completed 22-06-PLAN.md (Bulk Import Modal)
+**Last activity:** 2026-02-06 — v4.0 milestone archived
 
 ## Milestones
 
 | Version | Name | Status | Shipped |
 |---------|------|--------|---------|
 | v1.0 | Fee Analysis Spike | Archived | 2026-01-19 |
-| v2.0 | Data Pipeline Redesign | Shipped | 2026-01-24 |
-| v3.0 | Admin UI + IAM Foundation | Shipped | 2026-01-30 |
-| v4.0 | User Settings + Runtime Control | In Progress | -- |
+| v2.0 | Data Pipeline Redesign | Archived | 2026-01-24 |
+| v3.0 | Admin UI + IAM Foundation | Archived | 2026-01-30 |
+| v4.0 | User Settings + Runtime Control | Archived | 2026-02-06 |
 
 See `.planning/MILESTONES.md` for full history.
 
-## v4.0 Phase Summary
+## v4.0 Summary
 
-| Phase | Goal | Requirements | Status |
-|-------|------|--------------|--------|
-| 17 | Settings Infrastructure | SET-01 to SET-07 | Complete (SET-01 to SET-07) |
-| 18 | Control Channel Foundation | RUN-01,02,03,10,11,12,13 | Complete (RUN-01,02,03,10,11,12,13) |
-| 19 | Runtime Commands | RUN-04 to RUN-09 | Complete (RUN-04 to RUN-09) |
-| 20 | Symbol Management | SYM-01 to SYM-06 | Complete (SYM-01,02,03,04,05,06) |
-| 21 | Admin UI - Settings | UI-SET-01 to UI-SET-06 | Complete (21-01, 21-02, 21-03, 21-04, 21-05) |
-| 22 | Admin UI - Control + Symbols | UI-CTL-*, UI-SYM-* | Complete (22-01, 22-02, 22-03, 22-04, 22-05, 22-06) |
+**Shipped:** 6 phases, 23 plans, 45 requirements
 
-## Tech Debt from v3.0
+Key features:
+- User settings as JSONB with typed Zod schema
+- Redis pub/sub control channel
+- Runtime commands (pause, resume, reload-settings, etc.)
+- Symbol management with exchange validation
+- Admin Settings UI (form + JSON, bidirectional sync)
+- Admin Control Panel (status, pause/resume, mode switcher)
+- Admin Symbols UI (watchlist, add/remove, bulk import)
+- Real-time WebSocket alerts with MACD-V colored UI
 
-Carried forward from milestone audit:
+## Tech Debt (Carried to v4.1)
 
 | Issue | Priority | Impact |
 |-------|----------|--------|
 | indicator.router.ts uses publicProcedure | High | Unprotected API access |
 | alert.router.ts uses publicProcedure | High | Unprotected API access |
 | position.router.ts uses publicProcedure | High | Unprotected API access |
-| UserRole/isValidRole/assertRole unused | Low | RBAC not enforced |
-
-**Note:** Router auth hardening deferred to v4.1 per requirements.
+| control.getStatus returns mock data | Medium | UI shows mock status |
+| switch-mode is a stub | Medium | Mode doesn't actually switch |
 
 ## Accumulated Context
-
-### Technical Discoveries (from v1.0)
-
-- Coinbase List Orders endpoint uses cursor-based pagination with `has_next` flag
-- Fee tier info available via getTransactionSummary() (already implemented)
-- Order `total_fees` field contains aggregated fees per order
-
-### v2.0 Architecture (Shipped 2026-01-24)
-
-```
-WebSocket Layer (CoinbaseAdapter)
-    |
-    | Native 5m candles + ticker from Coinbase channels
-    v
-+-------------------+
-|   Redis Cache     |<-- Backfill Service (startup)
-+-------------------+<-- BoundaryRestService (15m/1h/4h/1d at boundaries)
-    |
-    | candle:close events + ticker pub/sub
-    v
-Indicator Service (cache-only reads)
-    |
-    v
-Alert Evaluation (receives ticker prices)
-```
 
 ### Hard Constraints (User-Specified)
 
@@ -93,16 +67,7 @@ Alert Evaluation (receives ticker prices)
 | **Atlas-only migrations** | Drizzle migrations BANNED - schema.sql is source of truth |
 | **SSL required** | Azure PostgreSQL requires SSL - hardcode, don't use env vars |
 
-### v3.0 Key Decisions
-
-| Decision | Rationale |
-|----------|-----------|
-| Webhook before clerkPlugin | Server-to-server route has no JWT |
-| Check-then-update for upsert | Partial unique index doesn't work with onConflictDoUpdate |
-| protectedProcedure only for new routers | Existing routers left as publicProcedure (tech debt) |
-| Pre-flight connection validation | Fail fast if database/Redis unavailable |
-
-### v4.0 Key Decisions (from research)
+### v4.0 Key Decisions
 
 | Decision | Rationale |
 |----------|-----------|
@@ -111,13 +76,12 @@ Alert Evaluation (receives ticker prices)
 | Control plane vs data plane | Control channel always on, data plane pausable |
 | Admin calls exchange API | Delta-based symbol validation from Admin, not API |
 | Credentials in env vars | Settings store env var names, not actual secrets |
-| Cast zodResolver for UserSettings | Zod schemas with defaults create type mismatch between input/output |
+| Cast zodResolver for UserSettings | Zod schemas with defaults create type mismatch |
 | lastEditSource ref for bidirectional sync | Prevents infinite loops between form and JSON editor |
-| splitViewKey ref for discard | Forces clean remount of SettingsSplitView without complex state reset |
-| Manual shadcn component creation | Project doesn't use shadcn CLI; components created manually with CVA |
+| splitViewKey ref for discard | Forces clean remount of SettingsSplitView |
+| Manual shadcn component creation | Project doesn't use shadcn CLI |
 | controlRouter uses protectedProcedure | Auth required for control commands |
-| Mock getStatus endpoint | Full implementation requires ControlChannelService in tRPC context |
-| Upgraded Select to Radix-based | Better UX/accessibility; required updating Logs.tsx |
+| Mock getStatus endpoint | Full implementation requires architecture change |
 
 ### Open Items
 
@@ -127,27 +91,21 @@ Alert Evaluation (receives ticker prices)
 
 ### Last Session
 
-**Date:** 2026-02-01
-**Activity:** Completed plan 22-06 (Bulk Import Modal)
-**Stopped At:** Phase 22 complete, v4.0 milestone complete
+**Date:** 2026-02-06
+**Activity:** Completed v4.0 milestone, archived to milestones/
+**Stopped At:** Ready for `/gsd:new-milestone`
 
 ### Resume Context
 
-**PHASE 22 COMPLETE - v4.0 MILESTONE COMPLETE**
+**v4.0 MILESTONE COMPLETE — READY FOR NEXT MILESTONE**
 
-Plan 22-06 completed (Bulk Import Modal):
-- Created BulkImportModal with JSON input and validation preview
-- Integrated into Symbols page with Bulk Import card
-- Commits: f97a32e, 1fcbaf1
+v4.0 archived:
+- milestones/v4.0-ROADMAP.md
+- milestones/v4.0-REQUIREMENTS.md
+- milestones/v4.0-MILESTONE-AUDIT.md
 
-v4.0 Milestone Summary:
-- Phase 17: Settings Infrastructure - Complete
-- Phase 18: Control Channel Foundation - Complete
-- Phase 19: Runtime Commands - Complete
-- Phase 20: Symbol Management - Complete
-- Phase 21: Admin UI - Settings - Complete
-- Phase 22: Admin UI - Control + Symbols - Complete (6 plans)
+Next: Run `/gsd:new-milestone` to start v4.1 (or v5.0)
 
 ---
 *State initialized: 2026-01-18*
-*Last updated: 2026-02-01 - Completed 22-06-PLAN.md (Bulk Import Modal)*
+*Last updated: 2026-02-06 — v4.0 milestone archived*
