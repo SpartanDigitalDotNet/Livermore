@@ -24,7 +24,7 @@ interface Signal {
 }
 
 /**
- * Get background color class based on MACD-V value and signalDelta.
+ * MACD-V color mapping based on value and signalDelta.
  * Colors match Pine Script MACD-V-MCC indicator.
  *
  * signalDelta = macdV - signal (EMA of macdV, 9)
@@ -41,36 +41,75 @@ interface Signal {
  * - Yellow:  Extended rally (+125 to +140)
  * - Orange:  Near exhaustion (+140 to +150)
  */
-function getMacdVColor(macdV: number | null, signalDelta: number | null): string {
-  if (macdV === null) return '';
 
-  // signalDelta > 0 means macdV is above its signal line (bullish/recovering)
+/** Tailwind color values for left border */
+const MACD_V_COLORS = {
+  slate: '#64748b',   // slate-500
+  cyan: '#06b6d4',    // cyan-500
+  lime: '#84cc16',    // lime-500
+  yellow: '#eab308',  // yellow-500
+  orange: '#f97316',  // orange-500
+  red: '#ef4444',     // red-500
+  teal: '#14b8a6',    // teal-500
+  purple: '#a855f7',  // purple-500
+} as const;
+
+/**
+ * Get left border color for a row based on MACD-V value and signalDelta.
+ * Returns a CSS style object with borderLeft property.
+ */
+function getMacdVBorderStyle(macdV: number | null, signalDelta: number | null): React.CSSProperties {
+  if (macdV === null) return {};
+
   const isRecovering = signalDelta !== null && signalDelta > 0;
   const absMacdV = Math.abs(macdV);
 
   // Extreme zones (±150+)
   if (absMacdV >= 150) {
-    // Oversold extreme recovering = purple
-    if (macdV < 0 && isRecovering) return 'bg-purple-100';
-    // Otherwise red for extreme
-    return 'bg-red-100';
+    if (macdV < 0 && isRecovering) return { borderLeft: `4px solid ${MACD_V_COLORS.purple}` };
+    return { borderLeft: `4px solid ${MACD_V_COLORS.red}` };
   }
 
   // Positive side (bullish momentum)
   if (macdV > 0) {
-    if (macdV <= 50) return 'bg-slate-100';      // Chop zone
-    if (macdV <= 75) return 'bg-cyan-100';       // Early rally
-    if (macdV <= 125) return 'bg-lime-100';      // Strong rally
-    if (macdV <= 140) return 'bg-yellow-100';    // Extended rally
-    return 'bg-orange-100';                       // Near exhaustion (140-150)
+    if (macdV <= 50) return { borderLeft: `4px solid ${MACD_V_COLORS.slate}` };
+    if (macdV <= 75) return { borderLeft: `4px solid ${MACD_V_COLORS.cyan}` };
+    if (macdV <= 125) return { borderLeft: `4px solid ${MACD_V_COLORS.lime}` };
+    if (macdV <= 140) return { borderLeft: `4px solid ${MACD_V_COLORS.yellow}` };
+    return { borderLeft: `4px solid ${MACD_V_COLORS.orange}` };
   }
 
-  // Negative side (bearish/oversold)
-  if (macdV >= -50) return 'bg-slate-100';       // Chop zone
+  // Negative side
+  if (macdV >= -50) return { borderLeft: `4px solid ${MACD_V_COLORS.slate}` };
+  if (isRecovering) return { borderLeft: `4px solid ${MACD_V_COLORS.teal}` };
+  return { borderLeft: `4px solid ${MACD_V_COLORS.slate}` };
+}
 
-  // Oversold territory (-50 to -150)
-  if (isRecovering) return 'bg-teal-100';        // Recovering = potential low-risk Long
-  return 'bg-slate-100';                          // Still falling = chop/wait
+/**
+ * Get background color class for highlighted (new) rows.
+ */
+function getMacdVBgClass(macdV: number | null, signalDelta: number | null): string {
+  if (macdV === null) return '';
+
+  const isRecovering = signalDelta !== null && signalDelta > 0;
+  const absMacdV = Math.abs(macdV);
+
+  if (absMacdV >= 150) {
+    if (macdV < 0 && isRecovering) return 'bg-purple-100';
+    return 'bg-red-100';
+  }
+
+  if (macdV > 0) {
+    if (macdV <= 50) return 'bg-slate-100';
+    if (macdV <= 75) return 'bg-cyan-100';
+    if (macdV <= 125) return 'bg-lime-100';
+    if (macdV <= 140) return 'bg-yellow-100';
+    return 'bg-orange-100';
+  }
+
+  if (macdV >= -50) return 'bg-slate-100';
+  if (isRecovering) return 'bg-teal-100';
+  return 'bg-slate-100';
 }
 
 interface SignalsTableProps {
@@ -121,11 +160,13 @@ export function SignalsTable({ data, highlightedIds }: SignalsTableProps) {
           data.map((signal) => {
             const { label, color } = formatAlertType(signal.alertType);
             const isHighlighted = highlightedIds?.has(signal.id);
-            const macdVColor = isHighlighted ? getMacdVColor(signal.triggerValue, signal.signalDelta) : '';
+            const borderStyle = getMacdVBorderStyle(signal.triggerValue, signal.signalDelta);
+            const bgClass = isHighlighted ? getMacdVBgClass(signal.triggerValue, signal.signalDelta) : '';
             return (
               <TableRow
                 key={signal.id}
-                className={isHighlighted ? `animate-highlight-fade ${macdVColor}` : ''}
+                style={borderStyle}
+                className={isHighlighted ? `animate-highlight-fade ${bgClass}` : ''}
               >
                 <TableCell className="font-mono text-sm">
                   {new Date(signal.triggeredAt).toLocaleString()}
