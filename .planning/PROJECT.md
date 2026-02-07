@@ -10,8 +10,31 @@ Data accuracy and timely alerts — indicators must calculate on complete, accur
 
 ## Current State
 
-**Status:** v4.0 shipped
-**Current focus:** Planning next milestone
+**Status:** v5.0 planning
+**Current focus:** Exchange-scoped data architecture, distributed cross-exchange visibility
+
+## Current Milestone: v5.0 Distributed Exchange Architecture
+
+**Goal:** Refactor from user-scoped to exchange-scoped candles/indicators, enabling cross-exchange visibility for distributed soft-arbitrage ("trigger remotely, buy locally").
+
+**Target features:**
+- Exchange-scoped candle keys: `candles:<exchange_id>:<symbol>:<timeframe>` (shared pool)
+- Exchange-scoped indicator keys: `indicator:<exchange_id>:<symbol>:<timeframe>:macdv`
+- User-defined overflow: `usercandles:` / `userindicator:` keys with TTL for positions/manual adds
+- New `exchanges` table with full metadata (API limits, fees, geo restrictions, supported timeframes)
+- Idle startup mode: API starts without exchange connections, awaits `start` command
+- `user_exchanges` refactor with FK to `exchanges` table
+- Symbol sourcing: Tier 1 (Top N by volume, shared) + Tier 2 (user positions + manual, de-duped)
+- New startup script with `--autostart <exchange>` parameter option
+
+**Architecture change:**
+```
+Mike's API (Coinbase)  ──publishes──►  Redis  ◄──subscribes── Kaia's PerseusWeb
+                                         │
+Kaia's API (Binance)   ──publishes──►────┘
+```
+
+Cross-exchange visibility via Redis pub/sub. Any client can subscribe to any exchange's feed.
 
 ## Requirements
 
@@ -47,12 +70,12 @@ Data accuracy and timely alerts — indicators must calculate on complete, accur
 - ✓ Admin Symbols UI (watchlist, add/remove, bulk import) — v4.0
 - ✓ Real-time WebSocket alerts with MACD-V colored UI elements — v4.0
 
-### Next Milestone Goals (v4.1+)
+### Next Milestone Goals (v5.1+)
 
-- Router auth hardening (convert publicProcedure to protectedProcedure)
+- Router auth hardening (convert publicProcedure to protectedProcedure) — tech debt from v3.0
 - Orderbook imbalance detection (scalper-orderbook mode implementation)
 - Trading contracts (orders, positions, paper trading)
-- Multi-exchange adapters (Binance.us, Binance.com)
+- Runtime exchange switching via Admin (connect to different exchange without restart)
 - Azure pub/sub for multi-instance deployment (identity_sub as channel)
 
 ### Out of Scope
@@ -62,7 +85,8 @@ Data accuracy and timely alerts — indicators must calculate on complete, accur
 - CCXT Library — performance overhead unnecessary
 - Cross-Region Replication — single-region sufficient
 - Azure pub/sub — Redis pub/sub sufficient for single-instance, Azure deferred
-- Multi-instance API — single API instance per user
+- Runtime exchange switching — API connects to one exchange per startup; switch requires restart
+- Router auth hardening — tech debt accepted, defer to v5.1
 
 ## Context
 
@@ -158,4 +182,4 @@ Admin UI (real-time alerts)
 **v4.0 added:** User settings schema that Kaia's PerseusWeb can also leverage for her Binance.com configuration. PerseusWeb integration guide for Redis pub/sub and API setup.
 
 ---
-*Last updated: 2026-02-06 — v4.0 milestone shipped*
+*Last updated: 2026-02-06 — v5.0 milestone started*
