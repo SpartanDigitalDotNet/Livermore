@@ -36,22 +36,68 @@ CREATE TABLE "users" (
 CREATE UNIQUE INDEX "users_identity_provider_sub_idx" ON "users" ("identity_provider", "identity_sub")
   WHERE identity_provider IS NOT NULL;
 
+-- Create "exchanges" table (Phase 23)
+-- Exchange metadata for multi-exchange architecture
+CREATE TABLE "exchanges" (
+  "id" serial NOT NULL,
+  "name" character varying(50) NOT NULL,
+  "display_name" character varying(100) NOT NULL,
+  "ws_url" character varying(255) NULL,
+  "rest_url" character varying(255) NULL,
+  "supported_timeframes" jsonb NOT NULL DEFAULT '[]'::jsonb,
+  "api_limits" jsonb NULL,
+  "fee_schedule" jsonb NULL,
+  "geo_restrictions" jsonb NULL,
+  "is_active" boolean NOT NULL DEFAULT true,
+  "created_at" timestamp NOT NULL DEFAULT now(),
+  "updated_at" timestamp NOT NULL DEFAULT now(),
+  PRIMARY KEY ("id"),
+  CONSTRAINT "exchanges_name_unique" UNIQUE ("name")
+);
+
+-- Seed data for Coinbase and Binance (idempotent via ON CONFLICT)
+INSERT INTO "exchanges" ("name", "display_name", "ws_url", "rest_url", "supported_timeframes", "api_limits", "fee_schedule") VALUES
+  ('coinbase', 'Coinbase Advanced Trade',
+   'wss://advanced-trade-ws.coinbase.com',
+   'https://api.coinbase.com',
+   '["1m", "5m", "15m", "30m", "1h", "2h", "4h", "6h", "1d"]'::jsonb,
+   '{"ws_connections_per_ip": 750, "ws_messages_per_second": 8, "rest_weight_limit": 10000}'::jsonb,
+   '{"base_maker": 0.006, "base_taker": 0.012}'::jsonb
+  ),
+  ('binance', 'Binance Spot',
+   'wss://stream.binance.com:9443',
+   'https://api.binance.com',
+   '["1m", "3m", "5m", "15m", "30m", "1h", "2h", "4h", "6h", "8h", "12h", "1d", "3d", "1w", "1M"]'::jsonb,
+   '{"ws_connections_per_5min": 300, "rest_weight_limit": 6000, "orders_per_10s": 50}'::jsonb,
+   '{"base_maker": 0.001, "base_taker": 0.001}'::jsonb
+  )
+ON CONFLICT ("name") DO UPDATE SET
+  "display_name" = EXCLUDED."display_name",
+  "ws_url" = EXCLUDED."ws_url",
+  "rest_url" = EXCLUDED."rest_url",
+  "supported_timeframes" = EXCLUDED."supported_timeframes",
+  "api_limits" = EXCLUDED."api_limits",
+  "fee_schedule" = EXCLUDED."fee_schedule",
+  "updated_at" = now();
+
 -- Create "user_exchanges" table
 CREATE TABLE "user_exchanges" (
   "id" serial NOT NULL,
   "user_id" serial NOT NULL,
   "exchange_name" character varying(50) NOT NULL,
+  "exchange_id" integer NULL,
   "display_name" character varying(100) NULL,
-  "api_key" character varying(500) NOT NULL,
-  "api_secret" text NOT NULL,
-  "additional_credentials" text NULL,
+  "api_key_env_var" character varying(100) NOT NULL,
+  "api_secret_env_var" character varying(100) NOT NULL,
+  "additional_credentials_env_vars" text NULL,
   "is_active" boolean NOT NULL DEFAULT true,
   "is_default" boolean NOT NULL DEFAULT false,
   "last_connected_at" timestamp NULL,
   "created_at" timestamp NOT NULL DEFAULT now(),
   "updated_at" timestamp NOT NULL DEFAULT now(),
   PRIMARY KEY ("id"),
-  CONSTRAINT "user_exchanges_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "users" ("id") ON UPDATE NO ACTION ON DELETE CASCADE
+  CONSTRAINT "user_exchanges_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "users" ("id") ON UPDATE NO ACTION ON DELETE CASCADE,
+  CONSTRAINT "user_exchanges_exchange_id_exchanges_id_fk" FOREIGN KEY ("exchange_id") REFERENCES "exchanges" ("id") ON UPDATE NO ACTION ON DELETE SET NULL
 );
 
 -- Create index "user_exchanges_user_exchange_idx" to table: "user_exchanges"
@@ -59,6 +105,9 @@ CREATE INDEX "user_exchanges_user_exchange_idx" ON "user_exchanges" ("user_id", 
 
 -- Create index "user_exchanges_user_id_idx" to table: "user_exchanges"
 CREATE INDEX "user_exchanges_user_id_idx" ON "user_exchanges" ("user_id");
+
+-- Create index "user_exchanges_exchange_id_idx" to table: "user_exchanges" (Phase 23)
+CREATE INDEX "user_exchanges_exchange_id_idx" ON "user_exchanges" ("exchange_id");
 
 -- Create "candles" table
 CREATE TABLE "candles" (
