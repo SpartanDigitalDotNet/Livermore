@@ -109,6 +109,31 @@ CREATE INDEX "user_exchanges_user_id_idx" ON "user_exchanges" ("user_id");
 -- Create index "user_exchanges_exchange_id_idx" to table: "user_exchanges" (Phase 23)
 CREATE INDEX "user_exchanges_exchange_id_idx" ON "user_exchanges" ("exchange_id");
 
+-- Create "exchange_symbols" table (Phase 25)
+-- Tier 1 symbols: Top N by 24h volume, shared across users
+CREATE TABLE "exchange_symbols" (
+  "id" serial NOT NULL,
+  "exchange_id" integer NOT NULL,
+  "symbol" character varying(20) NOT NULL,
+  "base_currency" character varying(10) NOT NULL,
+  "quote_currency" character varying(10) NOT NULL,
+  "volume_24h" numeric(30,8) NULL,
+  "volume_rank" integer NULL,
+  "is_active" boolean NOT NULL DEFAULT true,
+  "last_volume_update" timestamp NULL,
+  "created_at" timestamp NOT NULL DEFAULT now(),
+  "updated_at" timestamp NOT NULL DEFAULT now(),
+  PRIMARY KEY ("id"),
+  CONSTRAINT "exchange_symbols_exchange_id_exchanges_id_fk" FOREIGN KEY ("exchange_id") REFERENCES "exchanges" ("id") ON UPDATE NO ACTION ON DELETE CASCADE,
+  CONSTRAINT "exchange_symbols_unique" UNIQUE ("exchange_id", "symbol")
+);
+
+-- Index for volume-based queries (Phase 25)
+CREATE INDEX "exchange_symbols_exchange_rank_idx" ON "exchange_symbols" ("exchange_id", "volume_rank") WHERE is_active = true;
+
+-- Index for symbol lookup (Phase 25)
+CREATE INDEX "exchange_symbols_symbol_idx" ON "exchange_symbols" ("symbol");
+
 -- Create "candles" table
 CREATE TABLE "candles" (
   "id" serial NOT NULL,

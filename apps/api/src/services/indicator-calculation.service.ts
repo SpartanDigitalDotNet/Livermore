@@ -110,8 +110,8 @@ export class IndicatorCalculationService {
    * Parses the channel to extract symbol and timeframe, then recalculates from cache
    */
   private async handleCandleCloseEvent(channel: string, message: string): Promise<void> {
-    // Parse channel: "channel:candle:close:1:1:BTC-USD:5m"
-    // Indices:        0       1      2     3 4 5        6
+    // Parse channel: "channel:exchange:1:candle:close:BTC-USD:5m" (Phase 24 format)
+    // Indices:        0       1        2 3      4     5       6
     const parts = channel.split(':');
     const symbol = parts[5];
     const timeframe = parts[6] as Timeframe;
@@ -210,8 +210,9 @@ export class IndicatorCalculationService {
     this.subscriber = this.redis.duplicate();
 
     // Subscribe to candle:close events for ALL timeframes (wildcard pattern)
-    // Each timeframe's cache is populated independently by Phase 07 backfill
-    const pattern = `channel:candle:close:${this.TEST_USER_ID}:${this.TEST_EXCHANGE_ID}:*:*`;
+    // Phase 24: Exchange-scoped channel (shared across users)
+    // Pattern: channel:exchange:{exchange_id}:candle:close:{symbol}:{timeframe}
+    const pattern = `channel:exchange:${this.TEST_EXCHANGE_ID}:candle:close:*:*`;
     await this.subscriber.psubscribe(pattern);
 
     // Handle pattern messages (pmessage for psubscribe, not message)

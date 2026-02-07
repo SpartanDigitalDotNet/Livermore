@@ -53,6 +53,10 @@ export const controlRouter = router({
       startTime: state.startTime,
       exchangeConnected: state.exchangeConnected,
       queueDepth: state.queueDepth,
+      // Phase 26: Connection state for start/stop UI
+      connectionState: state.connectionState,
+      // Phase 29: Startup progress for UI
+      startup: state.startup,
     };
   }),
 

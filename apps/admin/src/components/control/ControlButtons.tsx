@@ -7,14 +7,19 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Play, Pause, RefreshCw, Trash2 } from 'lucide-react';
+import { Play, Pause, RefreshCw, Trash2, Power, PowerOff } from 'lucide-react';
 import { ConfirmationDialog } from './ConfirmationDialog';
+
+type ConnectionState = 'idle' | 'connecting' | 'connected' | 'disconnected' | 'error';
 
 interface ControlButtonsProps {
   isPaused: boolean;
   currentMode: string;
+  connectionState: ConnectionState;
   onPause: () => void;
   onResume: () => void;
+  onStart: () => void;
+  onStop: () => void;
   onModeChange: (mode: string) => void;
   onReloadSettings: () => void;
   onClearCache: (scope: 'all' | 'symbol' | 'timeframe') => void;
@@ -33,19 +38,48 @@ interface ControlButtonsProps {
 export function ControlButtons({
   isPaused,
   currentMode,
+  connectionState,
   onPause,
   onResume,
+  onStart,
+  onStop,
   onModeChange,
   onReloadSettings,
   onClearCache,
   isExecuting,
 }: ControlButtonsProps) {
   const [showClearConfirm, setShowClearConfirm] = useState(false);
+  const [showStopConfirm, setShowStopConfirm] = useState(false);
+
+  const isConnected = connectionState === 'connected';
+  const isConnecting = connectionState === 'connecting';
 
   return (
     <div className="flex flex-wrap items-center gap-3">
-      {/* Pause/Resume Button */}
-      {isPaused ? (
+      {/* Start/Stop Button (Phase 26) */}
+      {isConnected ? (
+        <Button
+          onClick={() => setShowStopConfirm(true)}
+          disabled={isExecuting}
+          variant="destructive"
+        >
+          <PowerOff className="h-4 w-4 mr-2" />
+          Stop
+        </Button>
+      ) : (
+        <Button
+          onClick={onStart}
+          disabled={isExecuting || isConnecting}
+          variant="default"
+          className="bg-green-600 hover:bg-green-700"
+        >
+          <Power className="h-4 w-4 mr-2" />
+          {isConnecting ? 'Connecting...' : 'Start'}
+        </Button>
+      )}
+
+      {/* Pause/Resume Button - only show when connected */}
+      {isConnected && (isPaused ? (
         <Button onClick={onResume} disabled={isExecuting}>
           <Play className="h-4 w-4 mr-2" />
           Resume
@@ -55,7 +89,7 @@ export function ControlButtons({
           <Pause className="h-4 w-4 mr-2" />
           Pause
         </Button>
-      )}
+      ))}
 
       {/* Mode Switcher */}
       <Select
@@ -105,6 +139,20 @@ export function ControlButtons({
         onConfirm={() => {
           onClearCache('all');
           setShowClearConfirm(false);
+        }}
+        isLoading={isExecuting}
+      />
+
+      {/* Stop Confirmation Dialog */}
+      <ConfirmationDialog
+        open={showStopConfirm}
+        onOpenChange={setShowStopConfirm}
+        title="Stop Exchange Connection"
+        description="This will disconnect from the exchange WebSocket. Real-time data will stop flowing until you start again."
+        confirmLabel="Stop Connection"
+        onConfirm={() => {
+          onStop();
+          setShowStopConfirm(false);
         }}
         isLoading={isExecuting}
       />

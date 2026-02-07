@@ -40,6 +40,12 @@ Requirements for exchange-scoped data architecture enabling cross-exchange visib
 
 ## v5.1+ Requirements (Deferred)
 
+### Autostart Authentication
+
+- [ ] **AUTH-01**: Autostart user context - `--autostart <exchange> --user <clerk_id>` or `LIVERMORE_SYSTEM_USER` env var
+- [ ] **AUTH-02**: System user concept - Unattended operation without interactive Clerk login
+- [ ] **AUTH-03**: User settings loading on autostart - Load user's symbols/settings from database by user ID
+
 ### Symbol Management
 
 - [ ] **SYM-03**: Tier 2 manual adds - User-added symbols with validation + de-dupe

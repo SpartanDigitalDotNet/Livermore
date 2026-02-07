@@ -142,16 +142,41 @@ Plans:
 
 ---
 
+## Phase 29: Service Integration
+
+**Goal:** Wire orphaned services into main application, completing all E2E flows.
+
+**Dependencies:** Phase 25 (SymbolSourceService), Phase 28 (ExchangeAdapterFactory)
+
+**Gap Closure:** Addresses audit findings from v5.0-MILESTONE-AUDIT.md
+
+**Tasks:**
+1. Replace direct `CoinbaseAdapter` instantiation with `ExchangeAdapterFactory.create()`
+2. Replace `getAccountSymbols()` with `SymbolSourceService.getMergedSymbols()`
+3. Wire tier classification into cache writes (Tier 1 vs Tier 2)
+4. Update `start` command to use factory pattern
+5. Verify Symbol Classification E2E flow works
+
+**Success Criteria:**
+1. `server.ts` uses `ExchangeAdapterFactory.create(1)` instead of `new CoinbaseAdapter()`
+2. `server.ts` uses `SymbolSourceService` for symbol sourcing
+3. Tier 1 symbols write to exchange-scoped keys, Tier 2 to user-scoped keys
+4. All 3 E2E flows pass (Start, Alert, Symbol Classification)
+5. Full turbo build passes
+
+---
+
 ## Progress
 
 | Phase | Name | Requirements | Status |
 |-------|------|--------------|--------|
-| 23 | Schema Foundation | 2 | Planned |
-| 24 | Data Architecture | 5 | Planned |
-| 25 | Symbol Management | 3 | Pending |
-| 26 | Startup Control | 4 | Pending |
-| 27 | Cross-Exchange Visibility | 3 | Pending |
-| 28 | Adapter Refactor | 2 | Pending |
+| 23 | Schema Foundation | 2 | Complete |
+| 24 | Data Architecture | 5 | Complete |
+| 25 | Symbol Management | 3 | Complete |
+| 26 | Startup Control | 4 | Complete |
+| 27 | Cross-Exchange Visibility | 3 | Complete |
+| 28 | Adapter Refactor | 2 | Complete |
+| 29 | Service Integration | 0 (gap closure) | Complete |
 
 **Total:** 6 phases, 19 requirements
 

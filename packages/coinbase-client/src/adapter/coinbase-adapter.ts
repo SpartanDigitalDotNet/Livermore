@@ -11,7 +11,7 @@ import WebSocket from 'ws';
 import { BaseExchangeAdapter } from './base-adapter';
 import { CoinbaseAuth } from '../rest/auth';
 import { CoinbaseRestClient } from '../rest/client';
-import { CandleCacheStrategy, candleCloseChannel, TickerCacheStrategy, type RedisClient } from '@livermore/cache';
+import { CandleCacheStrategy, candleCloseChannel, exchangeCandleCloseChannel, TickerCacheStrategy, type RedisClient } from '@livermore/cache';
 import type { Timeframe, UnifiedCandle, Ticker, Candle } from '@livermore/schemas';
 import { logger, getCandleTimestamp } from '@livermore/utils';
 
@@ -521,13 +521,22 @@ export class CoinbaseAdapter extends BaseExchangeAdapter {
 
     // Publish to Redis pub/sub for distributed subscribers (indicator service)
     try {
-      const channel = candleCloseChannel(
+      // NEW: Exchange-scoped channel (shared across users)
+      const exchangeChannel = exchangeCandleCloseChannel(
+        this.exchangeIdNum,
+        candle.symbol,
+        candle.timeframe
+      );
+      await this.redis.publish(exchangeChannel, JSON.stringify(candle));
+
+      // LEGACY: User-scoped channel (backward compatibility during migration)
+      const userChannel = candleCloseChannel(
         this.userId,
         this.exchangeIdNum,
         candle.symbol,
         candle.timeframe
       );
-      await this.redis.publish(channel, JSON.stringify(candle));
+      await this.redis.publish(userChannel, JSON.stringify(candle));
     } catch (error) {
       logger.error({ error, symbol: candle.symbol }, 'Failed to publish candle:close to Redis');
     }
@@ -663,8 +672,14 @@ export class CoinbaseAdapter extends BaseExchangeAdapter {
 
       // Publish candle:close event (triggers indicator recalculation)
       const unified: UnifiedCandle = { ...candle, exchange: 'coinbase' };
-      const channel = candleCloseChannel(this.userId, this.exchangeIdNum, symbol, timeframe);
-      await this.redis.publish(channel, JSON.stringify(unified));
+
+      // NEW: Exchange-scoped channel (shared across users)
+      const exchangeChannel = exchangeCandleCloseChannel(this.exchangeIdNum, symbol, timeframe);
+      await this.redis.publish(exchangeChannel, JSON.stringify(unified));
+
+      // LEGACY: User-scoped channel (backward compatibility during migration)
+      const userChannel = candleCloseChannel(this.userId, this.exchangeIdNum, symbol, timeframe);
+      await this.redis.publish(userChannel, JSON.stringify(unified));
     } catch (error) {
       logger.error({ error, symbol, timeframe }, 'Failed to persist 1m candle');
     }

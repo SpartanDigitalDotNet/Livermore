@@ -55,7 +55,12 @@
       "Bash(git status:*)",
       "WebFetch(domain:www.npmjs.com)",
       "WebFetch(domain:ui.shadcn.com)",
-      "Bash(find:*)"
+      "Bash(find:*)",
+      "WebFetch(domain:developers.binance.com)",
+      "WebFetch(domain:www.mexc.com)",
+      "WebFetch(domain:www.kucoin.com)",
+      "Bash(dir:*)",
+      "Bash(npx turbo run build:*)"
     ]
   }
 }
