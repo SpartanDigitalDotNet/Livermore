@@ -5,20 +5,20 @@
 See: .planning/PROJECT.md (updated 2026-02-06)
 
 **Core value:** Data accuracy and timely alerts
-**Current focus:** Planning next milestone
+**Current focus:** v5.0 Distributed Exchange Architecture
 
 ## Current Position
 
-**Milestone:** v4.0 User Settings + Runtime Control — SHIPPED
-**Phase:** Complete
-**Status:** Ready for next milestone
+**Milestone:** v5.0 Distributed Exchange Architecture
+**Phase:** 23 - Schema Foundation
+**Status:** Planning complete, ready for phase execution
 
 ```
-Progress: [==========] 100%
-v1.0 [X]  v2.0 [X]  v3.0 [X]  v4.0 [X]
+Progress: [          ] 0%
+v1.0 [X]  v2.0 [X]  v3.0 [X]  v4.0 [X]  v5.0 [ ]
 ```
 
-**Last activity:** 2026-02-06 — v4.0 milestone archived
+**Last activity:** 2026-02-06 - v5.0 roadmap created
 
 ## Milestones
 
@@ -28,32 +28,37 @@ v1.0 [X]  v2.0 [X]  v3.0 [X]  v4.0 [X]
 | v2.0 | Data Pipeline Redesign | Archived | 2026-01-24 |
 | v3.0 | Admin UI + IAM Foundation | Archived | 2026-01-30 |
 | v4.0 | User Settings + Runtime Control | Archived | 2026-02-06 |
+| v5.0 | Distributed Exchange Architecture | Active | - |
 
 See `.planning/MILESTONES.md` for full history.
 
-## v4.0 Summary
+## v5.0 Overview
 
-**Shipped:** 6 phases, 23 plans, 45 requirements
+**Goal:** Transform from user-scoped to exchange-scoped data architecture enabling cross-exchange visibility for soft-arbitrage patterns.
 
-Key features:
-- User settings as JSONB with typed Zod schema
-- Redis pub/sub control channel
-- Runtime commands (pause, resume, reload-settings, etc.)
-- Symbol management with exchange validation
-- Admin Settings UI (form + JSON, bidirectional sync)
-- Admin Control Panel (status, pause/resume, mode switcher)
-- Admin Symbols UI (watchlist, add/remove, bulk import)
-- Real-time WebSocket alerts with MACD-V colored UI
+**Phases:** 6 (Phase 23-28)
+**Requirements:** 19
 
-## Tech Debt (Carried to v4.1)
+| Phase | Name | Requirements | Status |
+|-------|------|--------------|--------|
+| 23 | Schema Foundation | EXC-01, EXC-02 | Pending |
+| 24 | Data Architecture | DATA-01 to DATA-05 | Pending |
+| 25 | Symbol Management | SYM-01, SYM-02, SYM-04 | Pending |
+| 26 | Startup Control | CTL-01 to CTL-04 | Pending |
+| 27 | Cross-Exchange Visibility | VIS-01 to VIS-03 | Pending |
+| 28 | Adapter Refactor | EXC-03, EXC-04 | Pending |
 
-| Issue | Priority | Impact |
-|-------|----------|--------|
-| indicator.router.ts uses publicProcedure | High | Unprotected API access |
-| alert.router.ts uses publicProcedure | High | Unprotected API access |
-| position.router.ts uses publicProcedure | High | Unprotected API access |
-| control.getStatus returns mock data | Medium | UI shows mock status |
-| switch-mode is a stub | Medium | Mode doesn't actually switch |
+## Tech Debt (Carried Forward)
+
+| Issue | Priority | Impact | From |
+|-------|----------|--------|------|
+| indicator.router.ts uses publicProcedure | High | Unprotected API access | v3.0 |
+| alert.router.ts uses publicProcedure | High | Unprotected API access | v3.0 |
+| position.router.ts uses publicProcedure | High | Unprotected API access | v3.0 |
+| control.getStatus returns mock data | Medium | UI shows mock status | v4.0 |
+| switch-mode is a stub | Medium | Mode doesn't actually switch | v4.0 |
+
+Note: EXC-04 (connection status tracking) will resolve the mock getStatus issue.
 
 ## Accumulated Context
 
@@ -67,45 +72,41 @@ Key features:
 | **Atlas-only migrations** | Drizzle migrations BANNED - schema.sql is source of truth |
 | **SSL required** | Azure PostgreSQL requires SSL - hardcode, don't use env vars |
 
-### v4.0 Key Decisions
+### v5.0 Key Decisions
 
 | Decision | Rationale |
 |----------|-----------|
-| Settings as JSONB | Single column with version field for schema evolution |
-| Redis pub/sub for control | Existing ioredis, no new dependencies needed |
-| Control plane vs data plane | Control channel always on, data plane pausable |
-| Admin calls exchange API | Delta-based symbol validation from Admin, not API |
-| Credentials in env vars | Settings store env var names, not actual secrets |
-| Cast zodResolver for UserSettings | Zod schemas with defaults create type mismatch |
-| lastEditSource ref for bidirectional sync | Prevents infinite loops between form and JSON editor |
-| splitViewKey ref for discard | Forces clean remount of SettingsSplitView |
-| Manual shadcn component creation | Project doesn't use shadcn CLI |
-| controlRouter uses protectedProcedure | Auth required for control commands |
-| Mock getStatus endpoint | Full implementation requires architecture change |
+| Exchange-scoped shared keys | Tier 1 symbols share data across users/instances |
+| User overflow with TTL | Tier 2 symbols have TTL-based auto-cleanup |
+| Idle startup mode | API doesn't connect until `start` command |
+| --autostart flag | CI/CD and automation can bypass idle mode |
+| Adapter factory pattern | Factory instantiates correct adapter by exchange type |
+| Dual-read for migration | Check exchange-scoped first, fall back to user-scoped |
 
 ### Open Items
 
 - Low-volume symbol policy: Include or exclude symbols with < 100 candles?
+- Tier 1 symbol refresh frequency: hourly or daily?
 
 ## Session Continuity
 
 ### Last Session
 
 **Date:** 2026-02-06
-**Activity:** Completed v4.0 milestone, archived to milestones/
-**Stopped At:** Ready for `/gsd:new-milestone`
+**Activity:** Created v5.0 roadmap with 6 phases covering 19 requirements
+**Stopped At:** Ready for `/gsd:plan-phase 23`
 
 ### Resume Context
 
-**v4.0 MILESTONE COMPLETE — READY FOR NEXT MILESTONE**
+**v5.0 ROADMAP CREATED - READY FOR PHASE 23 PLANNING**
 
-v4.0 archived:
-- milestones/v4.0-ROADMAP.md
-- milestones/v4.0-REQUIREMENTS.md
-- milestones/v4.0-MILESTONE-AUDIT.md
+Files created:
+- .planning/ROADMAP.md - 6 phases, 19 requirements
+- .planning/STATE.md - Updated for v5.0 milestone
+- .planning/REQUIREMENTS.md - Traceability updated
 
-Next: Run `/gsd:new-milestone` to start v4.1 (or v5.0)
+Next: Run `/gsd:plan-phase 23` to create execution plan for Schema Foundation
 
 ---
 *State initialized: 2026-01-18*
-*Last updated: 2026-02-06 — v4.0 milestone archived*
+*Last updated: 2026-02-06 - v5.0 roadmap created*

@@ -70,25 +70,25 @@ Requirements for exchange-scoped data architecture enabling cross-exchange visib
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| EXC-01 | | Pending |
-| EXC-02 | | Pending |
-| EXC-03 | | Pending |
-| EXC-04 | | Pending |
-| DATA-01 | | Pending |
-| DATA-02 | | Pending |
-| DATA-03 | | Pending |
-| DATA-04 | | Pending |
-| DATA-05 | | Pending |
-| SYM-01 | | Pending |
-| SYM-02 | | Pending |
-| SYM-04 | | Pending |
-| CTL-01 | | Pending |
-| CTL-02 | | Pending |
-| CTL-03 | | Pending |
-| CTL-04 | | Pending |
-| VIS-01 | | Pending |
-| VIS-02 | | Pending |
-| VIS-03 | | Pending |
+| EXC-01 | 23 | Pending |
+| EXC-02 | 23 | Pending |
+| EXC-03 | 28 | Pending |
+| EXC-04 | 28 | Pending |
+| DATA-01 | 24 | Pending |
+| DATA-02 | 24 | Pending |
+| DATA-03 | 24 | Pending |
+| DATA-04 | 24 | Pending |
+| DATA-05 | 24 | Pending |
+| SYM-01 | 25 | Pending |
+| SYM-02 | 25 | Pending |
+| SYM-04 | 25 | Pending |
+| CTL-01 | 26 | Pending |
+| CTL-02 | 26 | Pending |
+| CTL-03 | 26 | Pending |
+| CTL-04 | 26 | Pending |
+| VIS-01 | 27 | Pending |
+| VIS-02 | 27 | Pending |
+| VIS-03 | 27 | Pending |
 
 ---
 
