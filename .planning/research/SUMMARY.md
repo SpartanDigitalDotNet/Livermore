@@ -1,18 +1,18 @@
-# Research Summary: Livermore v4.0 User Settings + Runtime Control
+# Research Summary: Livermore v5.0 Distributed Exchange Architecture
 
-**Synthesized:** 2026-01-31
-**Research Files:** STACK.md, FEATURES.md, V4-ARCHITECTURE.md, v4-PITFALLS.md
+**Synthesized:** 2026-02-06
+**Research Files:** STACK.md, FEATURES.md, ARCHITECTURE.md, PITFALLS.md
 **Overall Confidence:** HIGH
 
 ---
 
 ## Executive Summary
 
-Livermore v4.0 adds user-specific settings stored as JSONB on the `users` table, with Redis pub/sub enabling Admin UI to send runtime commands (pause, resume, mode switch) to the API process. This is a well-understood architectural pattern used by trading platforms like 3Commas and Bitsgap. The existing codebase already has mature Redis pub/sub patterns for candle and indicator events, so the control channel follows the same conventions with minimal new infrastructure.
+The v5.0 milestone transforms Livermore from a user-scoped single-exchange platform to an exchange-scoped distributed architecture. The core value proposition is cross-exchange visibility enabling "trigger remotely, buy locally" soft-arbitrage: signals from one exchange (Mike's Coinbase) inform trading decisions on another (Kaia's Binance). The architecture change is fundamentally a **data access pattern shift**, not a ground-up rewrite. Current Redis keys embed `userId:exchangeId` in every key; v5.0 separates "shared data" (exchange-scoped, no userId) from "overflow data" (user-specific symbols not in the shared pool).
 
-The recommended approach is a hybrid architecture: frequently-queried fields (like `runtime_mode`, `is_paused`) as top-level columns with indexes, while flexible configuration (symbols, alerts, thresholds) lives in a versioned JSONB column. This balances query performance with schema flexibility. The critical insight is that pause mode must keep the command subscriber alive - stopping everything defeats the ability to receive a resume command.
+The recommended approach uses **exchange-specific adapters** rather than unified abstraction libraries like CCXT. Each exchange has distinct WebSocket protocols (MEXC uses protobuf), connection lifecycles (KuCoin requires token fetch), rate limits, and geo-restrictions. The existing `BaseExchangeAdapter` pattern should be extended with exchange-specific implementations using the `binance` npm package for Binance.com/US, `kucoin-universal-sdk` for KuCoin, and direct implementation with `protobufjs` for MEXC.
 
-The primary risks are: (1) tenant data leakage if userId is not consistently included in queries and cache keys, (2) Redis pub/sub message loss during disconnection requiring an ack pattern, and (3) JSONB schema evolution without a version field causing crashes when reading old data. All three are well-documented pitfalls with established prevention patterns.
+Key risks center on the migration itself: Redis key migration during live WebSocket data production, symbol normalization across exchanges (BTC-USD vs BTCUSDT), pub/sub channel breakage, and geo-restriction blind spots. Mitigation requires dual-write phases, canonical symbol formats, and explicit geo-checking before exchange connection attempts. The idle startup mode (API awaits `start` command rather than auto-connecting) provides deployment flexibility and resource optimization.
 
 ---
 
@@ -20,88 +20,77 @@ The primary risks are: (1) tenant data leakage if userId is not consistently inc
 
 ### From STACK.md
 
-| Technology | Decision | Rationale |
-|------------|----------|-----------|
-| react-hook-form + @hookform/resolvers | ADD | Best TypeScript DX, integrates with existing Zod schemas |
-| drizzle-orm JSONB | KEEP | Already supports `$type<T>()` for type-safe JSONB |
-| ioredis pub/sub | KEEP | Already used for candle close events, just add control channel |
-| @livermore/coinbase-client | KEEP | `getProducts()` already exists, extend for scanner |
+| Exchange | Key Insight |
+|----------|-------------|
+| Coinbase | Already implemented; 5m native WebSocket candles, 1m aggregated from trades; JWT auth with ES256 |
+| Binance.com | Blocked in US (VPN = ToS violation + ban risk); 24h max connection lifetime; HMAC-SHA256 auth |
+| Binance.US | Nearly identical API to Binance.com; configurable base URLs; smaller pair selection |
+| MEXC | **Uses protobuf encoding** (unique); 30 subscription limit per connection; not available in US |
+| KuCoin | **Must request WebSocket token first** via REST; 300 subscriptions/connection; not available in US |
 
-**No new backend dependencies required.** Only add `react-hook-form` and `@hookform/resolvers` to the admin package.
-
-**Critical Pattern:** Separate Redis clients for pub/sub vs regular operations - subscriber mode blocks all non-subscribe commands.
+**Stack Recommendations:**
+- `binance` npm (tiagosiebler) for Binance.com + Binance.US
+- `kucoin-universal-sdk` for KuCoin (official; old SDK archived March 2025)
+- `protobufjs` for MEXC message parsing
+- Continue native adapter pattern (no CCXT)
 
 ### From FEATURES.md
 
 **Table Stakes (Must Have):**
-- Settings CRUD tRPC endpoints
-- Settings JSONB column on users table
-- Runtime status display (running/paused/mode)
-- Pause/resume/mode-switch commands
-- Symbol watchlist display + add/remove
-- Command acknowledgment protocol
-- Form-based settings editor in Admin
+- `exchanges` metadata table with API limits, geo restrictions, supported timeframes
+- Exchange-scoped Redis keys (`candles:{exchangeId}:{symbol}:{timeframe}`)
+- User overflow keys for positions/manual adds with TTL
+- Tier 1 (Top N by volume) + Tier 2 (user positions) symbol sourcing
+- Idle startup mode with explicit `start` command
+- Cross-exchange pub/sub visibility
 
 **Differentiators:**
-- Partial settings updates via `jsonb_set()`
-- Settings versioning with migration functions
-- Command history audit trail
-- Settings diff view before save
+- Soft-arbitrage signals ("BTC moving on Coinbase" while viewing Binance)
+- Exchange latency comparison for same symbol
+- Exchange health dashboard
 
 **Anti-Features (Do NOT Build):**
-- Process kill button (use pause instead)
-- Per-symbol settings (global settings sufficient)
-- Automatic symbol discovery without approval
-- Complex ACL (single admin user)
-- Settings encryption at rest (credentials in env vars only)
+- Trade execution (monitoring-only platform)
+- Full orderbook aggregation
+- Cross-exchange position netting
+- CCXT integration
+- 1m candle support (5m is minimum)
 
-**Trading Modes Defined:**
-1. `position-monitor` - Default, monitors existing positions
-2. `scalper-macdv` - Active signal hunting on watchlist
-3. `scalper-orderbook` - Stub for v4.1 (returns "not implemented")
+### From ARCHITECTURE.md
 
-### From V4-ARCHITECTURE.md
+**Build Order (7 Phases):**
+1. Database Foundation - `exchanges` table, FK to `user_exchanges`, symbol sourcing tables
+2. Key Pattern Refactor - New shared/user key functions, backward compatibility
+3. Cache Strategy Updates - Tier-aware cache operations, fallback reads
+4. Service Refactor - Remove hardcoded `TEST_USER_ID`, accept exchangeId config
+5. Idle Startup Mode - State machine, `start` command, `--autostart` flag
+6. Symbol Sourcing - Tier 1/Tier 2 management, volume-based refresh
+7. Migration Cleanup - Remove legacy keys, deprecated functions, old code
 
-**Component Structure:**
+**Key Changes:**
+- Redis keys drop userId prefix for shared pool
+- New `exchanges` table centralizes metadata
+- Services receive exchangeId from config, not hardcoded
+- Control channel adds `start` command handler
+- Dual-read pattern during migration (exchange-scoped first, user-scoped fallback)
 
-| Component | Location | Responsibility |
-|-----------|----------|----------------|
-| Settings Router | `apps/api/src/routers/settings.router.ts` | CRUD for user settings |
-| Control Router | `apps/api/src/routers/control.router.ts` | Publish commands to Redis |
-| Command Handler | `apps/api/src/services/command-handler.service.ts` | Subscribe and dispatch commands |
-| Runtime Mode Manager | `apps/api/src/services/runtime-mode-manager.service.ts` | Coordinate pause/resume/mode switch |
-| Settings Loader | `apps/api/src/services/settings-loader.service.ts` | Load/cache PostgreSQL settings |
+### From PITFALLS.md
 
-**Channel Naming Convention:**
-```
-channel:control:{userId}     # Admin -> API commands
-channel:ack:{userId}:{cmdId} # API -> Admin acknowledgments
-```
+**Critical Pitfalls:**
 
-**State Machine:**
-```
-PAUSED <--pause/resume--> RUNNING (position-monitor | scalper-macdv | scalper-orderbook)
-```
+| Pitfall | Prevention |
+|---------|------------|
+| Key migration during live data | Dual-write phase OR stop-the-world; validate candle counts before cutover |
+| Symbol normalization gaps | Canonical `BASE-QUOTE` format; normalize at adapter boundary |
+| Redis Cluster cross-slot failures | Preserve per-key loop pattern; avoid pipeline across slots |
+| Geo-restriction detection failure | IP geolocation at startup; `geo_allowed` in exchanges table |
+| Exchange rate limit divergence | Per-exchange rate limiter; monitor weight headers; exponential backoff |
 
-**Key Insight:** Command subscriber NEVER stops, even when paused. Only data services (WebSocket, indicators, alerts) pause.
-
-### From v4-PITFALLS.md
-
-**Critical Pitfalls (Severity: HIGH):**
-
-| Pitfall | Impact | Prevention |
-|---------|--------|------------|
-| Tenant data leakage via missing userId | Security breach | Audit all hardcoded `TEST_USER_ID = 1`, user-scope all channels/keys |
-| Redis pub/sub message loss | Commands ignored | Ack pattern + state polling fallback |
-| JSONB schema evolution without versioning | Crash on old data | Version field in JSONB, migration on read |
-| Pause stops command subscriber | Can't resume | Separate control plane (always running) from data plane |
-| Cache key format change | All cached data lost | Verify user IDs before upgrade, keep primary user as ID 1 |
-
-**Moderate Pitfalls:**
-- Credential env var name validation failures (validate at save time)
-- Race condition between settings update and active processes (atomic reads)
-- Admin UI showing stale state (refresh on ack)
-- JSONB query performance without indexes (hybrid schema with top-level columns)
+**Phase Warnings:**
+- Phase 1 (Key Migration): Orphaned keys, pub/sub breakage, TypeScript type breakage
+- Phase 2 (Exchange Metadata): Stale metadata after deployment
+- Phase 4 (Idle Startup): Race condition on `start` command
+- Phase 5 (Symbol Sourcing): Shared pool starvation if no user monitors symbol
 
 ---
 
@@ -109,63 +98,74 @@ PAUSED <--pause/resume--> RUNNING (position-monitor | scalper-macdv | scalper-or
 
 ### Suggested Phase Structure
 
-Based on dependencies identified in the research, the recommended build order is:
+The research strongly suggests this phase order based on dependencies and risk:
 
-**Phase 1: Settings Infrastructure**
-- Add `settings` JSONB column to users table (via Atlas migration)
-- Create `UserSettingsSchema` in `@livermore/schemas` with version field
-- Implement `SettingsLoader` service
-- Modify `server.ts` to load settings on startup instead of hardcoded values
-- **Delivers:** Database foundation, typed settings, startup integration
-- **Pitfalls to avoid:** JSONB versioning (Pitfall 4), user_settings table confusion (Pitfall 14)
-- **Research needed:** None - standard patterns
+**Phase 1: Database Foundation**
+- Create `exchanges` metadata table
+- Add `exchange_id` FK to `user_exchanges`
+- Create `exchange_symbols` and `user_symbol_subscriptions` tables
+- **Rationale:** Foundation for all exchange-specific behavior; no code changes until DB ready
+- **Delivers:** Normalized exchange data, centralized metadata
+- **Pitfalls to avoid:** FK constraint ordering (exchanges before user_exchanges FK)
 
-**Phase 2: Settings tRPC + Control Channel**
-- Create `settings.router.ts` with get/update/reset endpoints
-- Add `controlChannel()` to `packages/cache/src/keys.ts`
-- Create `control.router.ts` for publishing commands
-- Create `command-handler.service.ts` (basic structure)
-- **Delivers:** API for settings CRUD, command infrastructure
-- **Pitfalls to avoid:** Subscriber connection leaks (Pitfall 3), channel naming (Pitfall 10)
-- **Research needed:** None - follows existing candle pub/sub pattern
+**Phase 2: Key Pattern + Cache Strategies**
+- Add new shared/user key functions to `keys.ts`
+- Update cache strategies for tier-aware writes
+- Implement dual-read pattern (shared first, user fallback)
+- **Rationale:** Must stabilize key format before touching services
+- **Delivers:** Backward-compatible key infrastructure
+- **Pitfalls to avoid:** Redis Cluster cross-slot issues, TypeScript breakage
 
-**Phase 3: Runtime Mode Manager**
-- Create `runtime-mode-manager.service.ts` with state machine
-- Implement pause/resume (keeping command subscriber alive)
-- Implement mode switching
-- Wire up existing services (CoinbaseAdapter, IndicatorService, AlertService)
-- **Delivers:** Pause/resume/mode-switch working end-to-end
-- **Pitfalls to avoid:** Pause stops everything (Pitfall 5), race conditions (Pitfall 8)
-- **Research needed:** None - state machine pattern well-documented
+**Phase 3: Service Refactor**
+- Remove hardcoded `TEST_USER_ID`, `TEST_EXCHANGE_ID`
+- Services accept exchangeId from config
+- Update subscription patterns for new channel format
+- **Rationale:** Services must use new key patterns before new adapters
+- **Delivers:** Configurable services, no hardcoded IDs
+- **Pitfalls to avoid:** Pub/sub channel migration breaks subscribers
 
-**Phase 4: Symbol Management**
-- Add/remove symbol commands
-- Scanner integration (fetch top symbols by volume)
-- Symbol list component in Admin UI
-- **Delivers:** Dynamic symbol management without restart
-- **Pitfalls to avoid:** Scanner auto-add without approval (anti-feature)
-- **Research needed:** None - extends existing `getProducts()` API
+**Phase 4: Idle Startup Mode**
+- Implement `IdleStartupManager` with state machine
+- Add `start` command to ControlChannelService
+- Add `--autostart <exchange>` CLI flag
+- **Rationale:** Required for clean multi-exchange deployment
+- **Delivers:** Lazy initialization, explicit resource control
+- **Pitfalls to avoid:** Race condition on `start` command before services ready
 
-**Phase 5: Admin UI Settings**
-- Install react-hook-form in admin package
-- Settings page with form-based editor
-- Control panel component (status, pause/resume, mode switch)
-- Command ack + refresh pattern
-- **Delivers:** Full Admin control panel
-- **Pitfalls to avoid:** Stale UI state (Pitfall 9)
-- **Research needed:** None - standard React patterns
+**Phase 5: Symbol Sourcing + Cross-Exchange Visibility**
+- Implement `SymbolSourceService` for Tier 1/Tier 2
+- Tier 1 refresh from exchange volume endpoints
+- Cross-exchange pub/sub channels
+- **Rationale:** Symbol sourcing depends on all prior phases
+- **Delivers:** Dynamic symbol management, cross-exchange signals
+- **Pitfalls to avoid:** Shared pool starvation
+
+**Phase 6: Binance Adapter**
+- Implement BinanceAdapter extending BaseExchangeAdapter
+- Use `binance` npm package
+- Per-exchange rate limiter
+- **Rationale:** Second exchange validates multi-exchange architecture
+- **Delivers:** Binance.com + Binance.US support
+- **Pitfalls to avoid:** Rate limit divergence, geo-restriction blind spots
+
+**Phase 7: Migration Cleanup + Additional Exchanges**
+- Remove legacy key functions
+- Delete orphaned Redis keys
+- Add MEXC adapter (protobuf)
+- Add KuCoin adapter (token flow)
+- **Rationale:** Cleanup only after stable rollout
+- **Delivers:** Clean codebase, full exchange support
+- **Pitfalls to avoid:** Orphaned keys consuming memory
 
 ### Research Flags
 
 | Phase | Research Needed | Rationale |
 |-------|-----------------|-----------|
-| Phase 1 | NO | Standard JSONB + Drizzle pattern |
-| Phase 2 | NO | Follows existing pub/sub pattern in codebase |
-| Phase 3 | NO | State machine pattern well-documented |
-| Phase 4 | NO | Extends existing Coinbase client |
-| Phase 5 | NO | Standard React Hook Form |
-
-All patterns are well-documented with existing codebase examples. No `/gsd:research-phase` commands needed.
+| Phase 2 | MINIMAL | Well-documented Redis patterns; existing code provides template |
+| Phase 3 | MINIMAL | Internal refactor; patterns already established |
+| Phase 6 | YES - `/gsd:research-phase` | Binance rate limits, WebSocket lifecycle, symbol format differences |
+| Phase 7 (MEXC) | YES - `/gsd:research-phase` | Protobuf encoding is unique; requires proto definition research |
+| Phase 7 (KuCoin) | YES - `/gsd:research-phase` | Token-first connection flow is unique |
 
 ---
 
@@ -173,48 +173,57 @@ All patterns are well-documented with existing codebase examples. No `/gsd:resea
 
 | Area | Confidence | Notes |
 |------|------------|-------|
-| Stack | HIGH | All libraries either already in codebase or well-documented (react-hook-form) |
-| Features | HIGH | Feature list derived from industry patterns (3Commas, Bitsgap) + PROJECT.md |
-| Architecture | HIGH | Extends existing patterns (Redis pub/sub, tRPC routers, services) |
-| Pitfalls | HIGH | All pitfalls sourced from official docs (Redis, PostgreSQL) and AWS whitepapers |
+| Stack | HIGH | Official documentation verified; library recommendations based on active maintenance |
+| Features | HIGH | Based on existing codebase patterns + PROJECT.md goals |
+| Architecture | HIGH | Based on comprehensive codebase analysis; 13+ file audit for hardcoded values |
+| Pitfalls | HIGH | Specific codebase references provided; Redis Cluster issues already encountered and solved |
 
-### Gaps to Address During Planning
+### Gaps to Address
 
-1. **user_settings table vs users.settings column**: Current codebase has `user_settings` table (global key-value). Need to clarify: keep both (app_settings vs user_settings), or consolidate.
-
-2. **Primary user ID verification**: Before deployment, verify your database user ID is 1 to avoid cache key migration issues.
-
-3. **Env var name conventions**: Document expected format for credential env var names (e.g., `Coinbase_ApiKeyId`, `Coinbase_PrivateKey`).
+1. **MEXC Protobuf Definitions:** Need to verify proto files from https://github.com/mexcdevelop/websocket-proto compile cleanly with protobufjs
+2. **KuCoin Universal SDK:** New SDK (March 2025); limited production usage data
+3. **Binance.US State Restrictions:** 11 states blocked or paused; need dynamic geo-check, not hardcoded list
+4. **Tier 1 Symbol Refresh Frequency:** Research didn't determine optimal refresh interval (hourly? daily?)
+5. **Cross-Exchange Latency:** No research on expected price discrepancy windows between exchanges
 
 ---
 
 ## Sources
 
-### Official Documentation (HIGH confidence)
-- [Drizzle ORM PostgreSQL Column Types](https://orm.drizzle.team/docs/column-types/pg)
-- [ioredis GitHub - Pub/Sub](https://github.com/redis/ioredis)
-- [Redis Pub/Sub Documentation](https://redis.io/docs/latest/develop/pubsub/)
-- [React Hook Form useForm](https://react-hook-form.com/docs/useform)
-- [@hookform/resolvers](https://github.com/react-hook-form/resolvers)
-- [Coinbase Advanced Trade API](https://docs.cdp.coinbase.com/advanced-trade/docs/api-overview/)
-- [AWS SaaS Tenant Isolation](https://docs.aws.amazon.com/whitepapers/latest/saas-architecture-fundamentals/tenant-isolation.html)
+### Official Exchange Documentation
+- [Binance WebSocket Streams](https://developers.binance.com/docs/binance-spot-api-docs/web-socket-streams)
+- [Binance Rate Limits](https://developers.binance.com/docs/binance-spot-api-docs/websocket-api/rate-limits)
+- [Binance.US API Docs](https://docs.binance.us/)
+- [Binance.US WebSocket (GitHub)](https://github.com/binance-us/binance-us-api-docs/blob/master/web-socket-streams.md)
+- [MEXC WebSocket Market Streams](https://www.mexc.com/api-docs/spot-v3/websocket-market-streams)
+- [MEXC Protobuf Definitions](https://github.com/mexcdevelop/websocket-proto)
+- [KuCoin WebSocket Klines](https://www.kucoin.com/docs/websocket/spot-trading/public-channels/klines)
+- [KuCoin Rate Limits](https://www.kucoin.com/docs/basic-info/request-rate-limit/websocket)
+- [Coinbase WebSocket Channels](https://docs.cdp.coinbase.com/advanced-trade/docs/ws-channels)
 
-### PostgreSQL JSONB Patterns (HIGH confidence)
-- [When To Avoid JSONB - Heap](https://www.heap.io/blog/when-to-avoid-jsonb-in-a-postgresql-schema)
-- [PostgreSQL JSONB Indexing Strategies](https://www.rickychilcott.com/2025/09/22/postgresql-indexing-strategies-for-jsonb-columns/)
-- [Zero-Downtime JSONB Migration](https://medium.com/@shinyjai2011/zero-downtime-postgresql-jsonb-migration-a-practical-guide-for-scalable-schema-evolution-9f74124ef4a1)
+### Libraries
+- [binance npm (tiagosiebler)](https://www.npmjs.com/package/binance)
+- [kucoin-universal-sdk GitHub](https://github.com/Kucoin/kucoin-universal-sdk)
+- [@binance/connector npm](https://www.npmjs.com/package/@binance/connector)
 
-### Trading Platform References (MEDIUM confidence)
-- [3Commas Risk Management](https://3commas.io/blog/ai-trading-bot-risk-management-guide)
-- [Altrady Watchlists](https://www.altrady.com/features/watchlists-and-price-alerts)
-- [Bitsgap Platform](https://bitsgap.com/)
+### Migration and Architecture
+- [Redis MIGRATE Command](https://redis.io/docs/latest/commands/migrate/)
+- [Zero-Downtime Database Migration Guide](https://dev.to/ari-ghosh/zero-downtime-database-migration-the-definitive-guide-5672)
+- [ioredis Cross-Slot Pipeline Issue #1602](https://github.com/redis/ioredis/issues/1602)
 
-### Existing Codebase
-- `packages/cache/src/keys.ts` - Channel naming patterns
-- `apps/api/src/server.ts` - Service initialization
-- `apps/api/src/services/indicator-calculation.service.ts` - Pub/sub subscriber pattern
-- `data/DESKTOP-5FK78SF.settings.json` - Current settings structure
+### Geo-Restrictions
+- [Binance.US Supported Regions](https://support.binance.us/en/articles/9842798-list-of-supported-and-unsupported-states-and-regions)
+- [Binance Restricted Countries](https://www.cryptowinrate.com/binance-restricted-supported-countries)
+
+### Codebase References
+- `packages/cache/src/keys.ts` - Current key patterns
+- `packages/cache/src/strategies/candle-cache.ts` - Cache strategy implementation
+- `packages/database/drizzle/schema.ts` - Current database schema
+- `packages/coinbase-client/src/adapter/coinbase-adapter.ts` - Adapter implementation
+- `apps/api/src/server.ts` - Startup sequence
+- `apps/api/src/services/indicator-calculation.service.ts` - Service patterns
+- `.planning/PROJECT.md` - v5.0 goals and requirements
 
 ---
 
-*Research synthesis complete. Ready for roadmap creation.*
+*Research synthesis complete. Ready for requirements definition.*

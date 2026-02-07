@@ -1,797 +1,633 @@
-# Architecture Research: v2.0 Data Pipeline
+# Architecture Research: v5.0 Multi-Exchange
 
-**Researched:** 2026-01-19
-**Confidence:** HIGH (based on existing codebase analysis + industry patterns)
+**Researched:** 2026-02-06
+**Confidence:** HIGH (based on codebase analysis)
+**Mode:** Integration research for exchange-scoped data architecture
 
 ## Executive Summary
 
-This document defines the exchange adapter architecture for the v2.0 data pipeline redesign. The architecture enables multi-exchange support (Coinbase now, Binance.us and Binance.com later) while maintaining a unified indicator calculation service that is exchange-agnostic.
+The v5.0 architecture change from user-scoped to exchange-scoped data requires coordinated changes across 4 layers: Redis keys, database schema, cache strategies, and services. The existing architecture cleanly separates these concerns, making the migration straightforward but requiring careful sequencing to maintain backward compatibility during the transition.
 
-**Key insight:** The adapter pattern must normalize exchange-specific data formats into a unified schema, with each adapter responsible for WebSocket connection management, data transformation, and cache writes. The indicator service consumes only from cache and events - never from adapters directly.
+The key insight: Redis keys currently embed `userId` and `exchangeId` in every key. The v5.0 model separates "shared data" (exchange-scoped, no userId) from "overflow data" (user-specific symbols not in the shared pool). This is a data access pattern change, not a fundamental architecture change.
 
-## Component Overview
+## Current Architecture (v4.0)
 
-### Layer Diagram
+### Component Overview
 
 ```
-                    ┌─────────────────────────────────────────────────┐
-                    │              Application Layer                   │
-                    │  ┌─────────────┐  ┌───────────────────────────┐ │
-                    │  │   Alerts    │  │  tRPC API (existing)      │ │
-                    │  └──────▲──────┘  └───────────────────────────┘ │
-                    │         │                                        │
-                    └─────────┼────────────────────────────────────────┘
-                              │ subscribes
-                    ┌─────────┼────────────────────────────────────────┐
-                    │         │        Indicator Layer                 │
-                    │  ┌──────┴──────────────────────────────────────┐ │
-                    │  │        Indicator Calculation Service         │ │
-                    │  │  - Subscribes to candle:close events        │ │
-                    │  │  - Reads history from unified cache         │ │
-                    │  │  - Calculates MACDV (exchange-agnostic)     │ │
-                    │  │  - Publishes indicator updates              │ │
-                    │  └──────▲──────────────────────────────────────┘ │
-                    │         │ subscribes to events                   │
-                    │         │ reads from cache                       │
-                    └─────────┼────────────────────────────────────────┘
-                              │
-                    ┌─────────┼────────────────────────────────────────┐
-                    │         │         Cache Layer                    │
-                    │  ┌──────┴──────────────────────────────────────┐ │
-                    │  │           Unified Candle Cache               │ │
-                    │  │  Redis sorted sets by timestamp             │ │
-                    │  │  Key: candles:{user}:{exchange}:{sym}:{tf}  │ │
-                    │  └──────▲──────────────────────────────────────┘ │
-                    │         │ writes                                 │
-                    └─────────┼────────────────────────────────────────┘
-                              │
-                    ┌─────────┼────────────────────────────────────────┐
-                    │         │        Adapter Layer                   │
-                    │  ┌──────┴──────┐  ┌───────────────┐  ┌────────┐ │
-                    │  │  Coinbase   │  │  Binance.us   │  │ Binance│ │
-                    │  │  Adapter    │  │  Adapter      │  │ Adapter│ │
-                    │  │  (v2.0)     │  │  (future)     │  │ (future│ │
-                    │  └──────▲──────┘  └───────────────┘  └────────┘ │
-                    │         │                                        │
-                    └─────────┼────────────────────────────────────────┘
-                              │
-                    ┌─────────┼────────────────────────────────────────┐
-                    │         │      External Data Sources             │
-                    │  ┌──────┴──────┐  ┌───────────────┐  ┌────────┐ │
-                    │  │  Coinbase   │  │  Binance.us   │  │ Binance│ │
-                    │  │  WebSocket  │  │  WebSocket    │  │ WebSkt │ │
-                    │  └─────────────┘  └───────────────┘  └────────┘ │
-                    └──────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────┐
+│                              API Server                                  │
+│  ┌─────────────────────────────────────────────────────────────────────┐│
+│  │                        Startup Sequence                              ││
+│  │  1. validateEnv()                                                   ││
+│  │  2. getDbClient() + testDatabaseConnection()                        ││
+│  │  3. getRedisClient() + testRedisConnection()                        ││
+│  │  4. getAccountSymbols() → symbols from Coinbase positions           ││
+│  │  5. cleanupExcludedSymbols() → remove old keys                      ││
+│  │  6. StartupBackfillService.backfill()                               ││
+│  │  7. Register tRPC routers                                           ││
+│  │  8. IndicatorCalculationService.start()                             ││
+│  │  9. IndicatorCalculationService.forceRecalculate() (warmup)         ││
+│  │  10. BoundaryRestService.start()                                    ││
+│  │  11. CoinbaseAdapter.connect() + subscribe()                        ││
+│  │  12. AlertEvaluationService.start()                                 ││
+│  │  13. Build ServiceRegistry                                          ││
+│  │  14. ControlChannelService initialized lazily                       ││
+│  └─────────────────────────────────────────────────────────────────────┘│
+└─────────────────────────────────────────────────────────────────────────┘
 ```
 
-### Component Responsibilities
+### Current Redis Key Patterns
 
-| Component | Responsibility | Owns |
-|-----------|----------------|------|
-| **Exchange Adapter** | WebSocket connection, data normalization, cache writes, event emission | Exchange-specific logic, auth, rate limits |
-| **Unified Candle Cache** | Storage, retrieval, TTL management | Redis sorted sets, key patterns |
-| **Indicator Service** | Calculation orchestration, event subscription | MACDV logic, calculation scheduling |
-| **Event Bus** | Candle close event routing | Redis pub/sub channels |
-| **Reconciliation Job** | Gap detection, backfill via REST | Periodic health checks |
-
-## Interface Definitions
-
-### Core Exchange Adapter Interface
+All keys are user-scoped (from `packages/cache/src/keys.ts`):
 
 ```typescript
-import type { Candle, Timeframe, Ticker } from '@livermore/schemas';
-import type { EventEmitter } from 'events';
+// Data keys
+candles:${userId}:${exchangeId}:${symbol}:${timeframe}
+ticker:${userId}:${exchangeId}:${symbol}
+indicator:${userId}:${exchangeId}:${symbol}:${timeframe}:${type}
 
-/**
- * Exchange identifier enum
- * Used for cache key scoping and adapter selection
- */
-export type ExchangeId = 'coinbase' | 'binance-us' | 'binance';
+// Pub/sub channels
+channel:candle:${userId}:${exchangeId}:${symbol}:${timeframe}
+channel:candle:close:${userId}:${exchangeId}:${symbol}:${timeframe}
+channel:ticker:${userId}:${exchangeId}:${symbol}
+channel:indicator:${userId}:${exchangeId}:${symbol}:${timeframe}:${type}
 
-/**
- * Connection state for adapter lifecycle management
- */
-export type ConnectionState = 'disconnected' | 'connecting' | 'connected' | 'reconnecting' | 'error';
-
-/**
- * Events emitted by exchange adapters
- * Using TypeScript declaration merging for type-safe EventEmitter
- */
-export interface ExchangeAdapterEvents {
-  'candle:close': (candle: UnifiedCandle) => void;
-  'candle:update': (candle: UnifiedCandle) => void;  // For live candle updates
-  'ticker:update': (ticker: Ticker) => void;
-  'connection:state': (state: ConnectionState) => void;
-  'error': (error: ExchangeAdapterError) => void;
-}
-
-/**
- * Unified candle schema - exchange-agnostic
- * All adapters must transform exchange-specific data to this format
- */
-export interface UnifiedCandle {
-  /** Unix timestamp in milliseconds (candle open time) */
-  timestamp: number;
-  /** Opening price */
-  open: number;
-  /** Highest price during period */
-  high: number;
-  /** Lowest price during period */
-  low: number;
-  /** Closing price */
-  close: number;
-  /** Trading volume in base currency */
-  volume: number;
-  /** Trading pair symbol in unified format (e.g., 'BTC-USD') */
-  symbol: string;
-  /** Candle timeframe */
-  timeframe: Timeframe;
-  /** Source exchange */
-  exchange: ExchangeId;
-  /** True if candle is closed/finalized */
-  isClosed: boolean;
-}
-
-/**
- * Standardized error type for consistent error handling across adapters
- */
-export interface ExchangeAdapterError {
-  code: 'CONNECTION_FAILED' | 'AUTH_FAILED' | 'RATE_LIMITED' | 'PARSE_ERROR' | 'UNKNOWN';
-  message: string;
-  exchange: ExchangeId;
-  retryable: boolean;
-  originalError?: unknown;
-}
-
-/**
- * Adapter capabilities - what each exchange supports
- */
-export interface ExchangeCapabilities {
-  /** Supported candle timeframes */
-  supportedTimeframes: Timeframe[];
-  /** Whether WebSocket provides native candles (vs building from tickers) */
-  hasNativeCandles: boolean;
-  /** Native candle granularity if hasNativeCandles is true */
-  nativeCandleTimeframe?: Timeframe;
-  /** Maximum symbols per WebSocket connection */
-  maxSymbolsPerConnection: number;
-  /** REST API rate limits (requests per second) */
-  restRateLimit: number;
-}
-
-/**
- * Base interface all exchange adapters must implement
- */
-export interface IExchangeAdapter extends EventEmitter {
-  /** Exchange identifier */
-  readonly exchangeId: ExchangeId;
-
-  /** Exchange capabilities */
-  readonly capabilities: ExchangeCapabilities;
-
-  /** Current connection state */
-  readonly connectionState: ConnectionState;
-
-  /**
-   * Initialize adapter with credentials
-   */
-  initialize(config: ExchangeAdapterConfig): Promise<void>;
-
-  /**
-   * Start WebSocket connection and subscribe to symbols
-   * @param symbols - Array of symbols in exchange-native format
-   */
-  start(symbols: string[]): Promise<void>;
-
-  /**
-   * Stop WebSocket connection and cleanup
-   */
-  stop(): Promise<void>;
-
-  /**
-   * Subscribe to additional symbols (while connected)
-   */
-  subscribeSymbols(symbols: string[]): Promise<void>;
-
-  /**
-   * Unsubscribe from symbols (while connected)
-   */
-  unsubscribeSymbols(symbols: string[]): Promise<void>;
-
-  /**
-   * Fetch historical candles via REST API (for backfill)
-   * @param symbol - Symbol to fetch
-   * @param timeframe - Candle timeframe
-   * @param start - Start timestamp (ms)
-   * @param end - End timestamp (ms)
-   */
-  fetchHistoricalCandles(
-    symbol: string,
-    timeframe: Timeframe,
-    start: number,
-    end: number
-  ): Promise<UnifiedCandle[]>;
-
-  /**
-   * Get adapter health status
-   */
-  getHealth(): AdapterHealth;
-}
-
-/**
- * Adapter configuration
- */
-export interface ExchangeAdapterConfig {
-  /** API credentials */
-  apiKey: string;
-  apiSecret: string;
-  /** Optional passphrase (some exchanges require this) */
-  passphrase?: string;
-  /** User ID for cache scoping */
-  userId: number;
-  /** Exchange ID for cache scoping */
-  exchangeDbId: number;
-}
-
-/**
- * Health status for monitoring
- */
-export interface AdapterHealth {
-  exchange: ExchangeId;
-  connected: boolean;
-  lastMessageAt: number | null;
-  subscribedSymbols: string[];
-  errorCount: number;
-  lastError: string | null;
-}
+// Control channels (user-scoped by identity)
+livermore:commands:${identitySub}
+livermore:responses:${identitySub}
 ```
 
-### Candle Close Event Schema
+### Current Database Schema
 
-```typescript
-/**
- * Event payload for candle close events
- * Published to Redis pub/sub when a candle finalizes
- */
-export interface CandleCloseEvent {
-  /** Event type identifier */
-  type: 'candle:close';
-  /** The closed candle */
-  candle: UnifiedCandle;
-  /** Timestamp when event was emitted */
-  emittedAt: number;
-}
+From `packages/database/drizzle/schema.ts`:
 
-/**
- * Redis channel naming for candle events
- * Pattern: channel:candle:close:{userId}:{exchangeId}:{symbol}:{timeframe}
- */
-export function candleCloseChannel(
-  userId: number,
-  exchangeId: number,
-  symbol: string,
-  timeframe: Timeframe
-): string {
-  return `channel:candle:close:${userId}:${exchangeId}:${symbol}:${timeframe}`;
-}
+```sql
+-- user_exchanges: per-user exchange connections
+user_exchanges (
+  id SERIAL PRIMARY KEY,
+  user_id INT REFERENCES users(id),
+  exchange_name VARCHAR(50),           -- 'coinbase', 'binance', etc.
+  api_key_env_var VARCHAR(100),        -- 'COINBASE_API_KEY'
+  api_secret_env_var VARCHAR(100),     -- 'COINBASE_API_SECRET'
+  is_active BOOLEAN,
+  is_default BOOLEAN,
+  ...
+)
 
-/**
- * Wildcard channel for all candle closes (for indicator service)
- * Pattern: channel:candle:close:{userId}:*
- */
-export function candleCloseWildcard(userId: number): string {
-  return `channel:candle:close:${userId}:*`;
-}
+-- candles: user-scoped historical data (rarely used, mostly in Redis)
+candles (
+  user_id INT,
+  exchange_id INT REFERENCES user_exchanges(id),
+  symbol VARCHAR(20),
+  timeframe VARCHAR(5),
+  ...
+)
 ```
 
-### Indicator Service Interface (Refactored)
+**Problem:** `user_exchanges` stores exchange NAME (string), not a reference to an exchange metadata table. No centralized exchange configuration exists.
 
-```typescript
-/**
- * Refactored indicator service that consumes from cache only
- * No direct REST API calls during normal operation
- */
-export interface IIndicatorService {
-  /**
-   * Start the indicator service
-   * - Subscribes to candle close events
-   * - Performs initial warmup from cache
-   */
-  start(configs: IndicatorConfig[]): Promise<void>;
-
-  /**
-   * Stop the service
-   */
-  stop(): void;
-
-  /**
-   * Handle candle close event (called by event subscription)
-   * Reads from cache, calculates indicators, publishes results
-   */
-  onCandleClose(event: CandleCloseEvent): Promise<void>;
-
-  /**
-   * Get current indicator value
-   */
-  getIndicator(
-    symbol: string,
-    timeframe: Timeframe,
-    type: string
-  ): Promise<CachedIndicatorValue | null>;
-}
-```
-
-## Data Flow
-
-### Normal Operation (WebSocket-Driven)
-
-```
-1. WEBSOCKET MESSAGE RECEIVED
-   ┌──────────────────────────────────────────────────────────────┐
-   │ Coinbase WebSocket sends candle update:                      │
-   │ {                                                            │
-   │   "channel": "candles",                                      │
-   │   "events": [{                                               │
-   │     "type": "update",                                        │
-   │     "candles": [{ start: "1705600800", open: "42000", ... }] │
-   │   }]                                                         │
-   │ }                                                            │
-   └──────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-2. ADAPTER TRANSFORMS TO UNIFIED FORMAT
-   ┌──────────────────────────────────────────────────────────────┐
-   │ CoinbaseAdapter.handleCandleMessage():                       │
-   │                                                              │
-   │ const unifiedCandle: UnifiedCandle = {                       │
-   │   timestamp: parseInt(raw.start) * 1000,  // Convert to ms   │
-   │   open: parseFloat(raw.open),                                │
-   │   high: parseFloat(raw.high),                                │
-   │   low: parseFloat(raw.low),                                  │
-   │   close: parseFloat(raw.close),                              │
-   │   volume: parseFloat(raw.volume),                            │
-   │   symbol: raw.product_id,  // Already in correct format      │
-   │   timeframe: '5m',         // Coinbase native granularity    │
-   │   exchange: 'coinbase',                                      │
-   │   isClosed: this.isCandleClosed(raw.start)                   │
-   │ };                                                           │
-   └──────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-3. ADAPTER WRITES TO CACHE
-   ┌──────────────────────────────────────────────────────────────┐
-   │ // Write to Redis sorted set                                 │
-   │ await this.candleCache.addCandle(                            │
-   │   this.config.userId,                                        │
-   │   this.config.exchangeDbId,                                  │
-   │   unifiedCandle                                              │
-   │ );                                                           │
-   │                                                              │
-   │ // Key: candles:1:1:BTC-USD:5m                              │
-   │ // Score: 1705600800000 (timestamp)                          │
-   │ // Value: JSON.stringify(unifiedCandle)                      │
-   └──────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-4. IF CANDLE CLOSED, EMIT EVENT
-   ┌──────────────────────────────────────────────────────────────┐
-   │ if (unifiedCandle.isClosed) {                                │
-   │   // Emit locally for same-process consumers                 │
-   │   this.emit('candle:close', unifiedCandle);                  │
-   │                                                              │
-   │   // Publish to Redis for distributed consumers              │
-   │   const event: CandleCloseEvent = {                          │
-   │     type: 'candle:close',                                    │
-   │     candle: unifiedCandle,                                   │
-   │     emittedAt: Date.now()                                    │
-   │   };                                                         │
-   │   await redis.publish(                                       │
-   │     candleCloseChannel(userId, exchangeId, symbol, tf),      │
-   │     JSON.stringify(event)                                    │
-   │   );                                                         │
-   │ }                                                            │
-   └──────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-5. INDICATOR SERVICE RECEIVES EVENT
-   ┌──────────────────────────────────────────────────────────────┐
-   │ // Via local EventEmitter (same process)                     │
-   │ coinbaseAdapter.on('candle:close', (candle) => {             │
-   │   indicatorService.onCandleClose(candle);                    │
-   │ });                                                          │
-   │                                                              │
-   │ // Or via Redis pub/sub (distributed)                        │
-   │ subscriber.psubscribe(candleCloseWildcard(userId));          │
-   └──────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-6. INDICATOR SERVICE READS FROM CACHE
-   ┌──────────────────────────────────────────────────────────────┐
-   │ async onCandleClose(candle: UnifiedCandle): Promise<void> {  │
-   │   // Read 60+ candles from cache (NOT from REST API)         │
-   │   const history = await this.candleCache.getRecentCandles(   │
-   │     this.userId,                                             │
-   │     candle.exchange === 'coinbase' ? 1 : 2, // exchangeDbId  │
-   │     candle.symbol,                                           │
-   │     candle.timeframe,                                        │
-   │     200 // Buffer for calculations                           │
-   │   );                                                         │
-   │                                                              │
-   │   if (history.length < 60) {                                 │
-   │     logger.warn('Insufficient history for MACDV');           │
-   │     return;                                                  │
-   │   }                                                          │
-   │                                                              │
-   │   // Calculate MACDV                                         │
-   │   const result = macdVWithStage(history);                    │
-   │   await this.indicatorCache.setIndicator(..., result);       │
-   │   await this.indicatorCache.publishUpdate(..., result);      │
-   │ }                                                            │
-   └──────────────────────────────────────────────────────────────┘
-```
-
-### Startup Backfill Flow
-
-```
-1. ADAPTER STARTUP
-   ┌────────────────────────────────────────────────────────────┐
-   │ async start(symbols: string[]): Promise<void> {            │
-   │   // Phase 1: Historical backfill via REST                 │
-   │   await this.backfillHistoricalCandles(symbols);           │
-   │                                                            │
-   │   // Phase 2: Connect WebSocket for live updates           │
-   │   await this.connectWebSocket();                           │
-   │   await this.subscribeChannels(symbols);                   │
-   │ }                                                          │
-   └────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-2. HISTORICAL BACKFILL (REST API)
-   ┌────────────────────────────────────────────────────────────┐
-   │ async backfillHistoricalCandles(symbols: string[]) {       │
-   │   for (const timeframe of this.capabilities.supportedTfs) {│
-   │     // Process in batches to respect rate limits           │
-   │     for (const batch of chunk(symbols, BATCH_SIZE)) {      │
-   │       await Promise.all(batch.map(async (symbol) => {      │
-   │         const candles = await this.fetchHistoricalCandles( │
-   │           symbol,                                          │
-   │           timeframe,                                       │
-   │           now - (MIN_CANDLES * timeframeToMs(timeframe)),  │
-   │           now                                              │
-   │         );                                                 │
-   │         await this.candleCache.addCandles(..., candles);   │
-   │       }));                                                 │
-   │       await sleep(BATCH_DELAY_MS); // Rate limit           │
-   │     }                                                      │
-   │   }                                                        │
-   │ }                                                          │
-   └────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-3. INDICATOR SERVICE WARMUP
-   ┌────────────────────────────────────────────────────────────┐
-   │ // After backfill, indicator service initializes           │
-   │ // from cache (no additional REST calls)                   │
-   │                                                            │
-   │ async start(configs: IndicatorConfig[]): Promise<void> {   │
-   │   for (const config of configs) {                          │
-   │     const candles = await this.candleCache.getRecentCandles│
-   │       ..., config.symbol, config.timeframe, 200            │
-   │     );                                                     │
-   │     if (candles.length >= MIN_CANDLES) {                   │
-   │       await this.calculateIndicators(config, candles);     │
-   │     }                                                      │
-   │   }                                                        │
-   │ }                                                          │
-   └────────────────────────────────────────────────────────────┘
-```
-
-### Higher Timeframe Aggregation
+### Current Service Architecture
 
 ```
 ┌────────────────────────────────────────────────────────────────┐
-│ TIMEFRAME AGGREGATION STRATEGY                                  │
-│                                                                 │
-│ Coinbase provides native 5m candles via WebSocket.              │
-│ Higher timeframes (15m, 1h, 4h, 1d) are aggregated from 5m.     │
-│ 1m candles are still built from ticker events (existing logic). │
-│                                                                 │
-│ ┌─────────────────────────────────────────────────────────────┐ │
-│ │ Source      │ Timeframe │ Method                           │ │
-│ ├─────────────┼───────────┼──────────────────────────────────┤ │
-│ │ WS ticker   │ 1m        │ Aggregate from tick data         │ │
-│ │ WS candles  │ 5m        │ Native from Coinbase             │ │
-│ │ Cache       │ 15m       │ Aggregate 3x 5m candles          │ │
-│ │ Cache       │ 30m       │ Aggregate 6x 5m candles          │ │
-│ │ Cache       │ 1h        │ Aggregate 12x 5m candles         │ │
-│ │ Cache       │ 4h        │ Aggregate 48x 5m candles         │ │
-│ │ Cache       │ 1d        │ Aggregate 288x 5m candles        │ │
-│ └─────────────────────────────────────────────────────────────┘ │
-│                                                                 │
-│ Aggregation runs in indicator service when 5m candle closes:    │
-│                                                                 │
-│ async aggregate5mToHigherTf(candle: UnifiedCandle) {            │
-│   const now = candle.timestamp;                                 │
-│   for (const tf of ['15m', '30m', '1h', '4h', '1d']) {          │
-│     if (this.isTimeframeBoundary(now, tf)) {                    │
-│       const sourceCandles = await this.candleCache.getCandles   │
-│         InRange(..., now - timeframeToMs(tf), now);             │
-│       const aggregated = this.aggregateCandles(sourceCandles);  │
-│       await this.candleCache.addCandle(..., aggregated);        │
-│       this.emit('candle:close', aggregated);                    │
-│     }                                                           │
-│   }                                                             │
-│ }                                                               │
+│                      CoinbaseAdapter                            │
+│  - Hardcoded userId=1, exchangeId=1                            │
+│  - Publishes to: channel:candle:close:1:1:{symbol}:5m          │
+│  - Writes to: candles:1:1:{symbol}:5m                          │
+└────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌────────────────────────────────────────────────────────────────┐
+│                  IndicatorCalculationService                    │
+│  - Hardcoded TEST_USER_ID=1, TEST_EXCHANGE_ID=1                │
+│  - Subscribes: channel:candle:close:1:1:*:*                    │
+│  - Reads from: candles:1:1:{symbol}:{timeframe}                │
+│  - Writes to: indicator:1:1:{symbol}:{timeframe}:macd-v        │
+└────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌────────────────────────────────────────────────────────────────┐
+│                   AlertEvaluationService                        │
+│  - Hardcoded TEST_USER_ID=1, TEST_EXCHANGE_ID=1                │
+│  - Subscribes: channel:ticker:1:1:{symbol}                     │
+│  - Subscribes: channel:indicator:1:1:{symbol}:{tf}:macd-v      │
 └────────────────────────────────────────────────────────────────┘
 ```
 
-## Exchange-Specific Considerations
+**Key observation:** Every service hardcodes `userId=1` and `exchangeId=1`. The multi-user/multi-exchange infrastructure exists in the key patterns but isn't actually used.
 
-### Coinbase
+## Proposed Architecture (v5.0)
 
-| Aspect | Details |
-|--------|---------|
-| WebSocket URL | `wss://advanced-trade-ws.coinbase.com` |
-| Native candles | Yes, 5m granularity via `candles` channel |
-| Candle message | `{ channel: "candles", events: [{ type: "snapshot"|"update", candles: [...] }] }` |
-| Symbol format | `BTC-USD` (hyphenated) |
-| Auth | JWT token per subscription |
-| Timeframes | 1m, 5m, 15m, 30m, 1h, 2h, 6h, 1d (no 4h!) |
-| Rate limits | ~100 REST requests/second |
+### Component Diagram
 
-**Coinbase quirk:** No native 4h timeframe. Must aggregate from 1h or use 6h.
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                         API Server (Idle Startup)                        │
+│  ┌─────────────────────────────────────────────────────────────────────┐│
+│  │                        Startup Sequence (v5.0)                       ││
+│  │  1. validateEnv()                                                   ││
+│  │  2. getDbClient() + testDatabaseConnection()                        ││
+│  │  3. getRedisClient() + testRedisConnection()                        ││
+│  │  4. Register tRPC routers                                           ││
+│  │  5. Start Fastify (IDLE MODE - no exchange connection)              ││
+│  │  6. ControlChannelService.start() (listen for 'start' command)      ││
+│  │                                                                      ││
+│  │  --- AWAIT 'start' COMMAND ---                                      ││
+│  │                                                                      ││
+│  │  7. Load exchange config from DB                                    ││
+│  │  8. Load symbol sources (Tier 1 + Tier 2)                           ││
+│  │  9. StartupBackfillService.backfill()                               ││
+│  │  10. IndicatorCalculationService.start()                            ││
+│  │  11. BoundaryRestService.start()                                    ││
+│  │  12. ExchangeAdapter.connect() + subscribe()                        ││
+│  │  13. AlertEvaluationService.start()                                 ││
+│  └─────────────────────────────────────────────────────────────────────┘│
+└─────────────────────────────────────────────────────────────────────────┘
+```
 
-### Binance.us (Future)
+### New Redis Key Patterns
 
-| Aspect | Details |
-|--------|---------|
-| WebSocket URL | `wss://stream.binance.us:9443/ws/<stream>` |
-| Native candles | Yes, all timeframes via kline streams |
-| Candle message | `{ e: "kline", k: { t, T, o, h, l, c, v, x, ... } }` |
-| Symbol format | `BTCUSD` (no separator) |
-| Auth | Not required for public streams |
-| Timeframes | 1m, 3m, 5m, 15m, 30m, 1h, 2h, 4h, 6h, 8h, 12h, 1d, 3d, 1w, 1M |
-| Rate limits | 5 WebSocket messages/second, 1200 REST requests/minute |
-
-**Binance.us advantage:** Native 4h timeframe available.
-
-### Symbol Normalization
-
+**Shared data (exchange-scoped):**
 ```typescript
-/**
- * Normalize symbols to unified format (Coinbase style: BASE-QUOTE)
- */
-export function normalizeSymbol(symbol: string, exchange: ExchangeId): string {
-  switch (exchange) {
-    case 'coinbase':
-      return symbol; // Already in BASE-QUOTE format
-    case 'binance-us':
-    case 'binance':
-      // BTCUSD -> BTC-USD, ETHUSDT -> ETH-USDT
-      return symbol.replace(/([A-Z]+)(USD[T]?|BTC|ETH|BNB)$/, '$1-$2');
-    default:
-      return symbol;
-  }
-}
+// Data keys - NO userId, shared by all subscribers
+candles:${exchangeId}:${symbol}:${timeframe}
+ticker:${exchangeId}:${symbol}
+indicator:${exchangeId}:${symbol}:${timeframe}:${type}
 
-/**
- * Convert unified symbol to exchange-native format
- */
-export function toExchangeSymbol(symbol: string, exchange: ExchangeId): string {
-  switch (exchange) {
-    case 'coinbase':
-      return symbol;
-    case 'binance-us':
-    case 'binance':
-      return symbol.replace('-', ''); // BTC-USD -> BTCUSD
-    default:
-      return symbol;
-  }
+// Pub/sub channels - NO userId, any subscriber can receive
+channel:candle:close:${exchangeId}:${symbol}:${timeframe}
+channel:ticker:${exchangeId}:${symbol}
+channel:indicator:${exchangeId}:${symbol}:${timeframe}:${type}
+```
+
+**Overflow data (user-specific extras):**
+```typescript
+// User-specific symbols not in shared pool
+usercandles:${exchangeId}:${userId}:${symbol}:${timeframe}
+userticker:${exchangeId}:${userId}:${symbol}
+userindicator:${exchangeId}:${userId}:${symbol}:${timeframe}:${type}
+
+// User-specific channels
+channel:usercandle:close:${exchangeId}:${userId}:${symbol}:${timeframe}
+```
+
+**Control channels (unchanged - user-scoped by identity):**
+```typescript
+livermore:commands:${identitySub}
+livermore:responses:${identitySub}
+```
+
+### New Database Schema
+
+```sql
+-- NEW: exchanges table (exchange metadata)
+CREATE TABLE exchanges (
+  id SERIAL PRIMARY KEY,
+  name VARCHAR(50) UNIQUE NOT NULL,        -- 'coinbase', 'binance', etc.
+  display_name VARCHAR(100) NOT NULL,      -- 'Coinbase Pro', 'Binance US'
+  api_base_url VARCHAR(255),               -- 'https://api.coinbase.com'
+  ws_url VARCHAR(255),                     -- 'wss://advanced-trade-ws.coinbase.com'
+  rate_limit_requests_per_second INT,      -- 10
+  supported_timeframes JSONB,              -- ['1m', '5m', '15m', '1h', '4h', '1d']
+  geo_restrictions JSONB,                  -- {'blocked': ['US'], 'allowed': [...]}
+  fee_tier_url VARCHAR(255),               -- URL to fee tier docs
+  is_active BOOLEAN DEFAULT true,
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW()
+);
+
+-- MODIFIED: user_exchanges with FK to exchanges
+ALTER TABLE user_exchanges
+  ADD COLUMN exchange_id INT REFERENCES exchanges(id),
+  -- Keep exchange_name for backward compatibility during migration
+  ALTER COLUMN exchange_name DROP NOT NULL;
+
+-- Symbol sourcing tables
+CREATE TABLE exchange_symbols (
+  id SERIAL PRIMARY KEY,
+  exchange_id INT REFERENCES exchanges(id),
+  symbol VARCHAR(20) NOT NULL,
+  tier SMALLINT NOT NULL,                  -- 1=shared (top N), 2=user-specific
+  volume_24h NUMERIC(30, 8),               -- For ranking
+  last_updated TIMESTAMP DEFAULT NOW(),
+  UNIQUE(exchange_id, symbol)
+);
+
+-- User symbol overrides (Tier 2)
+CREATE TABLE user_symbol_subscriptions (
+  id SERIAL PRIMARY KEY,
+  user_id INT REFERENCES users(id),
+  exchange_id INT REFERENCES exchanges(id),
+  symbol VARCHAR(20) NOT NULL,
+  source VARCHAR(20) NOT NULL,             -- 'position', 'manual', 'alert'
+  created_at TIMESTAMP DEFAULT NOW(),
+  UNIQUE(user_id, exchange_id, symbol)
+);
+```
+
+### Data Flow
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                        Symbol Sourcing                                   │
+│                                                                          │
+│  Tier 1 (Shared Pool)                   Tier 2 (User Overflow)          │
+│  ┌─────────────────────┐                ┌─────────────────────┐         │
+│  │ Top 50 by volume    │                │ User positions      │         │
+│  │ - Automatic refresh │                │ Manual additions    │         │
+│  │ - Shared cache keys │                │ Alert-based adds    │         │
+│  └─────────────────────┘                └─────────────────────┘         │
+│            │                                      │                      │
+│            ▼                                      ▼                      │
+│  candles:1:BTC-USD:5m                   usercandles:1:99:SHIB-USD:5m   │
+│  (exchangeId only)                      (exchangeId + userId)           │
+└─────────────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│                         ExchangeAdapter                                  │
+│  - Configured with exchangeId from DB                                    │
+│  - Publishes to: channel:candle:close:{exchangeId}:{symbol}:5m          │
+│  - Writes to: candles:{exchangeId}:{symbol}:5m                          │
+│  - OR writes to: usercandles:{exchangeId}:{userId}:{symbol}:5m          │
+└─────────────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│                    IndicatorCalculationService                           │
+│  - Subscribes: channel:candle:close:{exchangeId}:*:*                    │
+│  - Reads from: candles:{exchangeId}:{symbol}:{timeframe}                │
+│  - Writes to: indicator:{exchangeId}:{symbol}:{timeframe}:macd-v        │
+└─────────────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│         Cross-Exchange Subscribers (PerseusWeb, etc.)                    │
+│  - Subscribe to ANY exchange's channels                                  │
+│  - Kaia's UI can subscribe to: channel:candle:close:1:*:* (Coinbase)    │
+│  - Mike's UI can subscribe to: channel:candle:close:2:*:* (Binance)     │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+## Key Changes
+
+### Redis Key Migration
+
+**Old pattern:**
+```
+candles:${userId}:${exchangeId}:${symbol}:${timeframe}
+         ▲         ▲
+         │         │
+         └─────────┴── Both user and exchange scoped
+```
+
+**New pattern:**
+```
+candles:${exchangeId}:${symbol}:${timeframe}
+         ▲
+         │
+         └── Exchange-scoped only (shared)
+
+usercandles:${exchangeId}:${userId}:${symbol}:${timeframe}
+             ▲            ▲
+             │            │
+             └────────────┴── User overflow with exchange context
+```
+
+**Migration strategy:**
+
+1. **Add new key functions** in `packages/cache/src/keys.ts`:
+   ```typescript
+   // New exchange-scoped keys (v5.0)
+   export function sharedCandleKey(exchangeId: number, symbol: string, timeframe: Timeframe) {
+     return `candles:${exchangeId}:${symbol}:${timeframe}`;
+   }
+
+   export function userCandleKey(exchangeId: number, userId: number, symbol: string, timeframe: Timeframe) {
+     return `usercandles:${exchangeId}:${userId}:${symbol}:${timeframe}`;
+   }
+   ```
+
+2. **Update cache strategies** to use new key functions with tier awareness:
+   ```typescript
+   class CandleCacheStrategy {
+     async addCandle(exchangeId: number, symbol: string, tier: 1 | 2, userId?: number) {
+       const key = tier === 1
+         ? sharedCandleKey(exchangeId, symbol, timeframe)
+         : userCandleKey(exchangeId, userId!, symbol, timeframe);
+       // ... rest unchanged
+     }
+   }
+   ```
+
+3. **Delete old keys on startup** (one-time cleanup):
+   ```typescript
+   // Delete all keys matching old pattern: candles:*:*:*:*
+   // This is safe because we backfill on startup anyway
+   ```
+
+4. **Feature flag** for gradual rollout:
+   ```typescript
+   const USE_SHARED_KEYS = process.env.FEATURE_SHARED_KEYS === 'true';
+   ```
+
+### Database Schema Changes
+
+**1. Create `exchanges` table:**
+```sql
+INSERT INTO exchanges (name, display_name, ws_url, supported_timeframes) VALUES
+  ('coinbase', 'Coinbase Pro', 'wss://advanced-trade-ws.coinbase.com', '["5m"]'),
+  ('binance', 'Binance US', 'wss://stream.binance.us:9443/ws', '["1m","5m","15m","1h","4h","1d"]');
+```
+
+**2. Migrate `user_exchanges`:**
+```sql
+-- Add FK column
+ALTER TABLE user_exchanges ADD COLUMN exchange_id INT REFERENCES exchanges(id);
+
+-- Populate from exchange_name
+UPDATE user_exchanges ue
+SET exchange_id = e.id
+FROM exchanges e
+WHERE ue.exchange_name = e.name;
+
+-- Make NOT NULL after population
+ALTER TABLE user_exchanges ALTER COLUMN exchange_id SET NOT NULL;
+```
+
+**3. Create symbol sourcing tables** (new).
+
+### Service Changes
+
+| Service | v4.0 | v5.0 Change |
+|---------|------|-------------|
+| `CoinbaseAdapter` | Hardcoded userId=1, exchangeId=1 | Receives exchangeId from config, no userId |
+| `IndicatorCalculationService` | Hardcoded TEST_USER_ID, TEST_EXCHANGE_ID | Receives exchangeId from config, no userId |
+| `AlertEvaluationService` | Hardcoded TEST_USER_ID, TEST_EXCHANGE_ID | Multi-exchange subscription patterns |
+| `BoundaryRestService` | Uses DEFAULT_BOUNDARY_CONFIG | Receives exchangeId from config |
+| `StartupBackfillService` | Uses hardcoded userId/exchangeId | Receives exchangeId, supports tier-based symbols |
+| `ControlChannelService` | Unchanged (user-scoped by identity) | Add `start` command handler |
+| `server.ts` | Immediate startup | Idle mode, await `start` command |
+
+### New Components
+
+**1. ExchangeConfigService:**
+```typescript
+class ExchangeConfigService {
+  async getExchangeById(id: number): Promise<Exchange>;
+  async getActiveExchanges(): Promise<Exchange[]>;
+  async getExchangeByName(name: string): Promise<Exchange | null>;
+}
+```
+
+**2. SymbolSourceService:**
+```typescript
+class SymbolSourceService {
+  async getTier1Symbols(exchangeId: number): Promise<string[]>;
+  async getTier2Symbols(exchangeId: number, userId: number): Promise<string[]>;
+  async mergeSymbols(tier1: string[], tier2: string[]): Promise<SymbolWithTier[]>;
+  async refreshTier1FromVolume(exchangeId: number, topN: number): Promise<void>;
+}
+```
+
+**3. IdleStartupManager:**
+```typescript
+class IdleStartupManager {
+  private state: 'idle' | 'starting' | 'running' = 'idle';
+
+  async awaitStartCommand(): Promise<StartConfig>;
+  async startExchange(config: StartConfig): Promise<void>;
 }
 ```
 
 ## Build Order
 
-### Recommended Implementation Sequence
+Based on dependency analysis, the recommended phase structure:
+
+### Phase 1: Database Foundation
+
+**Dependencies:** None
+**Creates:** Foundation for all other phases
+
+1. Create `exchanges` table with seed data (Coinbase, Binance)
+2. Add `exchange_id` FK to `user_exchanges`
+3. Create `exchange_symbols` table
+4. Create `user_symbol_subscriptions` table
+5. Run Atlas migration
+6. Verify with `drizzle-kit pull`
+
+**Verification:** Query `exchanges` table, verify FK relationships work.
+
+### Phase 2: Key Pattern Refactor
+
+**Dependencies:** Phase 1 (needs exchangeId concept)
+**Creates:** New key functions used by cache strategies
+
+1. Add new key functions to `packages/cache/src/keys.ts`:
+   - `sharedCandleKey()`, `sharedTickerKey()`, `sharedIndicatorKey()`
+   - `userCandleKey()`, `userTickerKey()`, `userIndicatorKey()`
+   - `sharedCandleCloseChannel()`, etc.
+2. Add `KeyMode` enum: `'shared' | 'user'`
+3. Keep old functions for backward compatibility (deprecate)
+4. Write unit tests for new key patterns
+
+**Verification:** Unit tests pass, old functions still work.
+
+### Phase 3: Cache Strategy Updates
+
+**Dependencies:** Phase 2 (uses new key functions)
+**Creates:** Tier-aware cache operations
+
+1. Update `CandleCacheStrategy` constructor to accept mode config
+2. Add tier parameter to write operations
+3. Add fallback reads (check shared first, then user)
+4. Update `IndicatorCacheStrategy` similarly
+5. Update `TickerCacheStrategy` similarly
+
+**Verification:** Cache writes to correct keys based on tier.
+
+### Phase 4: Service Refactor
+
+**Dependencies:** Phase 3 (uses updated cache strategies)
+**Creates:** Services use exchangeId, not hardcoded userId
+
+1. Remove `TEST_USER_ID` and `TEST_EXCHANGE_ID` from all services
+2. Add `exchangeId` parameter to service constructors
+3. Update `CoinbaseAdapter` to receive config
+4. Update `IndicatorCalculationService` subscription patterns
+5. Update `BoundaryRestService` config
+6. Update `AlertEvaluationService` subscription patterns
+
+**Verification:** Services work with configurable exchangeId.
+
+### Phase 5: Idle Startup Mode
+
+**Dependencies:** Phase 4 (services can be configured)
+**Creates:** API starts idle, awaits command
+
+1. Create `IdleStartupManager` class
+2. Add `start` command to `ControlChannelService`
+3. Refactor `server.ts` startup sequence to be two-phase
+4. Add `--autostart <exchange>` CLI parameter for backward compatibility
+5. Update `ServiceRegistry` to support dynamic service creation
+
+**Verification:** Server starts idle, responds to `start` command.
+
+### Phase 6: Symbol Sourcing
+
+**Dependencies:** Phases 1, 4, 5 (DB tables, services, idle mode)
+**Creates:** Tier 1/Tier 2 symbol management
+
+1. Create `ExchangeConfigService`
+2. Create `SymbolSourceService`
+3. Implement Tier 1 refresh from exchange volume endpoint
+4. Implement Tier 2 aggregation from user positions/manual
+5. Integrate with startup sequence
+6. Add tRPC endpoints for symbol management
+
+**Verification:** Startup uses correct symbol sources.
+
+### Phase 7: Migration Cleanup
+
+**Dependencies:** All previous phases deployed and stable
+**Creates:** Clean state, removed legacy code
+
+1. Remove old key functions (or mark truly deprecated)
+2. Remove backward compatibility shims
+3. Delete legacy keys from Redis (one-time script)
+4. Update documentation
+
+**Verification:** System works with only new key patterns.
+
+## Component Boundaries
+
+### What Talks to What
 
 ```
-Phase 1: Foundation (No Breaking Changes)
-├── 1.1 Define interfaces (IExchangeAdapter, UnifiedCandle, etc.)
-├── 1.2 Add candle:close event channel to cache/keys.ts
-├── 1.3 Create base adapter abstract class
-└── 1.4 Write tests for symbol normalization
+┌─────────────────────────────────────────────────────────────────────────┐
+│                            tRPC Routers                                  │
+│  settings.router ←───────────────────────────────────────────┐          │
+│  control.router ←────────────────────────────────┐           │          │
+│  symbol.router ←──────────────────┐              │           │          │
+│  indicator.router ←───┐           │              │           │          │
+│  alert.router ←──┐    │           │              │           │          │
+│                  │    │           │              │           │          │
+│                  ▼    ▼           ▼              ▼           ▼          │
+│  ┌─────────────────────────────────────────────────────────────────────┐│
+│  │                         Cache Strategies                             ││
+│  │  IndicatorCacheStrategy  CandleCacheStrategy  TickerCacheStrategy   ││
+│  └─────────────────────────────────────────────────────────────────────┘│
+│                  │    │           │              │           │          │
+│                  ▼    ▼           ▼              ▼           ▼          │
+│  ┌─────────────────────────────────────────────────────────────────────┐│
+│  │                         Redis (ioredis)                              ││
+│  │  Data: ZADD, ZRANGE, GET, SET                                       ││
+│  │  Pub/Sub: PUBLISH, SUBSCRIBE, PSUBSCRIBE                            ││
+│  └─────────────────────────────────────────────────────────────────────┘│
+└─────────────────────────────────────────────────────────────────────────┘
 
-Phase 2: Coinbase Adapter (Parallel to Existing)
-├── 2.1 Implement CoinbaseAdapter extending base
-├── 2.2 Add WebSocket candles channel subscription
-├── 2.3 Handle candle message parsing and normalization
-├── 2.4 Write candles to cache on update
-├── 2.5 Emit candle:close events when candle finalizes
-└── 2.6 Integration test: verify cache writes
+┌─────────────────────────────────────────────────────────────────────────┐
+│                            Services                                      │
+│  CoinbaseAdapter ─────────────► CandleCacheStrategy                     │
+│        │                               │                                 │
+│        │ candle:close event            │ indicator update               │
+│        ▼                               ▼                                 │
+│  IndicatorCalculationService ──► IndicatorCacheStrategy                 │
+│        │                               │                                 │
+│        │ indicator update              │ alert trigger                   │
+│        ▼                               ▼                                 │
+│  AlertEvaluationService ───────► PostgreSQL (alert_history)             │
+│        │                                                                 │
+│        └─────────────────────────────► Discord WebhookClient            │
+└─────────────────────────────────────────────────────────────────────────┘
 
-Phase 3: Indicator Service Refactor
-├── 3.1 Add candle:close event subscription
-├── 3.2 Remove REST API calls from recalculateForConfig()
-├── 3.3 Read exclusively from cache
-├── 3.4 Add higher timeframe aggregation logic
-└── 3.5 Integration test: verify indicator calculation from cache
-
-Phase 4: Startup Backfill
-├── 4.1 Implement backfill in CoinbaseAdapter
-├── 4.2 Add progress tracking and logging
-├── 4.3 Respect rate limits during backfill
-└── 4.4 Integration test: verify 60+ candles in cache
-
-Phase 5: Reconciliation Job
-├── 5.1 Create ReconciliationService
-├── 5.2 Periodic gap detection logic
-├── 5.3 REST API calls to fill gaps
-└── 5.4 Health monitoring and alerting
-
-Phase 6: Cleanup
-├── 6.1 Remove REST calls from existing WebSocket service
-├── 6.2 Deprecate old CoinbaseWebSocketService
-├── 6.3 Update server.ts to use new adapter
-└── 6.4 End-to-end testing
+┌─────────────────────────────────────────────────────────────────────────┐
+│                         Control Plane                                    │
+│  ControlChannelService ←──── Redis Pub/Sub ←──── Admin UI               │
+│        │                                                                 │
+│        │ commands                                                        │
+│        ▼                                                                 │
+│  ServiceRegistry (access to all services)                               │
+│        │                                                                 │
+│        ├──► CoinbaseAdapter.disconnect() / connect()                    │
+│        ├──► IndicatorService.stop() / start()                           │
+│        ├──► AlertService.stop() / start()                               │
+│        └──► StartupBackfillService.backfill()                           │
+└─────────────────────────────────────────────────────────────────────────┘
 ```
 
-### Dependency Graph
+### Package Dependencies
 
 ```
-┌──────────────────┐
-│  1.1 Interfaces  │◄──────────────────────────────────────┐
-└────────┬─────────┘                                       │
-         │                                                 │
-         ▼                                                 │
-┌──────────────────┐     ┌──────────────────┐             │
-│  1.2 Cache Keys  │     │  1.3 Base Class  │             │
-└────────┬─────────┘     └────────┬─────────┘             │
-         │                        │                        │
-         └───────────┬────────────┘                        │
-                     ▼                                     │
-         ┌───────────────────────┐                        │
-         │  2.x Coinbase Adapter │────────────────────────┤
-         └───────────┬───────────┘                        │
-                     │                                     │
-                     ▼                                     │
-         ┌───────────────────────┐                        │
-         │ 3.x Indicator Refactor│────────────────────────┘
-         └───────────┬───────────┘
-                     │
-         ┌───────────┴───────────┐
-         ▼                       ▼
-┌─────────────────┐     ┌─────────────────┐
-│ 4.x Backfill    │     │ 5.x Reconcile   │
-└────────┬────────┘     └────────┬────────┘
-         │                       │
-         └───────────┬───────────┘
-                     ▼
-         ┌───────────────────────┐
-         │    6.x Cleanup        │
-         └───────────────────────┘
+@livermore/api (apps/api)
+  └── @livermore/coinbase-client
+  └── @livermore/cache
+  └── @livermore/database
+  └── @livermore/indicators
+  └── @livermore/schemas
+  └── @livermore/utils
+  └── @livermore/trpc-config
+
+@livermore/coinbase-client
+  └── @livermore/cache (for Redis writes)
+  └── @livermore/schemas (for types)
+  └── @livermore/utils (for logger)
+
+@livermore/cache
+  └── @livermore/schemas (for types, Zod validation)
+
+@livermore/database
+  └── @livermore/schemas (for types)
+  └── @livermore/utils (for logger)
+
+@livermore/indicators
+  └── (no internal dependencies - pure math)
+
+@livermore/schemas
+  └── (no internal dependencies - pure types)
 ```
 
-## Integration with Existing Code
+## Risk Assessment
 
-### Files to Modify
+### Low Risk
 
-| File | Changes |
-|------|---------|
-| `packages/cache/src/keys.ts` | Add `candleCloseChannel()` function |
-| `packages/schemas/src/market/candle.schema.ts` | Add `exchange` field, `isClosed` field |
-| `apps/api/src/services/indicator-calculation.service.ts` | Remove REST calls, add event subscription |
-| `apps/api/src/server.ts` | Initialize CoinbaseAdapter, wire up events |
+- Database schema additions (new tables, new columns)
+- New key functions (additive, not replacing)
+- New services (additive)
 
-### New Files to Create
+### Medium Risk
 
-| File | Purpose |
-|------|---------|
-| `packages/schemas/src/exchange/adapter.schema.ts` | Interface definitions |
-| `packages/coinbase-client/src/adapter/coinbase-adapter.ts` | Coinbase implementation |
-| `packages/coinbase-client/src/adapter/base-adapter.ts` | Abstract base class |
-| `apps/api/src/services/reconciliation.service.ts` | Gap detection job |
+- Cache strategy updates (need backward compatibility during migration)
+- Service constructor changes (need to update all call sites)
+- Startup sequence refactor (complex orchestration)
 
-### Incremental Migration Strategy
+### High Risk
 
-The existing `CoinbaseWebSocketService` continues to work during migration:
+- Redis key migration (data loss if done wrong)
+- Removing userId from services (breaks if any hardcoded references remain)
 
-```
-Week 1: Build CoinbaseAdapter in parallel
-        - Both services run simultaneously
-        - CoinbaseAdapter writes to cache
-        - Existing service still handles indicators
+### Mitigation Strategies
 
-Week 2: Wire indicator service to new events
-        - Indicator service subscribes to candle:close
-        - Falls back to REST if cache miss (safety net)
-
-Week 3: Remove REST fallback
-        - Indicator service reads cache only
-        - Monitor for gaps/issues
-
-Week 4: Deprecate old service
-        - Remove CoinbaseWebSocketService
-        - CoinbaseAdapter is sole data source
-```
-
-## Anti-Patterns to Avoid
-
-### 1. Indicator Service Calling Exchange APIs
-
-**Wrong:**
-```typescript
-// In IndicatorCalculationService
-async onCandleClose(candle: UnifiedCandle) {
-  // DON'T DO THIS - breaks exchange-agnostic principle
-  const history = await this.coinbaseClient.getCandles(candle.symbol, ...);
-}
-```
-
-**Right:**
-```typescript
-async onCandleClose(candle: UnifiedCandle) {
-  // Read from unified cache - no knowledge of exchange
-  const history = await this.candleCache.getRecentCandles(...);
-}
-```
-
-### 2. Polling for Candle Updates
-
-**Wrong:**
-```typescript
-// Timer-based polling
-setInterval(async () => {
-  const candle = await this.fetchLatestCandle();
-  if (candle.isClosed) this.processCandle(candle);
-}, 1000);
-```
-
-**Right:**
-```typescript
-// Event-driven
-this.adapter.on('candle:close', (candle) => {
-  this.processCandle(candle);
-});
-```
-
-### 3. Tight Coupling Between Adapter and Indicator Service
-
-**Wrong:**
-```typescript
-class CoinbaseAdapter {
-  private indicatorService: IndicatorCalculationService;
-
-  async handleCandle(candle) {
-    // Direct method call - tight coupling
-    await this.indicatorService.recalculate(candle);
-  }
-}
-```
-
-**Right:**
-```typescript
-class CoinbaseAdapter extends EventEmitter {
-  async handleCandle(candle) {
-    // Event emission - loose coupling
-    this.emit('candle:close', candle);
-  }
-}
-
-// Wired in server.ts
-coinbaseAdapter.on('candle:close', indicatorService.onCandleClose);
-```
+1. **Feature flags** for key pattern switch
+2. **Parallel writes** during migration (write to both old and new keys)
+3. **Startup backfill** ensures no data loss (can delete old keys safely)
+4. **Comprehensive testing** at each phase boundary
+5. **Rollback plan** at each phase
 
 ## Sources
 
-- [CCXT Library - Unified Exchange Interface](https://github.com/ccxt/ccxt) - Reference for adapter pattern
-- [Flowsurface Exchange Architecture](https://deepwiki.com/akenshaw/flowsurface/5.1-exchange-architecture) - Multi-exchange adapter design
-- [Coinbase WebSocket Channels](https://docs.cloud.coinbase.com/advanced-trade/docs/ws-channels) - Candles channel format
-- [Binance.us WebSocket Streams](https://github.com/binance-us/binance-us-api-docs/blob/master/web-socket-streams.md) - Kline stream format
-- [Node.js EventEmitter](https://nodejs.org/api/events.html) - Event-driven patterns
-- [Type-Safe EventEmitter in TypeScript](https://blog.makerx.com.au/a-type-safe-event-emitter-in-node-js/) - TypeScript patterns
-- [Redis Pub/Sub](https://redis.io/docs/latest/develop/pubsub/) - Event distribution
-- [ioredis](https://github.com/redis/ioredis) - Redis client for Node.js
+- `packages/cache/src/keys.ts` - Current key patterns
+- `packages/cache/src/strategies/candle-cache.ts` - Cache strategy implementation
+- `packages/database/drizzle/schema.ts` - Current database schema
+- `packages/coinbase-client/src/adapter/coinbase-adapter.ts` - Adapter implementation
+- `apps/api/src/server.ts` - Startup sequence
+- `apps/api/src/services/indicator-calculation.service.ts` - Service patterns
+- `apps/api/src/services/control-channel.service.ts` - Control channel patterns
+- `.planning/PROJECT.md` - v5.0 goals and requirements
+- `.planning/MILESTONES.md` - Historical context
+- `.planning/codebase/ARCHITECTURE.md` - Architecture documentation
 
 ---
 
-*Architecture research: 2026-01-19*
+*Architecture research: 2026-02-06*
