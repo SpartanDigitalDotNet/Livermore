@@ -39,6 +39,13 @@ Plans:
 
 **Dependencies:** Phase 23 (exchanges table provides exchange_id concept)
 
+**Plans:** 3 plans
+
+Plans:
+- [ ] 24-01-PLAN.md — Add exchange-scoped and user-overflow key functions to cache package
+- [ ] 24-02-PLAN.md — Implement dual-read and tiered writes in cache strategies
+- [ ] 24-03-PLAN.md — Update pub/sub to exchange-scoped channels with dual-publish
+
 **Requirements:**
 - DATA-01: Exchange-scoped candle keys `candles:{exchange_id}:{symbol}:{timeframe}`
 - DATA-02: Exchange-scoped indicator keys `indicator:{exchange_id}:{symbol}:{timeframe}:{type}`
@@ -140,7 +147,7 @@ Plans:
 | Phase | Name | Requirements | Status |
 |-------|------|--------------|--------|
 | 23 | Schema Foundation | 2 | Planned |
-| 24 | Data Architecture | 5 | Pending |
+| 24 | Data Architecture | 5 | Planned |
 | 25 | Symbol Management | 3 | Pending |
 | 26 | Startup Control | 4 | Pending |
 | 27 | Cross-Exchange Visibility | 3 | Pending |
