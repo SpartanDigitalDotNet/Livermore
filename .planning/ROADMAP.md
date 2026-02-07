@@ -16,6 +16,11 @@ Transform Livermore from user-scoped single-exchange to exchange-scoped distribu
 
 **Dependencies:** None (foundation phase)
 
+**Plans:** 1 plan
+
+Plans:
+- [ ] 23-01-PLAN.md — Create exchanges table with seed data and add FK to user_exchanges
+
 **Requirements:**
 - EXC-01: `exchanges` metadata table with API limits, fees, geo restrictions, supported timeframes
 - EXC-02: `user_exchanges` FK refactor to reference `exchanges` table
@@ -134,7 +139,7 @@ Transform Livermore from user-scoped single-exchange to exchange-scoped distribu
 
 | Phase | Name | Requirements | Status |
 |-------|------|--------------|--------|
-| 23 | Schema Foundation | 2 | Pending |
+| 23 | Schema Foundation | 2 | Planned |
 | 24 | Data Architecture | 5 | Pending |
 | 25 | Symbol Management | 3 | Pending |
 | 26 | Startup Control | 4 | Pending |
