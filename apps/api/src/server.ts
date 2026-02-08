@@ -218,6 +218,9 @@ async function start() {
 
   // Create separate Redis subscriber connection (required for psubscribe - cannot share with main client)
   const subscriberRedis = redis.duplicate();
+  subscriberRedis.on('error', (err) => {
+    logger.error({ error: err.message }, 'Subscriber Redis connection error');
+  });
   await testRedisConnection(subscriberRedis);
 
   logger.info('Pre-flight checks passed - all connections verified');

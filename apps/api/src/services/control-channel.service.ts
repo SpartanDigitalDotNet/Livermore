@@ -9,7 +9,6 @@ import {
 } from '@livermore/schemas';
 import { StartupBackfillService } from '@livermore/coinbase-client';
 import { SymbolSourceService } from './symbol-source.service';
-import { getAccountSymbols } from './account-symbols.service';
 import { eq, and, sql } from 'drizzle-orm';
 import { users } from '@livermore/database';
 import type { ServiceRegistry } from './types/service-registry';
@@ -442,18 +441,17 @@ export class ControlChannelService {
     };
 
     try {
-      // If symbols not yet loaded (idle startup), fetch from exchange now
+      // If symbols not yet loaded (idle startup), load Tier 1 from exchange_symbols table
       if (this.services.monitoredSymbols.length === 0) {
-        setProgress({ phase: 'indicators', phaseLabel: 'Loading account symbols', percent: 5 });
-        const { monitored, excluded } = await getAccountSymbols(
-          this.services.config.apiKeyId,
-          this.services.config.privateKeyPem
-        );
-
-        // Classify into tiers
+        setProgress({ phase: 'indicators', phaseLabel: 'Loading Tier 1 symbols', percent: 5 });
         const symbolSourceService = new SymbolSourceService(1); // Coinbase
-        const classified = await symbolSourceService.classifyUserPositions(monitored);
-        this.services.monitoredSymbols = classified.map(s => s.symbol);
+        const tier1 = await symbolSourceService.getTier1Symbols();
+
+        if (tier1.length === 0) {
+          throw new Error('No Tier 1 symbols in exchange_symbols table. Populate exchange_symbols first.');
+        }
+
+        this.services.monitoredSymbols = tier1.map(s => s.symbol);
 
         // Rebuild indicator configs
         const timeframes = this.services.timeframes;
@@ -462,19 +460,30 @@ export class ControlChannelService {
         );
 
         logger.info(
-          { total: this.services.monitoredSymbols.length, excluded: excluded.length, symbols: this.services.monitoredSymbols },
-          'Loaded symbols from account'
+          { total: this.services.monitoredSymbols.length, symbols: this.services.monitoredSymbols },
+          'Loaded Tier 1 symbols from exchange_symbols'
         );
       }
+
+      // Backfill cache with historical candles (MUST complete before indicators)
+      setProgress({ phase: 'indicators', phaseLabel: 'Backfilling historical candles', percent: 10 });
+      const backfillTimeframes: Timeframe[] = ['1m', '5m', '15m', '1h', '4h', '1d'];
+      const backfillService = new StartupBackfillService(
+        this.services.config.apiKeyId,
+        this.services.config.privateKeyPem,
+        this.services.redis
+      );
+      await backfillService.backfill(this.services.monitoredSymbols, backfillTimeframes);
+      logger.info('Cache backfill complete');
 
       // Start in dependency order (upstream to downstream)
 
       // 1. IndicatorService - needs to be listening before events arrive
-      setProgress({ phase: 'indicators', phaseLabel: 'Starting Indicator Service', percent: 10 });
+      setProgress({ phase: 'indicators', phaseLabel: 'Starting Indicator Service', percent: 15 });
       await this.services.indicatorService.start(this.services.indicatorConfigs);
       logger.debug('IndicatorService started');
 
-      // 2. Warmup - force initial indicator calculations
+      // 2. Warmup - force initial indicator calculations from backfilled data
       setProgress({ phase: 'warmup', phaseLabel: 'Warming up indicators', percent: 20, current: 0, total: this.services.indicatorConfigs.length });
       let warmupCount = 0;
       for (const cfg of this.services.indicatorConfigs) {

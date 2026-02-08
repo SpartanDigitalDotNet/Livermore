@@ -5,6 +5,7 @@ import { Signals } from './pages/Signals';
 import { Logs } from './pages/Logs';
 import { ControlPanel } from './pages/ControlPanel';
 import { Symbols } from './pages/Symbols';
+import { ExchangeSymbols } from './pages/ExchangeSymbols';
 import { Settings } from './pages/Settings';
 import { UserSync } from './components/UserSync';
 import { Toaster } from '@/components/ui/sonner';
@@ -67,6 +68,12 @@ function App() {
                     Symbols
                   </a>
                   <a
+                    href="#/exchange-symbols"
+                    className={`${hash === '#/exchange-symbols' ? 'text-gray-900 font-medium' : 'text-gray-600'} hover:text-gray-900`}
+                  >
+                    Exchange Symbols
+                  </a>
+                  <a
                     href="#/settings"
                     className={`${hash === '#/settings' ? 'text-gray-900 font-medium' : 'text-gray-600'} hover:text-gray-900`}
                   >
@@ -105,6 +112,8 @@ function HashRouter({ hash }: { hash: string }) {
       return <ControlPanel />;
     case '#/symbols':
       return <Symbols />;
+    case '#/exchange-symbols':
+      return <ExchangeSymbols />;
     case '#/settings':
       return <Settings />;
     default:

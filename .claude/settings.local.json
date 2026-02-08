@@ -60,7 +60,9 @@
       "WebFetch(domain:www.mexc.com)",
       "WebFetch(domain:www.kucoin.com)",
       "Bash(dir:*)",
-      "Bash(npx turbo run build:*)"
+      "Bash(npx turbo run build:*)",
+      "WebFetch(domain:www.coingecko.com)",
+      "WebFetch(domain:docs.coingecko.com)"
     ]
   }
 }

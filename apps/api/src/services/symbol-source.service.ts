@@ -1,5 +1,5 @@
 import { getDbClient, exchangeSymbols } from '@livermore/database';
-import { eq, and, lte } from 'drizzle-orm';
+import { eq, and, lte, isNotNull } from 'drizzle-orm';
 import { logger } from '@livermore/utils';
 
 /**
@@ -11,6 +11,7 @@ export interface ClassifiedSymbol {
   source: 'exchange_volume' | 'user_position';
   volumeRank?: number;
   volume24h?: number;
+  globalRank?: number;
 }
 
 /**
@@ -18,7 +19,7 @@ export interface ClassifiedSymbol {
  *
  * Phase 25: Two-tier symbol sourcing with automatic de-duplication.
  *
- * - Tier 1: Top N symbols by 24h volume from exchange (shared pool)
+ * - Tier 1: Top N symbols by global market cap rank (shared pool)
  * - Tier 2: User positions not in Tier 1 (user overflow with TTL)
  *
  * De-duplication: If a user position is in Tier 1, use shared pool (no duplicate data).
@@ -27,13 +28,13 @@ export class SymbolSourceService {
   private db = getDbClient();
 
   /** Maximum Tier 1 symbols per exchange */
-  private readonly TIER_1_LIMIT = 50;
+  private readonly TIER_1_LIMIT = 100;
 
   constructor(private exchangeId: number) {}
 
   /**
    * Get Tier 1 symbols for the exchange
-   * These are top N by 24h volume, shared across all users
+   * These are top N by global market cap rank, shared across all users
    */
   async getTier1Symbols(): Promise<ClassifiedSymbol[]> {
     const symbols = await this.db
@@ -41,16 +42,18 @@ export class SymbolSourceService {
         symbol: exchangeSymbols.symbol,
         volumeRank: exchangeSymbols.volumeRank,
         volume24h: exchangeSymbols.volume24h,
+        globalRank: exchangeSymbols.globalRank,
       })
       .from(exchangeSymbols)
       .where(
         and(
           eq(exchangeSymbols.exchangeId, this.exchangeId),
           eq(exchangeSymbols.isActive, true),
-          lte(exchangeSymbols.volumeRank, this.TIER_1_LIMIT)
+          isNotNull(exchangeSymbols.globalRank),
+          lte(exchangeSymbols.globalRank, this.TIER_1_LIMIT)
         )
       )
-      .orderBy(exchangeSymbols.volumeRank);
+      .orderBy(exchangeSymbols.globalRank);
 
     return symbols.map((s) => ({
       symbol: s.symbol,
@@ -58,6 +61,7 @@ export class SymbolSourceService {
       source: 'exchange_volume' as const,
       volumeRank: s.volumeRank ?? undefined,
       volume24h: s.volume24h ? parseFloat(s.volume24h) : undefined,
+      globalRank: s.globalRank ?? undefined,
     }));
   }
 
@@ -148,16 +152,25 @@ export class SymbolSourceService {
    * Refresh Tier 1 symbols from exchange volume data
    *
    * Called periodically to update volume rankings.
-   * Fetches top N products by 24h volume from exchange API.
+   * Accepts extended payload with CoinGecko global rank data.
    *
-   * @param volumeData - Array of { symbol, volume24h } from exchange
+   * @param volumeData - Array of symbol data from exchange + CoinGecko
    */
   async refreshTier1Symbols(
-    volumeData: Array<{ symbol: string; baseCurrency: string; quoteCurrency: string; volume24h: number }>
+    volumeData: Array<{
+      symbol: string;
+      baseCurrency: string;
+      quoteCurrency: string;
+      volume24h: number;
+      globalRank?: number;
+      marketCap?: number;
+      coingeckoId?: string;
+      displayName?: string;
+    }>
   ): Promise<void> {
     if (volumeData.length === 0) return;
 
-    // Sort by volume descending and assign ranks
+    // Sort by volume descending and assign volume ranks
     const ranked = volumeData
       .sort((a, b) => b.volume24h - a.volume24h)
       .slice(0, this.TIER_1_LIMIT)
@@ -179,6 +192,10 @@ export class SymbolSourceService {
           quoteCurrency: data.quoteCurrency,
           volume24h: data.volume24h.toString(),
           volumeRank: data.volumeRank,
+          globalRank: data.globalRank ?? null,
+          marketCap: data.marketCap?.toString() ?? null,
+          coingeckoId: data.coingeckoId ?? null,
+          displayName: data.displayName ?? null,
           isActive: true,
           lastVolumeUpdate: now,
           updatedAt: now,
@@ -188,6 +205,10 @@ export class SymbolSourceService {
           set: {
             volume24h: data.volume24h.toString(),
             volumeRank: data.volumeRank,
+            globalRank: data.globalRank ?? null,
+            marketCap: data.marketCap?.toString() ?? null,
+            coingeckoId: data.coingeckoId ?? null,
+            displayName: data.displayName ?? null,
             isActive: true,
             lastVolumeUpdate: now,
             updatedAt: now,
@@ -234,7 +255,8 @@ export class SymbolSourceService {
           eq(exchangeSymbols.exchangeId, this.exchangeId),
           eq(exchangeSymbols.symbol, symbol),
           eq(exchangeSymbols.isActive, true),
-          lte(exchangeSymbols.volumeRank, this.TIER_1_LIMIT)
+          isNotNull(exchangeSymbols.globalRank),
+          lte(exchangeSymbols.globalRank, this.TIER_1_LIMIT)
         )
       )
       .limit(1);
