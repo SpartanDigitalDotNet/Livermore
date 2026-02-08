@@ -65,38 +65,6 @@ export const alertHistory = pgTable("alert_history", {
 	}
 });
 
-export const userExchanges = pgTable("user_exchanges", {
-	id: serial().primaryKey().notNull(),
-	userId: serial("user_id").notNull(),
-	exchangeName: varchar("exchange_name", { length: 50 }).notNull(),
-	displayName: varchar("display_name", { length: 100 }),
-	apiKeyEnvVar: varchar("api_key_env_var", { length: 100 }).notNull(),
-	apiSecretEnvVar: varchar("api_secret_env_var", { length: 100 }).notNull(),
-	additionalCredentialsEnvVars: text("additional_credentials_env_vars"),
-	isActive: boolean("is_active").default(true).notNull(),
-	isDefault: boolean("is_default").default(false).notNull(),
-	lastConnectedAt: timestamp("last_connected_at", { mode: 'string' }),
-	createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
-	updatedAt: timestamp("updated_at", { mode: 'string' }).defaultNow().notNull(),
-	exchangeId: integer("exchange_id"),
-}, (table) => {
-	return {
-		exchangeIdIdx: index("user_exchanges_exchange_id_idx").using("btree", table.exchangeId.asc().nullsLast().op("int4_ops")),
-		userExchangeIdx: index("user_exchanges_user_exchange_idx").using("btree", table.userId.asc().nullsLast().op("text_ops"), table.exchangeName.asc().nullsLast().op("text_ops")),
-		userIdIdx: index("user_exchanges_user_id_idx").using("btree", table.userId.asc().nullsLast().op("int4_ops")),
-		userExchangesUserIdUsersIdFk: foreignKey({
-			columns: [table.userId],
-			foreignColumns: [users.id],
-			name: "user_exchanges_user_id_users_id_fk"
-		}).onDelete("cascade"),
-		userExchangesExchangeIdExchangesIdFk: foreignKey({
-			columns: [table.exchangeId],
-			foreignColumns: [exchanges.id],
-			name: "user_exchanges_exchange_id_exchanges_id_fk"
-		}).onDelete("set null"),
-	}
-});
-
 export const candles = pgTable("candles", {
 	id: serial().primaryKey().notNull(),
 	userId: serial("user_id").notNull(),
@@ -116,15 +84,15 @@ export const candles = pgTable("candles", {
 		timestampIdx: index("candles_timestamp_idx").using("btree", table.timestamp.asc().nullsLast().op("int8_ops")),
 		userExchangeIdx: index("candles_user_exchange_idx").using("btree", table.userId.asc().nullsLast().op("int4_ops"), table.exchangeId.asc().nullsLast().op("int4_ops")),
 		userSymbolTimeframeIdx: index("candles_user_symbol_timeframe_idx").using("btree", table.userId.asc().nullsLast().op("int4_ops"), table.exchangeId.asc().nullsLast().op("text_ops"), table.symbol.asc().nullsLast().op("int4_ops"), table.timeframe.asc().nullsLast().op("int4_ops")),
-		candlesExchangeIdUserExchangesIdFk: foreignKey({
-			columns: [table.exchangeId],
-			foreignColumns: [userExchanges.id],
-			name: "candles_exchange_id_user_exchanges_id_fk"
-		}).onDelete("cascade"),
 		candlesUserIdUsersIdFk: foreignKey({
 			columns: [table.userId],
 			foreignColumns: [users.id],
 			name: "candles_user_id_users_id_fk"
+		}).onDelete("cascade"),
+		candlesExchangeIdUserExchangesIdFk: foreignKey({
+			columns: [table.exchangeId],
+			foreignColumns: [userExchanges.id],
+			name: "candles_exchange_id_user_exchanges_id_fk"
 		}).onDelete("cascade"),
 		candlesUnique: unique("candles_unique").on(table.userId, table.exchangeId, table.symbol, table.timeframe, table.timestamp),
 	}
@@ -146,15 +114,15 @@ export const indicators = pgTable("indicators", {
 		timestampIdx: index("indicators_timestamp_idx").using("btree", table.timestamp.asc().nullsLast().op("int8_ops")),
 		userExchangeIdx: index("indicators_user_exchange_idx").using("btree", table.userId.asc().nullsLast().op("int4_ops"), table.exchangeId.asc().nullsLast().op("int4_ops")),
 		userSymbolTimeframeTypeIdx: index("indicators_user_symbol_timeframe_type_idx").using("btree", table.userId.asc().nullsLast().op("text_ops"), table.exchangeId.asc().nullsLast().op("int4_ops"), table.symbol.asc().nullsLast().op("text_ops"), table.timeframe.asc().nullsLast().op("int4_ops"), table.type.asc().nullsLast().op("text_ops")),
-		indicatorsExchangeIdUserExchangesIdFk: foreignKey({
-			columns: [table.exchangeId],
-			foreignColumns: [userExchanges.id],
-			name: "indicators_exchange_id_user_exchanges_id_fk"
-		}).onDelete("cascade"),
 		indicatorsUserIdUsersIdFk: foreignKey({
 			columns: [table.userId],
 			foreignColumns: [users.id],
 			name: "indicators_user_id_users_id_fk"
+		}).onDelete("cascade"),
+		indicatorsExchangeIdUserExchangesIdFk: foreignKey({
+			columns: [table.exchangeId],
+			foreignColumns: [userExchanges.id],
+			name: "indicators_exchange_id_user_exchanges_id_fk"
 		}).onDelete("cascade"),
 	}
 });
@@ -176,15 +144,15 @@ export const positions = pgTable("positions", {
 	return {
 		symbolIdx: index("positions_symbol_idx").using("btree", table.userId.asc().nullsLast().op("int4_ops"), table.exchangeId.asc().nullsLast().op("text_ops"), table.symbol.asc().nullsLast().op("int4_ops")),
 		userExchangeIdx: index("positions_user_exchange_idx").using("btree", table.userId.asc().nullsLast().op("int4_ops"), table.exchangeId.asc().nullsLast().op("int4_ops")),
-		positionsExchangeIdUserExchangesIdFk: foreignKey({
-			columns: [table.exchangeId],
-			foreignColumns: [userExchanges.id],
-			name: "positions_exchange_id_user_exchanges_id_fk"
-		}).onDelete("cascade"),
 		positionsUserIdUsersIdFk: foreignKey({
 			columns: [table.userId],
 			foreignColumns: [users.id],
 			name: "positions_user_id_users_id_fk"
+		}).onDelete("cascade"),
+		positionsExchangeIdUserExchangesIdFk: foreignKey({
+			columns: [table.exchangeId],
+			foreignColumns: [userExchanges.id],
+			name: "positions_exchange_id_user_exchanges_id_fk"
 		}).onDelete("cascade"),
 		positionsUniqueSymbol: unique("positions_unique_symbol").on(table.userId, table.exchangeId, table.symbol),
 	}
@@ -206,5 +174,66 @@ export const exchanges = pgTable("exchanges", {
 }, (table) => {
 	return {
 		exchangesNameUnique: unique("exchanges_name_unique").on(table.name),
+	}
+});
+
+export const userExchanges = pgTable("user_exchanges", {
+	id: serial().primaryKey().notNull(),
+	userId: serial("user_id").notNull(),
+	exchangeId: integer("exchange_id"),
+	exchangeName: varchar("exchange_name", { length: 50 }).notNull(),
+	displayName: varchar("display_name", { length: 100 }),
+	apiKeyEnvVar: varchar("api_key_env_var", { length: 100 }).notNull(),
+	apiSecretEnvVar: varchar("api_secret_env_var", { length: 100 }).notNull(),
+	additionalCredentialsEnvVars: text("additional_credentials_env_vars"),
+	isActive: boolean("is_active").default(true).notNull(),
+	isDefault: boolean("is_default").default(false).notNull(),
+	lastConnectedAt: timestamp("last_connected_at", { mode: 'string' }),
+	createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
+	updatedAt: timestamp("updated_at", { mode: 'string' }).defaultNow().notNull(),
+}, (table) => {
+	return {
+		exchangeIdIdx: index("user_exchanges_exchange_id_idx").using("btree", table.exchangeId.asc().nullsLast().op("int4_ops")),
+		userExchangeIdx: index("user_exchanges_user_exchange_idx").using("btree", table.userId.asc().nullsLast().op("text_ops"), table.exchangeName.asc().nullsLast().op("int4_ops")),
+		userIdIdx: index("user_exchanges_user_id_idx").using("btree", table.userId.asc().nullsLast().op("int4_ops")),
+		userExchangesUserIdUsersIdFk: foreignKey({
+			columns: [table.userId],
+			foreignColumns: [users.id],
+			name: "user_exchanges_user_id_users_id_fk"
+		}).onDelete("cascade"),
+		userExchangesExchangeIdExchangesIdFk: foreignKey({
+			columns: [table.exchangeId],
+			foreignColumns: [exchanges.id],
+			name: "user_exchanges_exchange_id_exchanges_id_fk"
+		}).onDelete("set null"),
+	}
+});
+
+export const exchangeSymbols = pgTable("exchange_symbols", {
+	id: serial().primaryKey().notNull(),
+	exchangeId: integer("exchange_id").notNull(),
+	symbol: varchar({ length: 20 }).notNull(),
+	baseCurrency: varchar("base_currency", { length: 10 }).notNull(),
+	quoteCurrency: varchar("quote_currency", { length: 10 }).notNull(),
+	volume24H: numeric("volume_24h", { precision: 30, scale:  8 }),
+	volumeRank: integer("volume_rank"),
+	isActive: boolean("is_active").default(true).notNull(),
+	lastVolumeUpdate: timestamp("last_volume_update", { mode: 'string' }),
+	createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
+	updatedAt: timestamp("updated_at", { mode: 'string' }).defaultNow().notNull(),
+	globalRank: integer("global_rank"),
+	marketCap: numeric("market_cap", { precision: 30, scale:  2 }),
+	coingeckoId: varchar("coingecko_id", { length: 100 }),
+	displayName: varchar("display_name", { length: 100 }),
+}, (table) => {
+	return {
+		exchangeRankIdx: index("exchange_symbols_exchange_rank_idx").using("btree", table.exchangeId.asc().nullsLast().op("int4_ops"), table.globalRank.asc().nullsLast().op("int4_ops")).where(sql`(is_active = true)`),
+		symbolIdx: index("exchange_symbols_symbol_idx").using("btree", table.symbol.asc().nullsLast().op("text_ops")),
+		exchangeSymbolsExchangeIdExchangesIdFk: foreignKey({
+			columns: [table.exchangeId],
+			foreignColumns: [exchanges.id],
+			name: "exchange_symbols_exchange_id_exchanges_id_fk"
+		}).onDelete("cascade"),
+		exchangeSymbolsUnique: unique("exchange_symbols_unique").on(table.exchangeId, table.symbol),
 	}
 });

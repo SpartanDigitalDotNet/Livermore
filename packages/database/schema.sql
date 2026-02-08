@@ -119,8 +119,8 @@ ON CONFLICT ("name") DO UPDATE SET
 CREATE TABLE "user_exchanges" (
   "id" serial NOT NULL,
   "user_id" serial NOT NULL,
-  "exchange_name" character varying(50) NOT NULL,
   "exchange_id" integer NULL,
+  "exchange_name" character varying(50) NOT NULL,
   "display_name" character varying(100) NULL,
   "api_key_env_var" character varying(100) NOT NULL,
   "api_secret_env_var" character varying(100) NOT NULL,

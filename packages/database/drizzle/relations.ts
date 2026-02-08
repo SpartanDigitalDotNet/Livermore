@@ -1,5 +1,5 @@
 import { relations } from "drizzle-orm/relations";
-import { userExchanges, alertHistory, users, exchanges, candles, indicators, positions } from "./schema";
+import { userExchanges, alertHistory, users, candles, indicators, positions, exchanges, exchangeSymbols } from "./schema";
 
 export const alertHistoryRelations = relations(alertHistory, ({one}) => ({
 	userExchange: one(userExchanges, {
@@ -10,6 +10,9 @@ export const alertHistoryRelations = relations(alertHistory, ({one}) => ({
 
 export const userExchangesRelations = relations(userExchanges, ({one, many}) => ({
 	alertHistories: many(alertHistory),
+	candles: many(candles),
+	indicators: many(indicators),
+	positions: many(positions),
 	user: one(users, {
 		fields: [userExchanges.userId],
 		references: [users.id]
@@ -18,51 +21,56 @@ export const userExchangesRelations = relations(userExchanges, ({one, many}) => 
 		fields: [userExchanges.exchangeId],
 		references: [exchanges.id]
 	}),
-	candles: many(candles),
-	indicators: many(indicators),
-	positions: many(positions),
-}));
-
-export const usersRelations = relations(users, ({many}) => ({
-	userExchanges: many(userExchanges),
-	candles: many(candles),
-	indicators: many(indicators),
-	positions: many(positions),
-}));
-
-export const exchangesRelations = relations(exchanges, ({many}) => ({
-	userExchanges: many(userExchanges),
 }));
 
 export const candlesRelations = relations(candles, ({one}) => ({
-	userExchange: one(userExchanges, {
-		fields: [candles.exchangeId],
-		references: [userExchanges.id]
-	}),
 	user: one(users, {
 		fields: [candles.userId],
 		references: [users.id]
 	}),
+	userExchange: one(userExchanges, {
+		fields: [candles.exchangeId],
+		references: [userExchanges.id]
+	}),
+}));
+
+export const usersRelations = relations(users, ({many}) => ({
+	candles: many(candles),
+	indicators: many(indicators),
+	positions: many(positions),
+	userExchanges: many(userExchanges),
 }));
 
 export const indicatorsRelations = relations(indicators, ({one}) => ({
-	userExchange: one(userExchanges, {
-		fields: [indicators.exchangeId],
-		references: [userExchanges.id]
-	}),
 	user: one(users, {
 		fields: [indicators.userId],
 		references: [users.id]
 	}),
+	userExchange: one(userExchanges, {
+		fields: [indicators.exchangeId],
+		references: [userExchanges.id]
+	}),
 }));
 
 export const positionsRelations = relations(positions, ({one}) => ({
+	user: one(users, {
+		fields: [positions.userId],
+		references: [users.id]
+	}),
 	userExchange: one(userExchanges, {
 		fields: [positions.exchangeId],
 		references: [userExchanges.id]
 	}),
-	user: one(users, {
-		fields: [positions.userId],
-		references: [users.id]
+}));
+
+export const exchangesRelations = relations(exchanges, ({many}) => ({
+	userExchanges: many(userExchanges),
+	exchangeSymbols: many(exchangeSymbols),
+}));
+
+export const exchangeSymbolsRelations = relations(exchangeSymbols, ({one}) => ({
+	exchange: one(exchanges, {
+		fields: [exchangeSymbols.exchangeId],
+		references: [exchanges.id]
 	}),
 }));

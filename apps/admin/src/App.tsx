@@ -8,6 +8,7 @@ import { Symbols } from './pages/Symbols';
 import { ExchangeSymbols } from './pages/ExchangeSymbols';
 import { Settings } from './pages/Settings';
 import { UserSync } from './components/UserSync';
+import { ExchangeGuard } from './components/exchange/ExchangeGuard';
 import { Toaster } from '@/components/ui/sonner';
 import { AlertProvider } from '@/contexts/AlertContext';
 import { AlertToastHandler } from '@/components/AlertToastHandler';
@@ -30,6 +31,7 @@ function App() {
       </SignedOut>
       <SignedIn>
         <UserSync>
+          <ExchangeGuard>
           <AlertProvider currentHash={hash}>
             <AlertToastHandler />
             <div className="min-h-screen bg-gray-100">
@@ -95,6 +97,7 @@ function App() {
               </main>
             </div>
           </AlertProvider>
+          </ExchangeGuard>
         </UserSync>
         <Toaster />
       </SignedIn>

@@ -1,8 +1,11 @@
 import { z } from 'zod';
+import { TRPCError } from '@trpc/server';
 import { router, protectedProcedure } from '@livermore/trpc-config';
 import { getDbClient, exchangeSymbols, exchanges, userExchanges, users } from '@livermore/database';
 import { eq, and, asc, sql } from 'drizzle-orm';
 import { hasEnvVar } from '@livermore/utils';
+import { getRedisClient } from '@livermore/cache';
+import { connectionStatusKey, type ExchangeConnectionStatus } from '../services/exchange/adapter-factory';
 
 /**
  * Exchange Symbol Router
@@ -209,6 +212,141 @@ export const exchangeSymbolRouter = router({
           hasCredentials: hasEnvVar(ue.apiKeyEnvVar) && hasEnvVar(ue.apiSecretEnvVar),
         })),
       };
+    }),
+
+  /**
+   * List exchanges with Redis connection status (busy/available).
+   */
+  exchangeStatuses: protectedProcedure
+    .query(async () => {
+      const db = getDbClient();
+
+      const exchangeList = await db
+        .select({
+          id: exchanges.id,
+          name: exchanges.name,
+          displayName: exchanges.displayName,
+          geoRestrictions: exchanges.geoRestrictions,
+        })
+        .from(exchanges)
+        .where(eq(exchanges.isActive, true))
+        .orderBy(asc(exchanges.id));
+
+      let statusMap = new Map<number, ExchangeConnectionStatus>();
+      try {
+        const redis = getRedisClient();
+        const results = await Promise.all(
+          exchangeList.map(async (ex) => {
+            const data = await redis.get(connectionStatusKey(ex.id));
+            return { id: ex.id, data };
+          })
+        );
+        for (const r of results) {
+          if (r.data) {
+            statusMap.set(r.id, JSON.parse(r.data) as ExchangeConnectionStatus);
+          }
+        }
+      } catch {
+        // Redis unavailable — treat all as available
+      }
+
+      return {
+        exchanges: exchangeList.map((ex) => {
+          const status = statusMap.get(ex.id);
+          const isBusy = status != null && status.connectionState !== 'idle';
+          return { ...ex, isBusy };
+        }),
+      };
+    }),
+
+  /**
+   * Check if environment variable names exist on the server.
+   */
+  checkEnvVars: protectedProcedure
+    .input(
+      z.object({
+        envVars: z.array(z.string()).max(10),
+      })
+    )
+    .query(({ input }) => {
+      const results: Record<string, boolean> = {};
+      for (const name of input.envVars) {
+        results[name] = hasEnvVar(name);
+      }
+      return { results };
+    }),
+
+  /**
+   * Create a user_exchanges record for initial exchange setup.
+   */
+  setupExchange: protectedProcedure
+    .input(
+      z.object({
+        exchangeName: z.string().min(1),
+        apiKeyEnvVar: z.string().min(1),
+        apiSecretEnvVar: z.string().min(1),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const db = getDbClient();
+      const clerkId = ctx.auth.userId;
+
+      const [user] = await db
+        .select({ id: users.id })
+        .from(users)
+        .where(
+          and(
+            eq(users.identityProvider, 'clerk'),
+            eq(users.identitySub, clerkId)
+          )
+        )
+        .limit(1);
+
+      if (!user) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'User not found' });
+      }
+
+      // Validate exchange exists
+      const [exchange] = await db
+        .select({ id: exchanges.id, name: exchanges.name })
+        .from(exchanges)
+        .where(and(eq(exchanges.name, input.exchangeName), eq(exchanges.isActive, true)))
+        .limit(1);
+
+      if (!exchange) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Exchange not found' });
+      }
+
+      // Check for duplicate
+      const [existing] = await db
+        .select({ id: userExchanges.id })
+        .from(userExchanges)
+        .where(
+          and(
+            eq(userExchanges.userId, user.id),
+            eq(userExchanges.exchangeName, input.exchangeName)
+          )
+        )
+        .limit(1);
+
+      if (existing) {
+        throw new TRPCError({ code: 'CONFLICT', message: 'Exchange already configured for this user' });
+      }
+
+      const [inserted] = await db
+        .insert(userExchanges)
+        .values({
+          userId: user.id,
+          exchangeName: input.exchangeName,
+          exchangeId: exchange.id,
+          apiKeyEnvVar: input.apiKeyEnvVar,
+          apiSecretEnvVar: input.apiSecretEnvVar,
+          isDefault: true,
+          isActive: true,
+        })
+        .returning({ id: userExchanges.id });
+
+      return { success: true, userExchangeId: inserted.id };
     }),
 
 });
