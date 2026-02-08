@@ -1,7 +1,6 @@
-import type { Timeframe } from '@livermore/schemas';
+import type { Timeframe, IRestClient } from '@livermore/schemas';
 import { CandleCacheStrategy, type RedisClient } from '@livermore/cache';
 import { logger } from '@livermore/utils';
-import { CoinbaseRestClient } from '../rest/client';
 import { BackfillConfig, DEFAULT_BACKFILL_CONFIG, TIMEFRAME_PRIORITY } from './types';
 
 /**
@@ -18,17 +17,16 @@ import { BackfillConfig, DEFAULT_BACKFILL_CONFIG, TIMEFRAME_PRIORITY } from './t
  * - Graceful error handling (individual failures don't block entire backfill)
  */
 export class StartupBackfillService {
-  private restClient: CoinbaseRestClient;
+  private restClient: IRestClient;
   private candleCache: CandleCacheStrategy;
   private config: BackfillConfig;
 
   constructor(
-    apiKeyId: string,
-    privateKeyPem: string,
+    restClient: IRestClient,
     redis: RedisClient,
     config: Partial<BackfillConfig> = {}
   ) {
-    this.restClient = new CoinbaseRestClient(apiKeyId, privateKeyPem);
+    this.restClient = restClient;
     this.candleCache = new CandleCacheStrategy(redis);
     this.config = { ...DEFAULT_BACKFILL_CONFIG, ...config };
   }

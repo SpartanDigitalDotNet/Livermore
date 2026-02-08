@@ -7,3 +7,4 @@
  * - IExchangeAdapter: Interface that all exchange adapters must implement
  */
 export * from './exchange-adapter.schema';
+export * from './rest-client.schema';

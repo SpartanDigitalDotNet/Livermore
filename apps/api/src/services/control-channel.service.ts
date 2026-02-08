@@ -8,6 +8,7 @@ import {
   type Timeframe,
 } from '@livermore/schemas';
 import { StartupBackfillService } from '@livermore/coinbase-client';
+import { createRestClient } from './exchange/rest-client-factory';
 import { SymbolSourceService } from './symbol-source.service';
 import { eq, and, sql } from 'drizzle-orm';
 import { users, userExchanges } from '@livermore/database';
@@ -447,7 +448,12 @@ export class ControlChannelService {
 
         // Resolve user's default exchange from user_exchanges
         const [userExchange] = await this.services.db
-          .select({ exchangeId: userExchanges.exchangeId })
+          .select({
+            exchangeId: userExchanges.exchangeId,
+            exchangeName: userExchanges.exchangeName,
+            apiKeyEnvVar: userExchanges.apiKeyEnvVar,
+            apiSecretEnvVar: userExchanges.apiSecretEnvVar,
+          })
           .from(userExchanges)
           .innerJoin(users, eq(users.id, userExchanges.userId))
           .where(
@@ -463,6 +469,14 @@ export class ControlChannelService {
         if (!userExchange?.exchangeId) {
           throw new Error('No exchange configured. Set up your exchange in Admin first.');
         }
+
+        // Create exchange-specific REST client and store on registry
+        const restClient = createRestClient(
+          userExchange.exchangeName,
+          userExchange.apiKeyEnvVar,
+          userExchange.apiSecretEnvVar
+        );
+        this.services.restClient = restClient;
 
         const symbolSourceService = new SymbolSourceService(userExchange.exchangeId);
         const tier1 = await symbolSourceService.getTier1Symbols();
@@ -488,11 +502,10 @@ export class ControlChannelService {
       // Backfill cache with historical candles (MUST complete before indicators)
       setProgress({ phase: 'indicators', phaseLabel: 'Backfilling historical candles', percent: 10 });
       const backfillTimeframes: Timeframe[] = ['1m', '5m', '15m', '1h', '4h', '1d'];
-      const backfillService = new StartupBackfillService(
-        this.services.config.apiKeyId,
-        this.services.config.privateKeyPem,
-        this.services.redis
-      );
+      if (!this.services.restClient) {
+        throw new Error('No REST client available. Exchange setup may be incomplete.');
+      }
+      const backfillService = new StartupBackfillService(this.services.restClient, this.services.redis);
       await backfillService.backfill(this.services.monitoredSymbols, backfillTimeframes);
       logger.info('Cache backfill complete');
 
@@ -750,12 +763,10 @@ export class ControlChannelService {
 
     logger.info({ symbol, timeframes }, 'Starting force backfill');
 
-    // Create backfill service with credentials from config
-    const backfillService = new StartupBackfillService(
-      this.services.config.apiKeyId,
-      this.services.config.privateKeyPem,
-      this.services.redis
-    );
+    if (!this.services.restClient) {
+      throw new Error('No REST client available. Run "start" first.');
+    }
+    const backfillService = new StartupBackfillService(this.services.restClient, this.services.redis);
 
     // Run backfill for the symbol
     await backfillService.backfill([symbol], timeframes);
@@ -945,11 +956,10 @@ export class ControlChannelService {
     // 5. If not paused, start monitoring the new symbol
     if (!this.isPaused) {
       // 5a. Backfill historical data first
-      const backfillService = new StartupBackfillService(
-        this.services.config.apiKeyId,
-        this.services.config.privateKeyPem,
-        this.services.redis
-      );
+      if (!this.services.restClient) {
+        throw new Error('No REST client available. Run "start" first.');
+      }
+      const backfillService = new StartupBackfillService(this.services.restClient, this.services.redis);
       await backfillService.backfill([normalizedSymbol], this.services.timeframes);
 
       // 5b. Add indicator configs
@@ -1156,11 +1166,10 @@ export class ControlChannelService {
 
     if (!this.isPaused) {
       // Backfill all new symbols
-      const backfillService = new StartupBackfillService(
-        this.services.config.apiKeyId,
-        this.services.config.privateKeyPem,
-        this.services.redis
-      );
+      if (!this.services.restClient) {
+        throw new Error('No REST client available. Run "start" first.');
+      }
+      const backfillService = new StartupBackfillService(this.services.restClient, this.services.redis);
       await backfillService.backfill(toAdd, this.services.timeframes);
 
       // Add indicator configs for all new symbols

@@ -150,6 +150,9 @@ importers:
       '@fastify/websocket':
         specifier: ^11.0.1
         version: 11.2.0
+      '@livermore/binance-client':
+        specifier: workspace:*
+        version: link:../../packages/binance-client
       '@livermore/cache':
         specifier: workspace:*
         version: link:../../packages/cache
@@ -205,6 +208,25 @@ importers:
       tsx:
         specifier: ^4.19.2
         version: 4.21.0
+      typescript:
+        specifier: ^5.6.3
+        version: 5.9.3
+
+  packages/binance-client:
+    dependencies:
+      '@livermore/schemas':
+        specifier: workspace:*
+        version: link:../schemas
+      '@livermore/utils':
+        specifier: workspace:*
+        version: link:../utils
+    devDependencies:
+      '@types/node':
+        specifier: ^22.19.3
+        version: 22.19.3
+      tsup:
+        specifier: ^8.3.5
+        version: 8.5.1(jiti@2.6.1)(postcss@8.5.6)(tsx@4.21.0)(typescript@5.9.3)
       typescript:
         specifier: ^5.6.3
         version: 5.9.3

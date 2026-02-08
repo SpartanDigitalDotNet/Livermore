@@ -1,6 +1,6 @@
 import type { BoundaryRestService } from '@livermore/coinbase-client';
 import type { Database } from '@livermore/database';
-import type { Timeframe, IExchangeAdapter } from '@livermore/schemas';
+import type { Timeframe, IExchangeAdapter, IRestClient } from '@livermore/schemas';
 import type { RedisClient } from '@livermore/cache';
 import type { IndicatorCalculationService } from '../indicator-calculation.service';
 import type { AlertEvaluationService } from '../alert-evaluation.service';
@@ -61,6 +61,9 @@ export interface ServiceRegistry {
 
   /** Supported timeframes for alert service */
   timeframes: Timeframe[];
+
+  /** REST client for the active exchange (null until start) */
+  restClient: IRestClient | null;
 
   /** Phase 29: Exchange adapter factory for creating adapters */
   adapterFactory?: ExchangeAdapterFactory;

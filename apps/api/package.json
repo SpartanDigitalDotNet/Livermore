@@ -17,6 +17,7 @@
     "@fastify/websocket": "^11.0.1",
     "@livermore/cache": "workspace:*",
     "@livermore/charts": "workspace:*",
+    "@livermore/binance-client": "workspace:*",
     "@livermore/coinbase-client": "workspace:*",
     "@livermore/database": "workspace:*",
     "@livermore/indicators": "workspace:*",

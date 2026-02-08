@@ -10,7 +10,8 @@ import { logger, validateEnv } from '@livermore/utils';
 import { getDbClient, testDatabaseConnection } from '@livermore/database';
 import { getRedisClient, testRedisConnection, deleteKeysClusterSafe, exchangeCandleKey, exchangeIndicatorKey } from '@livermore/cache';
 import { createContext as baseCreateContext } from '@livermore/trpc-config';
-import { StartupBackfillService, BoundaryRestService, DEFAULT_BOUNDARY_CONFIG } from '@livermore/coinbase-client';
+import { CoinbaseRestClient, StartupBackfillService, BoundaryRestService, DEFAULT_BOUNDARY_CONFIG } from '@livermore/coinbase-client';
+import type { IRestClient } from '@livermore/schemas';
 import { ExchangeAdapterFactory } from './services/exchange/adapter-factory';
 import { SymbolSourceService } from './services/symbol-source.service';
 import { getAccountSymbols } from './services/account-symbols.service';
@@ -251,6 +252,7 @@ async function start() {
 
   // Symbol loading: only fetch from exchange on autostart, otherwise defer to start command
   let monitoredSymbols: string[] = [];
+  let restClient: IRestClient | null = null;
 
   if (isAutostart) {
     // Autostart: fetch symbols now (we have API keys, need data before connecting)
@@ -274,11 +276,8 @@ async function start() {
     // Backfill cache with historical candles
     logger.info('Starting cache backfill...');
     const backfillTimeframes: Timeframe[] = ['1m', '5m', '15m', '1h', '4h', '1d'];
-    const backfillService = new StartupBackfillService(
-      config.Coinbase_ApiKeyId,
-      config.Coinbase_EcPrivateKeyPem,
-      redis
-    );
+    restClient = new CoinbaseRestClient(config.Coinbase_ApiKeyId, config.Coinbase_EcPrivateKeyPem);
+    const backfillService = new StartupBackfillService(restClient, redis);
     await backfillService.backfill(monitoredSymbols, backfillTimeframes);
     logger.info('Cache backfill complete');
   } else {
@@ -442,6 +441,7 @@ async function start() {
     monitoredSymbols,
     indicatorConfigs,
     timeframes: SUPPORTED_TIMEFRAMES,
+    restClient,
     // Phase 29: New services (populated during autostart, otherwise set by start command)
     adapterFactory,
   };
