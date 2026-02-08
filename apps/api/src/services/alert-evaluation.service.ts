@@ -1,4 +1,4 @@
-import { getRedisClient, tickerChannel, indicatorChannel, IndicatorCacheStrategy, CandleCacheStrategy, type CachedIndicatorValue, type RedisClient } from '@livermore/cache';
+import { getRedisClient, tickerChannel, indicatorChannel, exchangeAlertChannel, IndicatorCacheStrategy, CandleCacheStrategy, type CachedIndicatorValue, type RedisClient } from '@livermore/cache';
 import { getDbClient, alertHistory } from '@livermore/database';
 import { logger } from '@livermore/utils';
 import type { Ticker, Timeframe } from '@livermore/schemas';
@@ -477,7 +477,7 @@ export class AlertEvaluationService {
       }).returning({ id: alertHistory.id });
 
       // Broadcast to WebSocket clients
-      broadcastAlert({
+      const alertPayload = {
         id: inserted.id,
         symbol,
         alertType: 'macdv',
@@ -486,7 +486,14 @@ export class AlertEvaluationService {
         triggerValue: currentMacdV,
         signalDelta: histogram,
         triggeredAt: now.toISOString(),
-      });
+        sourceExchangeId: this.TEST_EXCHANGE_ID,
+        sourceExchangeName: 'coinbase',
+      };
+      broadcastAlert(alertPayload);
+
+      // Publish to Redis for cross-exchange visibility (Phase 27 VIS-01)
+      const channel = exchangeAlertChannel(this.TEST_EXCHANGE_ID);
+      await this.redis.publish(channel, JSON.stringify(alertPayload));
     } catch (dbError) {
       logger.error({ error: dbError, symbol, timeframe }, 'Failed to record alert to database');
     }
@@ -577,7 +584,7 @@ export class AlertEvaluationService {
       }).returning({ id: alertHistory.id });
 
       // Broadcast to WebSocket clients
-      broadcastAlert({
+      const alertPayload = {
         id: inserted.id,
         symbol,
         alertType: 'macdv',
@@ -586,7 +593,14 @@ export class AlertEvaluationService {
         triggerValue: currentMacdV,
         signalDelta: histogram,
         triggeredAt: now.toISOString(),
-      });
+        sourceExchangeId: this.TEST_EXCHANGE_ID,
+        sourceExchangeName: 'coinbase',
+      };
+      broadcastAlert(alertPayload);
+
+      // Publish to Redis for cross-exchange visibility (Phase 27 VIS-01)
+      const channel = exchangeAlertChannel(this.TEST_EXCHANGE_ID);
+      await this.redis.publish(channel, JSON.stringify(alertPayload));
     } catch (dbError) {
       logger.error({ error: dbError, symbol, timeframe }, 'Failed to record alert to database');
     }

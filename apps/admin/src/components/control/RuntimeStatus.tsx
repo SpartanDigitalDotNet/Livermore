@@ -1,6 +1,16 @@
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { PlayCircle, PauseCircle, Clock, Wifi, WifiOff } from 'lucide-react';
+import { Progress } from '@/components/ui/progress';
+import { PlayCircle, PauseCircle, Clock, Wifi, WifiOff, Loader2 } from 'lucide-react';
+
+interface StartupProgress {
+  phase: 'idle' | 'indicators' | 'warmup' | 'boundary' | 'websocket' | 'complete';
+  phaseLabel: string;
+  percent: number;
+  currentItem?: string;
+  total?: number;
+  current?: number;
+}
 
 interface RuntimeStatusProps {
   status: {
@@ -9,6 +19,8 @@ interface RuntimeStatusProps {
     uptime: number;
     exchangeConnected: boolean;
     queueDepth: number;
+    connectionState?: 'idle' | 'connecting' | 'connected' | 'disconnected' | 'error';
+    startup?: StartupProgress;
   } | null;
   isLoading: boolean;
 }
@@ -60,19 +72,45 @@ export function RuntimeStatus({ status, isLoading }: RuntimeStatusProps) {
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           Runtime Status
-          <Badge variant={status.isPaused ? 'secondary' : 'default'}>
-            {status.isPaused ? (
-              <>
+          {(() => {
+            const cs = status.connectionState ?? (status.exchangeConnected ? 'connected' : 'idle');
+            if (cs === 'idle' || cs === 'disconnected') {
+              return (
+                <Badge variant="secondary">
+                  <PauseCircle className="h-3 w-3 mr-1" />
+                  Idle
+                </Badge>
+              );
+            }
+            if (cs === 'connecting') {
+              return (
+                <Badge variant="outline" className="border-blue-300 text-blue-600">
+                  <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                  Starting
+                </Badge>
+              );
+            }
+            if (cs === 'error') {
+              return (
+                <Badge variant="destructive">
+                  <WifiOff className="h-3 w-3 mr-1" />
+                  Error
+                </Badge>
+              );
+            }
+            // connected
+            return status.isPaused ? (
+              <Badge variant="secondary">
                 <PauseCircle className="h-3 w-3 mr-1" />
                 Paused
-              </>
+              </Badge>
             ) : (
-              <>
+              <Badge variant="default">
                 <PlayCircle className="h-3 w-3 mr-1" />
                 Running
-              </>
-            )}
-          </Badge>
+              </Badge>
+            );
+          })()}
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -101,6 +139,28 @@ export function RuntimeStatus({ status, isLoading }: RuntimeStatusProps) {
           <span className="text-sm text-gray-500">Mode: </span>
           <Badge variant="outline">{status.mode}</Badge>
         </div>
+
+        {/* Startup Progress */}
+        {status.startup && status.startup.phase !== 'idle' && status.startup.phase !== 'complete' && (
+          <div className="space-y-2 pt-2 border-t">
+            <div className="flex items-center gap-2">
+              <Loader2 className="h-4 w-4 animate-spin text-blue-500" />
+              <span className="text-sm font-medium">{status.startup.phaseLabel}</span>
+            </div>
+            <Progress value={status.startup.percent} className="h-2" />
+            <div className="flex justify-between text-xs text-gray-500">
+              <span>
+                {status.startup.currentItem && (
+                  <span className="text-gray-700">{status.startup.currentItem}</span>
+                )}
+                {status.startup.current && status.startup.total && (
+                  <span className="ml-2">({status.startup.current}/{status.startup.total})</span>
+                )}
+              </span>
+              <span>{status.startup.percent}%</span>
+            </div>
+          </div>
+        )}
 
         {/* Queue Depth (if > 0) */}
         {status.queueDepth > 0 && (

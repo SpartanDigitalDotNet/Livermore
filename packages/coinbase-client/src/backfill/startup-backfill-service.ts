@@ -88,7 +88,7 @@ export class StartupBackfillService {
       }
 
       // Log progress (BKFL-04)
-      this.logProgress(completed, tasks.length, startTime, errors);
+      this.logProgress(completed, tasks.length, startTime, errors, batch);
 
       // Sleep before next batch (skip on last batch)
       if (i + this.config.batchSize < tasks.length) {
@@ -156,23 +156,23 @@ export class StartupBackfillService {
     completed: number,
     total: number,
     startTime: number,
-    errors: number
+    errors: number,
+    batch: Array<{ symbol: string; timeframe: Timeframe }>
   ): void {
-    const percent = ((completed / total) * 100).toFixed(1);
     const elapsed = (Date.now() - startTime) / 1000;
     const rate = completed / elapsed;
     const remaining = total - completed;
     const eta = rate > 0 ? (remaining / rate).toFixed(1) : '?';
+    const tf = batch[0]?.timeframe ?? '?';
 
     logger.info({
       event: 'backfill_progress',
+      timeframe: tf,
       completed,
       total,
-      percent,
-      elapsedSec: elapsed.toFixed(1),
       etaSec: eta,
       errors,
-    }, `Backfill: ${completed}/${total} (${percent}%) - ETA ${eta}s`);
+    }, `Backfill: ${tf} ${completed}/${total} - ETA ${eta}s`);
   }
 
   /**

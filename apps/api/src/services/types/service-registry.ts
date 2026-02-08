@@ -1,9 +1,11 @@
-import type { CoinbaseAdapter, BoundaryRestService } from '@livermore/coinbase-client';
+import type { BoundaryRestService } from '@livermore/coinbase-client';
 import type { Database } from '@livermore/database';
-import type { Timeframe } from '@livermore/schemas';
+import type { Timeframe, IExchangeAdapter } from '@livermore/schemas';
 import type { RedisClient } from '@livermore/cache';
 import type { IndicatorCalculationService } from '../indicator-calculation.service';
 import type { AlertEvaluationService } from '../alert-evaluation.service';
+import type { ExchangeAdapterFactory } from '../exchange/adapter-factory';
+import type { SymbolSourceService, ClassifiedSymbol } from '../symbol-source.service';
 
 /**
  * Runtime configuration for services that need API credentials
@@ -30,8 +32,8 @@ export interface RuntimeConfig {
  * - Config holds credentials for operations requiring API access
  */
 export interface ServiceRegistry {
-  /** CoinbaseAdapter - WebSocket connection for real-time data */
-  coinbaseAdapter: CoinbaseAdapter;
+  /** Exchange adapter - WebSocket connection for real-time data (Phase 29: via factory) */
+  coinbaseAdapter: IExchangeAdapter;
 
   /** IndicatorCalculationService - Calculates MACD-V from cached candles */
   indicatorService: IndicatorCalculationService;
@@ -59,4 +61,13 @@ export interface ServiceRegistry {
 
   /** Supported timeframes for alert service */
   timeframes: Timeframe[];
+
+  /** Phase 29: Exchange adapter factory for creating adapters */
+  adapterFactory?: ExchangeAdapterFactory;
+
+  /** Phase 29: Symbol source service for tier classification */
+  symbolSourceService?: SymbolSourceService;
+
+  /** Phase 29: Classified symbols with tier info */
+  classifiedSymbols?: ClassifiedSymbol[];
 }

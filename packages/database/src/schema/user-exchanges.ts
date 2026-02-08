@@ -1,5 +1,6 @@
-import { pgTable, serial, varchar, text, boolean, timestamp, index } from 'drizzle-orm/pg-core';
+import { pgTable, serial, integer, varchar, text, boolean, timestamp, index, foreignKey } from 'drizzle-orm/pg-core';
 import { users } from './users';
+import { exchanges } from './exchanges';
 
 /**
  * User exchanges table - stores user connections to different exchanges
@@ -18,6 +19,8 @@ export const userExchanges = pgTable(
       .references(() => users.id, { onDelete: 'cascade' }),
     /** Exchange name (e.g., 'coinbase', 'binance', 'kraken') */
     exchangeName: varchar('exchange_name', { length: 50 }).notNull(),
+    /** FK to exchanges table */
+    exchangeId: integer('exchange_id'),
     /** Display name for this connection (user-defined) */
     displayName: varchar('display_name', { length: 100 }),
     /** Name of environment variable containing the API key (e.g., 'COINBASE_API_KEY') */
@@ -41,6 +44,12 @@ export const userExchanges = pgTable(
       table.userId,
       table.exchangeName
     ),
+    exchangeIdIdx: index('user_exchanges_exchange_id_idx').on(table.exchangeId),
+    userExchangesExchangeIdExchangesIdFk: foreignKey({
+      columns: [table.exchangeId],
+      foreignColumns: [exchanges.id],
+      name: 'user_exchanges_exchange_id_exchanges_id_fk',
+    }).onDelete('set null'),
   })
 );
 

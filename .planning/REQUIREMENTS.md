@@ -1,161 +1,102 @@
-# Requirements: Livermore Trading Platform
+# Requirements: v5.0 Distributed Exchange Architecture
 
-**Defined:** 2026-01-31
-**Core Value:** Data accuracy and timely alerts
+Requirements for exchange-scoped data architecture enabling cross-exchange visibility.
 
-## v4.0 Requirements
+## v5.0 Requirements
 
-Requirements for User Settings + Runtime Control milestone.
+### Exchange Management
 
-### Settings Infrastructure
+- [ ] **EXC-01**: `exchanges` metadata table with API limits, fees, geo restrictions, supported timeframes, WebSocket URLs
+- [ ] **EXC-02**: `user_exchanges` FK refactor to reference `exchanges` table (normalize exchange data)
+- [ ] **EXC-03**: Exchange adapter factory that instantiates correct adapter (Coinbase/Binance) based on exchange type
+- [ ] **EXC-04**: Exchange connection status tracking (`connected_at`, `last_heartbeat`, `connection_state`)
 
-- [x] **SET-01**: `settings` JSONB column added to users table with version field
-- [x] **SET-02**: Zod schema for UserSettings type matching existing file structure
-- [x] **SET-03**: tRPC `settings.get` endpoint returns user settings
-- [x] **SET-04**: tRPC `settings.update` endpoint replaces entire settings
-- [x] **SET-05**: tRPC `settings.patch` endpoint updates specific sections via jsonb_set
-- [x] **SET-06**: Settings export endpoint (download as JSON)
-- [x] **SET-07**: Settings import endpoint (upload JSON, validate, save)
+### Data Architecture
 
-### Runtime Control
-
-- [x] **RUN-01**: Redis pub/sub command channel `livermore:commands:{identity_sub}`
-- [x] **RUN-02**: Redis pub/sub response channel `livermore:responses:{identity_sub}`
-- [x] **RUN-03**: Command handler in API processes incoming commands
-- [x] **RUN-04**: `pause` command stops WebSocket connections and indicator processing
-- [x] **RUN-05**: `resume` command restarts WebSocket and indicator processing
-- [x] **RUN-06**: `reload-settings` command reloads settings from database
-- [x] **RUN-07**: `switch-mode` command changes runtime mode (position-monitor, scalper-macdv, scalper-orderbook stub)
-- [x] **RUN-08**: `force-backfill` command triggers candle backfill for specified symbol
-- [x] **RUN-09**: `clear-cache` command clears Redis cache with scope (all, symbol, timeframe)
-- [x] **RUN-10**: Command ACK returned immediately on receipt
-- [x] **RUN-11**: Command result returned after execution
-- [x] **RUN-12**: Command timeout — commands expire if not processed within 30s
-- [x] **RUN-13**: Command priority — pause/resume processed before other commands
+- [ ] **DATA-01**: Exchange-scoped candle keys `candles:{exchange_id}:{symbol}:{timeframe}` (shared pool for Tier 1)
+- [ ] **DATA-02**: Exchange-scoped indicator keys `indicator:{exchange_id}:{symbol}:{timeframe}:{type}` (shared calculations)
+- [ ] **DATA-03**: User overflow keys `usercandles:{userId}:{exchange_id}:{symbol}:{timeframe}` with TTL for positions
+- [ ] **DATA-04**: Dual-read pattern (indicator service checks exchange-scoped first, falls back to user-scoped)
+- [ ] **DATA-05**: Cross-exchange pub/sub channels `channel:exchange:{exchange_id}:candle:close:{symbol}:{timeframe}`
 
 ### Symbol Management
 
-- [x] **SYM-01**: `add-symbol` command adds symbol to watchlist dynamically
-- [x] **SYM-02**: `remove-symbol` command removes symbol from watchlist
-- [x] **SYM-03**: Admin verifies symbols against exchange API before saving (delta-based validation)
-- [x] **SYM-04**: Symbol search endpoint fetches available symbols from user's exchange
-- [x] **SYM-05**: Bulk symbol import from JSON array
-- [x] **SYM-06**: Symbol metrics preview (24h volume, price) before adding
+- [ ] **SYM-01**: Tier 1 symbol list - Top N by 24h volume (exchange-driven, shared pool)
+- [ ] **SYM-02**: Tier 2 user positions - Auto-subscribe held positions (de-duped against Tier 1)
+- [ ] **SYM-04**: Symbol de-duplication logic (Tier 2 entries matching Tier 1 use shared pool)
 
-### Admin UI - Settings
+### Startup/Control
 
-- [x] **UI-SET-01**: Settings page with form-based editor for common settings
-- [x] **UI-SET-02**: JSON raw editor for power users (Monaco or json-edit-react)
-- [x] **UI-SET-03**: Side-by-side view (form + JSON simultaneously)
-- [x] **UI-SET-04**: Settings diff view shows changes before saving
-- [x] **UI-SET-05**: Save/discard buttons with validation error display
-- [x] **UI-SET-06**: Loading states and success/error toasts
+- [ ] **CTL-01**: Idle startup mode - API starts without WebSocket connections, awaits `start` command
+- [ ] **CTL-02**: `start` command to initiate exchange connections (replaces auto-connect)
+- [ ] **CTL-03**: `--autostart <exchange>` CLI flag to bypass idle mode for specific exchange
+- [ ] **CTL-04**: Connection lifecycle events (`exchange:connecting`, `exchange:connected`, `exchange:disconnected`)
 
-### Admin UI - Control Panel
+### Cross-Exchange Visibility
 
-- [x] **UI-CTL-01**: Runtime status display (running/paused, current mode, uptime)
-- [x] **UI-CTL-02**: Pause/resume buttons
-- [x] **UI-CTL-03**: Mode switcher dropdown
-- [x] **UI-CTL-04**: Active symbols count and list
-- [x] **UI-CTL-05**: Exchange connection status indicators
-- [x] **UI-CTL-06**: Command history panel (recent commands + results)
-- [x] **UI-CTL-07**: Confirmation dialog for destructive commands (clear-cache)
+- [ ] **VIS-01**: Exchange-scoped alert channels `channel:alerts:{exchange_id}` (not user-scoped)
+- [ ] **VIS-02**: Cross-exchange subscription - Client can subscribe to any exchange's feed
+- [ ] **VIS-03**: Alert source attribution - Alert payloads include `source_exchange_id` field
 
-### Admin UI - Symbols
+## v5.1+ Requirements (Deferred)
 
-- [x] **UI-SYM-01**: Symbol watchlist display with enable/disable toggles
-- [x] **UI-SYM-02**: Add symbol with search + validation against exchange
-- [x] **UI-SYM-03**: Remove symbol with confirmation
-- [x] **UI-SYM-04**: Bulk import modal (paste JSON, validate, preview)
-- [x] **UI-SYM-05**: Scanner status display (enabled, last run, exchange)
-- [x] **UI-SYM-06**: Symbol metrics display (volume, price) on hover/expand
+### Autostart Authentication
 
-## v4.1 Requirements
+- [ ] **AUTH-01**: Autostart user context - `--autostart <exchange> --user <clerk_id>` or `LIVERMORE_SYSTEM_USER` env var
+- [ ] **AUTH-02**: System user concept - Unattended operation without interactive Clerk login
+- [ ] **AUTH-03**: User settings loading on autostart - Load user's symbols/settings from database by user ID
 
-Deferred to next milestone.
+### Symbol Management
 
-### Orderbook Imbalance
+- [ ] **SYM-03**: Tier 2 manual adds - User-added symbols with validation + de-dupe
+- [ ] **SYM-05**: Symbol metrics endpoint - 24h volume, price, market cap for add/remove decisions
 
-- **OB-01**: WebSocket Level2 channel subscription
-- **OB-02**: Orderbook imbalance detection algorithm
-- **OB-03**: Imbalance alerts with configurable thresholds
+### Differentiators
 
-### Multi-Exchange Adapters
-
-- **EXCH-01**: Binance.com adapter implementation
-- **EXCH-02**: Binance.us adapter implementation
-
-### Security Hardening
-
-- **SEC-01**: Convert indicator.router.ts to protectedProcedure
-- **SEC-02**: Convert alert.router.ts to protectedProcedure
-- **SEC-03**: Convert position.router.ts to protectedProcedure
+- [ ] **DIFF-02**: Exchange latency comparison - Display price discrepancy between exchanges
+- [ ] **DIFF-03**: Volume-weighted symbol scoring - Rank symbols by cross-exchange combined volume
+- [ ] **DIFF-04**: Geographic exchange routing - Suggest optimal exchange based on user's geo
+- [ ] **DIFF-05**: Exchange health dashboard - Aggregate view of all connected exchanges
 
 ## Out of Scope
 
 | Feature | Reason |
 |---------|--------|
-| Orderbook imbalance implementation | Stub only in v4.0 — full implementation v4.1 |
-| Azure Service Bus | Redis pub/sub sufficient for single-instance |
-| Multi-instance API | Single API instance per user |
-| Settings history/audit log | Single JSONB with updated_at sufficient |
-| Per-symbol settings | Global settings apply to all symbols |
-| Router auth hardening | Tech debt accepted, defer to v4.1 |
+| Trade execution | Monitoring-only platform; execution adds complexity, liability, regulatory burden |
+| Order book aggregation | Full Level2 orderbook across exchanges not needed for MACD-V signals |
+| Cross-exchange position netting | Complex reconciliation, unclear value for signal platform |
+| Automatic exchange failover | Switching exchanges mid-session could confuse signal context |
+| Multi-user shared cache | Exchange-scoped but each API instance serves one user |
+| Azure Service Bus | Redis pub/sub sufficient for current scale |
+| Real-time arbitrage execution | Requires sub-second execution; soft-arbitrage (signals only) is safer |
+| CCXT integration | Abstraction overhead; native adapters are faster and more controllable |
+| 1m candle support | Coinbase WebSocket only provides native 5m; 1m requires ticker aggregation |
 
 ## Traceability
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| SET-01 | 17 | Complete |
-| SET-02 | 17 | Complete |
-| SET-03 | 17 | Complete |
-| SET-04 | 17 | Complete |
-| SET-05 | 17 | Complete |
-| SET-06 | 17 | Complete |
-| SET-07 | 17 | Complete |
-| RUN-01 | 18 | Complete |
-| RUN-02 | 18 | Complete |
-| RUN-03 | 18 | Complete |
-| RUN-04 | 19 | Complete |
-| RUN-05 | 19 | Complete |
-| RUN-06 | 19 | Complete |
-| RUN-07 | 19 | Complete |
-| RUN-08 | 19 | Complete |
-| RUN-09 | 19 | Complete |
-| RUN-10 | 18 | Complete |
-| RUN-11 | 18 | Complete |
-| RUN-12 | 18 | Complete |
-| RUN-13 | 18 | Complete |
-| SYM-01 | 20 | Complete |
-| SYM-02 | 20 | Complete |
-| SYM-03 | 20 | Complete |
-| SYM-04 | 20 | Complete |
-| SYM-05 | 20 | Complete |
-| SYM-06 | 20 | Complete |
-| UI-SET-01 | 21 | Complete |
-| UI-SET-02 | 21 | Complete |
-| UI-SET-03 | 21 | Complete |
-| UI-SET-04 | 21 | Complete |
-| UI-SET-05 | 21 | Complete |
-| UI-SET-06 | 21 | Complete |
-| UI-CTL-01 | 22 | Complete |
-| UI-CTL-02 | 22 | Complete |
-| UI-CTL-03 | 22 | Complete |
-| UI-CTL-04 | 22 | Complete |
-| UI-CTL-05 | 22 | Complete |
-| UI-CTL-06 | 22 | Complete |
-| UI-CTL-07 | 22 | Complete |
-| UI-SYM-01 | 22 | Complete |
-| UI-SYM-02 | 22 | Complete |
-| UI-SYM-03 | 22 | Complete |
-| UI-SYM-04 | 22 | Complete |
-| UI-SYM-05 | 22 | Complete |
-| UI-SYM-06 | 22 | Complete |
-
-**Coverage:**
-- v4.0 requirements: 45 total
-- Mapped to phases: 45
-- Unmapped: 0
+| EXC-01 | 23 | Pending |
+| EXC-02 | 23 | Pending |
+| EXC-03 | 28 | Pending |
+| EXC-04 | 28 | Pending |
+| DATA-01 | 24 | Pending |
+| DATA-02 | 24 | Pending |
+| DATA-03 | 24 | Pending |
+| DATA-04 | 24 | Pending |
+| DATA-05 | 24 | Pending |
+| SYM-01 | 25 | Pending |
+| SYM-02 | 25 | Pending |
+| SYM-04 | 25 | Pending |
+| CTL-01 | 26 | Pending |
+| CTL-02 | 26 | Pending |
+| CTL-03 | 26 | Pending |
+| CTL-04 | 26 | Pending |
+| VIS-01 | 27 | Pending |
+| VIS-02 | 27 | Pending |
+| VIS-03 | 27 | Pending |
 
 ---
-*Requirements defined: 2026-01-31*
+
+*Created: 2026-02-06*
+*Milestone: v5.0 Distributed Exchange Architecture*

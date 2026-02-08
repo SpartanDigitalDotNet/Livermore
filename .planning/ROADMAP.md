@@ -1,225 +1,201 @@
-# Milestone v4.0: User Settings + Runtime Control
-
-**Status:** In Progress
-**Phases:** 17-22
-**Total Plans:** TBD
+# Roadmap: v5.0 Distributed Exchange Architecture
 
 ## Overview
 
-Enables user-specific configuration stored in PostgreSQL with JSONB, establishes Redis pub/sub control channels for Admin-to-API command communication, implements runtime mode management and symbol management, and builds Admin UI for settings editing, runtime control, and symbol curation.
+Transform Livermore from user-scoped single-exchange to exchange-scoped distributed architecture. Core outcome: cross-exchange visibility enabling "trigger remotely, buy locally" soft-arbitrage patterns. Mike's Coinbase signals visible to Kaia's Binance instance via Redis pub/sub.
 
-## Phases
-
-### Phase 17: Settings Infrastructure
-
-**Goal**: User settings can be stored, retrieved, and managed via database with type-safe schema
-**Depends on**: None (foundation phase)
-**Plans**: 3 plans
-
-Plans:
-- [x] 17-01-PLAN.md — Database column + Zod schema foundation
-- [x] 17-02-PLAN.md — Core CRUD endpoints (get/update/patch)
-- [x] 17-03-PLAN.md — Export/Import endpoints
-
-**Requirements:**
-- SET-01: `settings` JSONB column added to users table with version field
-- SET-02: Zod schema for UserSettings type matching existing file structure
-- SET-03: tRPC `settings.get` endpoint returns user settings
-- SET-04: tRPC `settings.update` endpoint replaces entire settings
-- SET-05: tRPC `settings.patch` endpoint updates specific sections via jsonb_set
-- SET-06: Settings export endpoint (download as JSON)
-- SET-07: Settings import endpoint (upload JSON, validate, save)
-
-**Success Criteria:**
-1. User can retrieve their settings via tRPC call and receive typed JSON response
-2. User can replace entire settings document and changes persist across API restarts
-3. User can patch individual sections without affecting other settings
-4. User can export settings to JSON file and import settings from JSON file
-5. Invalid settings (schema mismatch) are rejected with clear validation errors
+**Phases:** 6
+**Requirements:** 19 (mapped 100%)
+**Starting phase:** 23
 
 ---
 
-### Phase 18: Control Channel Foundation
+## Phase 23: Schema Foundation
 
-**Goal**: Admin UI can send commands to API and receive acknowledgments and results
-**Depends on**: Phase 17 (settings schema informs command payloads)
-**Plans**: 3 plans
+**Goal:** Establish database foundation for multi-exchange architecture with normalized metadata.
+
+**Dependencies:** None (foundation phase)
+
+**Plans:** 1 plan
 
 Plans:
-- [x] 18-01-PLAN.md — Schemas + channel key helpers
-- [x] 18-02-PLAN.md — ControlChannelService with pub/sub + priority queue
-- [x] 18-03-PLAN.md — Server integration (startup/shutdown)
+- [ ] 23-01-PLAN.md — Create exchanges table with seed data and add FK to user_exchanges
 
 **Requirements:**
-- RUN-01: Redis pub/sub command channel `livermore:commands:{identity_sub}`
-- RUN-02: Redis pub/sub response channel `livermore:responses:{identity_sub}`
-- RUN-03: Command handler in API processes incoming commands
-- RUN-10: Command ACK returned immediately on receipt
-- RUN-11: Command result returned after execution
-- RUN-12: Command timeout - commands expire if not processed within 30s
-- RUN-13: Command priority - pause/resume processed before other commands
+- EXC-01: `exchanges` metadata table with API limits, fees, geo restrictions, supported timeframes
+- EXC-02: `user_exchanges` FK refactor to reference `exchanges` table
 
 **Success Criteria:**
-1. Admin UI can publish a command and receive immediate ACK within 100ms
-2. Admin UI receives execution result after command completes (success or failure)
-3. Commands that exceed 30s timeout are marked as expired and not processed
-4. Pause command is processed before queued non-priority commands
-5. Multiple commands can be queued and processed in priority order
+1. `exchanges` table exists with Coinbase and Binance seed data (name, display_name, ws_url, supported_timeframes)
+2. `user_exchanges.exchange_id` FK references `exchanges.id` (nullable during migration)
+3. Schema migration runs via Atlas without errors
+4. `drizzle-kit pull` regenerates TypeScript schema with new tables/columns
 
 ---
 
-### Phase 19: Runtime Commands
+## Phase 24: Data Architecture
 
-**Goal**: API runtime can be controlled via pub/sub commands without restart
-**Depends on**: Phase 18 (command channel and handler exist)
-**Plans**: 3 plans
+**Goal:** Redis key patterns support exchange-scoped shared data and user-scoped overflow with backward compatibility.
+
+**Dependencies:** Phase 23 (exchanges table provides exchange_id concept)
+
+**Plans:** 3 plans
 
 Plans:
-- [x] 19-01-PLAN.md — ServiceRegistry interface + constructor injection
-- [x] 19-02-PLAN.md — Server integration + pause/resume handlers (RUN-04, RUN-05)
-- [x] 19-03-PLAN.md — Remaining handlers: reload-settings, switch-mode, force-backfill, clear-cache (RUN-06 to RUN-09)
+- [ ] 24-01-PLAN.md — Add exchange-scoped and user-overflow key functions to cache package
+- [ ] 24-02-PLAN.md — Implement dual-read and tiered writes in cache strategies
+- [ ] 24-03-PLAN.md — Update pub/sub to exchange-scoped channels with dual-publish
 
 **Requirements:**
-- RUN-04: `pause` command stops WebSocket connections and indicator processing
-- RUN-05: `resume` command restarts WebSocket and indicator processing
-- RUN-06: `reload-settings` command reloads settings from database
-- RUN-07: `switch-mode` command changes runtime mode (position-monitor, scalper-macdv, scalper-orderbook stub)
-- RUN-08: `force-backfill` command triggers candle backfill for specified symbol
-- RUN-09: `clear-cache` command clears Redis cache with scope (all, symbol, timeframe)
+- DATA-01: Exchange-scoped candle keys `candles:{exchange_id}:{symbol}:{timeframe}`
+- DATA-02: Exchange-scoped indicator keys `indicator:{exchange_id}:{symbol}:{timeframe}:{type}`
+- DATA-03: User overflow keys `usercandles:{userId}:{exchange_id}:{symbol}:{timeframe}` with TTL
+- DATA-04: Dual-read pattern (indicator service checks exchange-scoped first, falls back to user-scoped)
+- DATA-05: Cross-exchange pub/sub channels `channel:exchange:{exchange_id}:candle:close:{symbol}:{timeframe}`
 
 **Success Criteria:**
-1. User can pause API and WebSocket connections stop (no new data processing)
-2. User can resume API and WebSocket connections restart from current state
-3. User can reload settings and API uses new values without restart
-4. User can switch between position-monitor and scalper-macdv modes at runtime
-5. User can force backfill for a symbol and candle data is refreshed from exchange
+1. New key functions exist in `packages/cache/src/keys.ts` for shared and user-scoped patterns
+2. Cache strategies accept tier parameter (1 = shared, 2 = user overflow)
+3. Indicator service reads from exchange-scoped keys first, falls back to legacy user-scoped keys
+4. Candle close events publish to exchange-scoped channels (without userId)
+5. Legacy key functions remain (deprecated) for backward compatibility during migration
 
 ---
 
-### Phase 20: Symbol Management
+## Phase 25: Symbol Management
 
-**Goal**: Users can dynamically add/remove symbols with exchange validation
-**Depends on**: Phase 18 (command channel for add/remove), Phase 17 (settings store symbol list)
-**Plans**: 3 plans
+**Goal:** Two-tier symbol sourcing with automatic de-duplication between shared pool and user positions.
 
-Plans:
-- [x] 20-01-PLAN.md — Symbol router for Admin UI (search, validate, metrics)
-- [x] 20-02-PLAN.md — Command handlers (add-symbol, remove-symbol)
-- [x] 20-03-PLAN.md — Bulk import validation and command
+**Dependencies:** Phase 24 (uses new key patterns for tier-aware storage)
 
 **Requirements:**
-- SYM-01: `add-symbol` command adds symbol to watchlist dynamically
-- SYM-02: `remove-symbol` command removes symbol from watchlist
-- SYM-03: Admin verifies symbols against exchange API before saving (delta-based validation)
-- SYM-04: Symbol search endpoint fetches available symbols from user's exchange
-- SYM-05: Bulk symbol import from JSON array
-- SYM-06: Symbol metrics preview (24h volume, price) before adding
+- SYM-01: Tier 1 symbol list - Top N by 24h volume (exchange-driven, shared pool)
+- SYM-02: Tier 2 user positions - Auto-subscribe held positions (de-duped against Tier 1)
+- SYM-04: Symbol de-duplication logic (Tier 2 entries matching Tier 1 use shared pool)
 
 **Success Criteria:**
-1. User can add a valid symbol and API starts processing it within 30s
-2. User can remove a symbol and API stops processing it (cache cleanup)
-3. Invalid symbols (not on exchange) are rejected with clear error message
-4. User can search available symbols from their configured exchange
-5. User can bulk import multiple symbols and see validation results for each
+1. `exchange_symbols` table tracks Tier 1 symbols per exchange with volume ranking
+2. Startup fetches user positions and classifies as Tier 1 (use shared) or Tier 2 (user overflow)
+3. Symbols in both Tier 1 and user positions write to shared keys only (no duplicate data)
+4. `SymbolSourceService` provides merged symbol list with tier annotations
+5. Admin symbols UI shows tier classification for each symbol
 
 ---
 
-### Phase 21: Admin UI - Settings
+## Phase 26: Startup Control
 
-**Goal**: Users can view and edit their settings through intuitive form and JSON interfaces
-**Depends on**: Phase 17 (settings endpoints exist)
-**Plans**: 5 plans
+**Goal:** API starts idle and awaits explicit start command, with CLI override for automation.
 
-Plans:
-- [x] 21-01-PLAN.md — Foundation: libraries, Settings page shell, loading/error states, Sonner toasts
-- [x] 21-02-PLAN.md — JSON editor: Monaco editor component and diff view component
-- [x] 21-03-PLAN.md — Form editor: shadcn components, ProfileSection, RuntimeSection, SettingsForm
-- [x] 21-04-PLAN.md — Split view: side-by-side layout with bidirectional form/JSON sync
-- [x] 21-05-PLAN.md — Save/discard: diff modal, save mutation, discard, toast notifications
+**Dependencies:** Phase 25 (symbol sourcing integrated into startup sequence)
 
 **Requirements:**
-- UI-SET-01: Settings page with form-based editor for common settings
-- UI-SET-02: JSON raw editor for power users (Monaco or json-edit-react)
-- UI-SET-03: Side-by-side view (form + JSON simultaneously)
-- UI-SET-04: Settings diff view shows changes before saving
-- UI-SET-05: Save/discard buttons with validation error display
-- UI-SET-06: Loading states and success/error toasts
+- CTL-01: Idle startup mode - API starts without WebSocket connections, awaits `start` command
+- CTL-02: `start` command to initiate exchange connections (replaces auto-connect)
+- CTL-03: `--autostart <exchange>` CLI flag to bypass idle mode for specific exchange
+- CTL-04: Connection lifecycle events (`exchange:connecting`, `exchange:connected`, `exchange:disconnected`)
 
 **Success Criteria:**
-1. User can edit common settings via form fields without knowing JSON structure
-2. Power user can edit raw JSON with syntax highlighting and validation
-3. User can see form changes reflected in JSON view in real-time
-4. User can review diff of changes before committing save
-5. User receives clear feedback on save success or validation errors
+1. API starts Fastify server and tRPC routes without connecting to any exchange
+2. ControlChannelService responds to `start` command by initiating exchange connection sequence
+3. `npm run dev -- --autostart coinbase` bypasses idle mode and connects immediately
+4. WebSocket connection state changes emit events observable via control channel responses
+5. Admin control panel shows current connection state (idle, connecting, connected, disconnected)
 
 ---
 
-### Phase 22: Admin UI - Control Panel + Symbols
+## Phase 27: Cross-Exchange Visibility
 
-**Goal**: Users can monitor and control API runtime and manage their symbol watchlist
-**Depends on**: Phase 19 (runtime commands), Phase 20 (symbol management)
-**Plans**: 6 plans
+**Goal:** Any subscriber can receive signals from any exchange, enabling soft-arbitrage patterns.
 
-Plans:
-- [x] 22-01-PLAN.md — Foundation: shadcn components, controlRouter, page shells, navigation
-- [x] 22-02-PLAN.md — Control Panel: RuntimeStatus, ControlButtons, ConfirmationDialog
-- [x] 22-03-PLAN.md — Command history and active symbols display
-- [x] 22-04-PLAN.md — Symbol watchlist with metrics display
-- [x] 22-05-PLAN.md — Add/remove symbol functionality
-- [x] 22-06-PLAN.md — Bulk import modal
+**Dependencies:** Phase 24 (uses exchange-scoped channels), Phase 26 (connection lifecycle established)
 
 **Requirements:**
-- UI-CTL-01: Runtime status display (running/paused, current mode, uptime)
-- UI-CTL-02: Pause/resume buttons
-- UI-CTL-03: Mode switcher dropdown
-- UI-CTL-04: Active symbols count and list
-- UI-CTL-05: Exchange connection status indicators
-- UI-CTL-06: Command history panel (recent commands + results)
-- UI-CTL-07: Confirmation dialog for destructive commands (clear-cache)
-- UI-SYM-01: Symbol watchlist display with enable/disable toggles
-- UI-SYM-02: Add symbol with search + validation against exchange
-- UI-SYM-03: Remove symbol with confirmation
-- UI-SYM-04: Bulk import modal (paste JSON, validate, preview)
-- UI-SYM-05: Scanner status display (enabled, last run, exchange)
-- UI-SYM-06: Symbol metrics display (volume, price) on hover/expand
+- VIS-01: Exchange-scoped alert channels `channel:alerts:{exchange_id}` (not user-scoped)
+- VIS-02: Cross-exchange subscription - Client can subscribe to any exchange's feed
+- VIS-03: Alert source attribution - Alert payloads include `source_exchange_id` field
 
 **Success Criteria:**
-1. User can see current API status (running/paused, mode, uptime) at a glance
-2. User can pause and resume API with single button click
-3. User can switch runtime mode from dropdown and see confirmation
-4. User can view, add, and remove symbols from watchlist
-5. User can see command history with timestamps and results
-6. Destructive actions require confirmation dialog before execution
+1. AlertEvaluationService publishes to `channel:alerts:{exchange_id}` instead of user-scoped channels
+2. PerseusWeb (or any Redis subscriber) can subscribe to `channel:alerts:1` to receive Coinbase alerts
+3. Alert payloads include `source_exchange_id` and `source_exchange_name` fields
+4. Admin UI alerts panel shows which exchange generated each signal
+5. Cross-exchange subscription documented in PerseusWeb integration guide
+
+---
+
+## Phase 28: Adapter Refactor
+
+**Goal:** Exchange adapters instantiated via factory with connection status tracking.
+
+**Dependencies:** Phase 23 (exchanges table), Phase 24 (new key patterns), Phase 26 (lifecycle events)
+
+**Requirements:**
+- EXC-03: Exchange adapter factory that instantiates correct adapter (Coinbase/Binance) based on exchange type
+- EXC-04: Exchange connection status tracking (`connected_at`, `last_heartbeat`, `connection_state`)
+
+**Success Criteria:**
+1. `ExchangeAdapterFactory.create(exchangeId)` returns correctly typed adapter (CoinbaseAdapter or BinanceAdapter)
+2. Adapter selection based on `exchanges.name` lookup (not hardcoded switch)
+3. Connection status stored in Redis with `last_heartbeat` timestamp updated on WebSocket ping
+4. `getStatus` control command returns actual connection state from tracking (not mock data)
+5. Services receive adapter from factory, no longer hardcode `TEST_EXCHANGE_ID`
+
+---
+
+## Phase 29: Service Integration
+
+**Goal:** Wire orphaned services into main application, completing all E2E flows.
+
+**Dependencies:** Phase 25 (SymbolSourceService), Phase 28 (ExchangeAdapterFactory)
+
+**Gap Closure:** Addresses audit findings from v5.0-MILESTONE-AUDIT.md
+
+**Tasks:**
+1. Replace direct `CoinbaseAdapter` instantiation with `ExchangeAdapterFactory.create()`
+2. Replace `getAccountSymbols()` with `SymbolSourceService.getMergedSymbols()`
+3. Wire tier classification into cache writes (Tier 1 vs Tier 2)
+4. Update `start` command to use factory pattern
+5. Verify Symbol Classification E2E flow works
+
+**Success Criteria:**
+1. `server.ts` uses `ExchangeAdapterFactory.create(1)` instead of `new CoinbaseAdapter()`
+2. `server.ts` uses `SymbolSourceService` for symbol sourcing
+3. Tier 1 symbols write to exchange-scoped keys, Tier 2 to user-scoped keys
+4. All 3 E2E flows pass (Start, Alert, Symbol Classification)
+5. Full turbo build passes
 
 ---
 
 ## Progress
 
-| Phase | Name | Status | Plans |
-|-------|------|--------|-------|
-| 17 | Settings Infrastructure | Complete | 3/3 |
-| 18 | Control Channel Foundation | Complete | 3/3 |
-| 19 | Runtime Commands | Complete | 3/3 |
-| 20 | Symbol Management | Complete | 3/3 |
-| 21 | Admin UI - Settings | Complete | 5/5 |
-| 22 | Admin UI - Control Panel + Symbols | Complete | 6/6 |
+| Phase | Name | Requirements | Status |
+|-------|------|--------------|--------|
+| 23 | Schema Foundation | 2 | Complete |
+| 24 | Data Architecture | 5 | Complete |
+| 25 | Symbol Management | 3 | Complete |
+| 26 | Startup Control | 4 | Complete |
+| 27 | Cross-Exchange Visibility | 3 | Complete |
+| 28 | Adapter Refactor | 2 | Complete |
+| 29 | Service Integration | 0 (gap closure) | Complete |
+
+**Total:** 6 phases, 19 requirements
 
 ---
 
-## Requirement Coverage
+## Coverage
 
-| Category | Requirements | Phase | Count |
-|----------|--------------|-------|-------|
-| Settings Infrastructure | SET-01 to SET-07 | 17 | 7 |
-| Control Channel | RUN-01, RUN-02, RUN-03, RUN-10 to RUN-13 | 18 | 7 |
-| Runtime Commands | RUN-04 to RUN-09 | 19 | 6 |
-| Symbol Management | SYM-01 to SYM-06 | 20 | 6 |
-| Admin UI Settings | UI-SET-01 to UI-SET-06 | 21 | 6 |
-| Admin UI Control | UI-CTL-01 to UI-CTL-07 | 22 | 7 |
-| Admin UI Symbols | UI-SYM-01 to UI-SYM-06 | 22 | 6 |
+| Category | Requirements | Phase |
+|----------|--------------|-------|
+| Exchange Management | EXC-01, EXC-02 | 23 |
+| Exchange Management | EXC-03, EXC-04 | 28 |
+| Data Architecture | DATA-01, DATA-02, DATA-03, DATA-04, DATA-05 | 24 |
+| Symbol Management | SYM-01, SYM-02, SYM-04 | 25 |
+| Startup/Control | CTL-01, CTL-02, CTL-03, CTL-04 | 26 |
+| Cross-Exchange Visibility | VIS-01, VIS-02, VIS-03 | 27 |
 
-**Total:** 45 requirements mapped to 6 phases
+All 19 v5.0 requirements mapped. No orphans.
 
 ---
 
-_For current project status, see .planning/PROJECT.md_
+*Created: 2026-02-06*
+*Milestone: v5.0 Distributed Exchange Architecture*

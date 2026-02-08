@@ -33,7 +33,7 @@ if ($missing.Count -gt 0) {
 }
 
 # Build connection URL
-$url = "postgresql://${username}:${password}@${host_}:${port}/${database}?sslmode=disable&search_path=public"
+$url = "postgresql://${username}:${password}@${host_}:${port}/${database}?sslmode=require&search_path=public"
 
 Write-Host "=== Step 1: Applying Schema via Atlas ===" -ForegroundColor Cyan
 Write-Host ""
@@ -42,6 +42,13 @@ Write-Host ""
 
 # Set DATABASE_URL for Atlas
 $env:DATABASE_URL = $url
+
+# Set individual env vars for Drizzle
+$env:DATABASE_HOST = $host_
+$env:DATABASE_PORT = $port
+$env:DATABASE_LIVERMORE_USERNAME = $username
+$env:DATABASE_LIVERMORE_PASSWORD = $password
+$env:LIVERMORE_DATABASE_NAME = $database
 
 # Navigate to packages/database
 $originalLocation = Get-Location

@@ -16,6 +16,10 @@ import { z } from 'zod';
  * Phase 20 (Symbol Management):
  * - add-symbol: Add symbol to tracking list
  * - remove-symbol: Remove symbol from tracking list
+ *
+ * Phase 26 (Startup Control):
+ * - start: Initiate exchange connections (exits idle mode)
+ * - stop: Gracefully disconnect from exchanges (enters idle mode)
  */
 export const CommandTypeSchema = z.enum([
   // Phase 18 - Control channel foundation
@@ -30,6 +34,9 @@ export const CommandTypeSchema = z.enum([
   'add-symbol',
   'remove-symbol',
   'bulk-add-symbols',
+  // Phase 26 - Startup control
+  'start',
+  'stop',
 ]);
 
 /**

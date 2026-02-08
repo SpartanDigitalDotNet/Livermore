@@ -31,14 +31,19 @@ export function ControlPanel() {
   // Command history state (session memory only)
   const [commandHistory, setCommandHistory] = useState<CommandHistoryItem[]>([]);
 
-  // Fetch status with 5-second polling
+  // Fetch status - poll faster during startup for progress updates
   const {
     data: status,
     isLoading: statusLoading,
     error: statusError,
   } = useQuery({
     ...trpc.control.getStatus.queryOptions(),
-    refetchInterval: 5000,
+    refetchInterval: (query) => {
+      const data = query.state.data as { connectionState?: string; startup?: { phase: string } } | undefined;
+      const isStarting = data?.connectionState === 'connecting' ||
+        (data?.startup?.phase && data.startup.phase !== 'idle' && data.startup.phase !== 'complete');
+      return isStarting ? 1000 : 5000;
+    },
   });
 
   // Fetch user settings for symbols list
@@ -99,7 +104,7 @@ export function ControlPanel() {
       payload?: Record<string, unknown>;
     }) => {
       const result = await trpcClient.control.executeCommand.mutate({
-        type: params.type as 'pause' | 'resume' | 'switch-mode' | 'reload-settings' | 'force-backfill' | 'clear-cache' | 'add-symbol' | 'remove-symbol' | 'bulk-add-symbols',
+        type: params.type as 'pause' | 'resume' | 'start' | 'stop' | 'switch-mode' | 'reload-settings' | 'force-backfill' | 'clear-cache' | 'add-symbol' | 'remove-symbol' | 'bulk-add-symbols',
         payload: params.payload,
       });
       return result;
@@ -174,6 +179,14 @@ export function ControlPanel() {
     });
   };
 
+  const handleStart = () => {
+    executeCommandMutation.mutate({ type: 'start' });
+  };
+
+  const handleStop = () => {
+    executeCommandMutation.mutate({ type: 'stop' });
+  };
+
   if (statusError) {
     return (
       <Card>
@@ -206,8 +219,11 @@ export function ControlPanel() {
           <ControlButtons
             isPaused={status?.isPaused ?? false}
             currentMode={status?.mode ?? 'position-monitor'}
+            connectionState={(status?.connectionState as 'idle' | 'connecting' | 'connected' | 'disconnected' | 'error') ?? 'idle'}
             onPause={handlePause}
             onResume={handleResume}
+            onStart={handleStart}
+            onStop={handleStop}
             onModeChange={handleModeChange}
             onReloadSettings={handleReloadSettings}
             onClearCache={handleClearCache}
