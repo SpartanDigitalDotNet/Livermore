@@ -21,8 +21,11 @@ export const EnvConfigSchema = z.object({
   DATABASE_LIVERMORE_PASSWORD: z.string().min(1, 'Database password is required'),
   LIVERMORE_DATABASE_NAME: z.string().min(1, 'Database name is required'),
 
-  // Redis connection URL (LIVERMORE_ prefix to avoid collision with other apps)
-  LIVERMORE_REDIS_URL: z.string().min(1, 'Redis URL is required'),
+  // Redis connection (3 separate vars — URL is constructed at runtime, never stored)
+  // LIVERMORE_REDIS_URL is the hostname (e.g., 'redis-livermore-sandbox')
+  LIVERMORE_REDIS_URL: z.string().min(1, 'Redis host is required'),
+  LIVERMORE_REDIS_PORT: z.string().transform((val) => parseInt(val, 10)).pipe(z.number().int().positive()).default('6379'),
+  LIVERMORE_REDIS_SECRET: z.string().min(1, 'Redis password is required'),
 
   // Coinbase API credentials
   Coinbase_ApiKeyId: z.string().min(1, 'Coinbase API key ID is required'),
