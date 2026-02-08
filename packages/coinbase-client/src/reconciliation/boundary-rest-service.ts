@@ -1,7 +1,6 @@
-import type { Timeframe, UnifiedCandle } from '@livermore/schemas';
+import type { Timeframe, UnifiedCandle, IRestClient } from '@livermore/schemas';
 import { CandleCacheStrategy, candleClosePattern, type RedisClient } from '@livermore/cache';
 import { logger } from '@livermore/utils';
-import { CoinbaseRestClient } from '../rest/client';
 import { BoundaryRestConfig, DEFAULT_BOUNDARY_CONFIG } from './types';
 import { detectBoundaries } from './boundary-detector';
 
@@ -26,7 +25,8 @@ import { detectBoundaries } from './boundary-detector';
  * Total: ~12,700 calls/day (~8.8 calls/minute average)
  */
 export class BoundaryRestService {
-  private restClient: CoinbaseRestClient;
+  private restClient: IRestClient;
+  private exchangeName: string;
   private candleCache: CandleCacheStrategy;
   private subscriber: RedisClient;
   private config: BoundaryRestConfig;
@@ -42,13 +42,14 @@ export class BoundaryRestService {
   private readonly MAX_CANDLE_AGE_MS = 10 * 60 * 1000; // 10 minutes
 
   constructor(
-    apiKeyId: string,
-    privateKeyPem: string,
+    restClient: IRestClient,
+    exchangeName: string,
     redis: RedisClient,
     subscriberRedis: RedisClient, // Separate connection for psubscribe
     config: Partial<BoundaryRestConfig> = {}
   ) {
-    this.restClient = new CoinbaseRestClient(apiKeyId, privateKeyPem);
+    this.restClient = restClient;
+    this.exchangeName = exchangeName;
     this.candleCache = new CandleCacheStrategy(redis);
     this.subscriber = subscriberRedis;
     this.config = { ...DEFAULT_BOUNDARY_CONFIG, ...config };
@@ -272,7 +273,7 @@ export class BoundaryRestService {
     // Write to cache using versioned writes
     const unified: UnifiedCandle = {
       ...latestCandle,
-      exchange: 'coinbase',
+      exchange: this.exchangeName,
     };
 
     await this.candleCache.addCandleIfNewer(

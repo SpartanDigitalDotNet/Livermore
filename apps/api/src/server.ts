@@ -346,14 +346,17 @@ async function start() {
     SUPPORTED_TIMEFRAMES.map((timeframe) => ({ symbol, timeframe }))
   );
 
+  const boundaryRestClient = restClient ?? new CoinbaseRestClient(
+    config.Coinbase_ApiKeyId, config.Coinbase_EcPrivateKeyPem
+  );
   const boundaryRestService = new BoundaryRestService(
-    config.Coinbase_ApiKeyId,
-    config.Coinbase_EcPrivateKeyPem,
+    boundaryRestClient,
+    activeExchangeName ?? 'unknown',
     redis,
     subscriberRedis,
     {
       userId: DEFAULT_BOUNDARY_CONFIG.userId,
-      exchangeId: DEFAULT_BOUNDARY_CONFIG.exchangeId,
+      exchangeId: activeExchangeId ?? DEFAULT_BOUNDARY_CONFIG.exchangeId,
       higherTimeframes: ['15m', '1h', '4h', '1d'],
     }
   );
