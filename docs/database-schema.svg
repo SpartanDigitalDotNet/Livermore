@@ -1,0 +1,618 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 1200" width="1440" height="1200">
+  <defs>
+    <style>
+      .table-bg { fill: #161b22; stroke: #30363d; stroke-width: 1; }
+      .table-header { fill: #1c2333; }
+      .header-text { fill: #f0f6fc; font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; font-size: 13px; font-weight: 600; }
+      .col-name { fill: #c9d1d9; font-family: 'Cascadia Code', 'Consolas', 'Courier New', monospace; font-size: 11px; }
+      .col-type { fill: #6e7681; font-family: 'Cascadia Code', 'Consolas', 'Courier New', monospace; font-size: 10px; }
+      .pk { fill: #f0c040; font-family: 'Segoe UI', system-ui, sans-serif; font-size: 9px; font-weight: 700; }
+      .fk { fill: #58a6ff; font-family: 'Segoe UI', system-ui, sans-serif; font-size: 9px; font-weight: 700; }
+      .rel-line { fill: none; stroke: #388bfd; stroke-width: 1.5; stroke-opacity: 0.45; }
+      .rel-dot { fill: #388bfd; fill-opacity: 0.6; }
+      .logo-text { fill: #20b2aa; font-family: 'Segoe UI', system-ui, sans-serif; font-size: 26px; font-weight: 700; letter-spacing: 3px; }
+      .subtitle { fill: #4a6a6e; font-family: 'Segoe UI', system-ui, sans-serif; font-size: 11px; letter-spacing: 1px; }
+      .row-alt { fill: #1c2128; opacity: 0.35; }
+      .row-sep { stroke: #21262d; stroke-width: 0.5; }
+    </style>
+    <radialGradient id="bg-grad" cx="50%" cy="35%" r="65%">
+      <stop offset="0%" stop-color="#111927"/>
+      <stop offset="100%" stop-color="#0d1117"/>
+    </radialGradient>
+    <filter id="shadow" x="-3%" y="-2%" width="106%" height="110%">
+      <feDropShadow dx="0" dy="2" stdDeviation="4" flood-color="#000" flood-opacity="0.35"/>
+    </filter>
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="2.5" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <marker id="arrow" viewBox="0 0 10 7" refX="9" refY="3.5" markerWidth="8" markerHeight="6" orient="auto">
+      <path d="M0,0 L10,3.5 L0,7 Z" fill="#388bfd" opacity="0.5"/>
+    </marker>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1440" height="1200" fill="url(#bg-grad)"/>
+
+  <!-- Subtle grid dots -->
+  <g opacity="0.04">
+    <pattern id="dots" width="30" height="30" patternUnits="userSpaceOnUse">
+      <circle cx="15" cy="15" r="1" fill="#c9d1d9"/>
+    </pattern>
+    <rect width="1440" height="1200" fill="url(#dots)"/>
+  </g>
+
+  <!-- ═══════════════════════════════════════ -->
+  <!-- Logo: Golden Trident + Perseus          -->
+  <!-- ═══════════════════════════════════════ -->
+  <g transform="translate(28, 14)" filter="url(#glow)">
+    <g stroke="#daa520" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" fill="none">
+      <line x1="25" y1="58" x2="25" y2="26"/>
+      <line x1="6" y1="26" x2="44" y2="26"/>
+      <line x1="25" y1="26" x2="25" y2="6"/>
+      <polyline points="20,12 25,2 30,12"/>
+      <line x1="6" y1="26" x2="6" y2="14"/>
+      <polyline points="1,20 6,8 11,20"/>
+      <line x1="44" y1="26" x2="44" y2="14"/>
+      <polyline points="39,20 44,8 49,20"/>
+    </g>
+    <circle cx="25" cy="26" r="2.5" fill="#daa520"/>
+  </g>
+  <text x="100" y="42" class="logo-text">PERSEUS</text>
+  <text x="100" y="58" class="subtitle">Database Schema</text>
+
+  <!-- ═══════════════════════════════════════ -->
+  <!-- Relationship Lines (behind tables)      -->
+  <!-- ═══════════════════════════════════════ -->
+  <g>
+    <!-- users → user_exchanges -->
+    <path d="M500,392 C500,430 570,430 570,460" class="rel-line" marker-end="url(#arrow)"/>
+    <circle cx="500" cy="392" r="3" class="rel-dot"/>
+
+    <!-- exchanges → user_exchanges -->
+    <path d="M1100,280 C980,280 840,380 840,460" class="rel-line" marker-end="url(#arrow)"/>
+    <circle cx="1100" cy="280" r="3" class="rel-dot"/>
+
+    <!-- exchanges → exchange_symbols -->
+    <path d="M1255,372 C1255,400 1240,410 1240,440" class="rel-line" marker-end="url(#arrow)"/>
+    <circle cx="1255" cy="372" r="3" class="rel-dot"/>
+
+    <!-- users → candles (route left to avoid user_exchanges) -->
+    <path d="M350,300 C280,300 175,550 175,850" class="rel-line" marker-end="url(#arrow)"/>
+    <circle cx="350" cy="300" r="3" class="rel-dot"/>
+
+    <!-- user_exchanges → candles -->
+    <path d="M500,720 C460,780 260,780 260,850" class="rel-line" marker-end="url(#arrow)"/>
+    <circle cx="500" cy="720" r="3" class="rel-dot"/>
+
+    <!-- users → indicators (route left) -->
+    <path d="M350,260 C270,260 300,600 410,850" class="rel-line" marker-end="url(#arrow)"/>
+
+    <!-- user_exchanges → indicators -->
+    <path d="M620,752 C620,800 505,800 505,850" class="rel-line" marker-end="url(#arrow)"/>
+    <circle cx="620" cy="752" r="3" class="rel-dot"/>
+
+    <!-- users → positions (route right) -->
+    <path d="M650,300 C700,300 740,550 740,850" class="rel-line" marker-end="url(#arrow)"/>
+    <circle cx="650" cy="300" r="3" class="rel-dot"/>
+
+    <!-- user_exchanges → positions -->
+    <path d="M780,752 C780,800 845,800 845,850" class="rel-line" marker-end="url(#arrow)"/>
+    <circle cx="780" cy="752" r="3" class="rel-dot"/>
+
+    <!-- user_exchanges → alert_history -->
+    <path d="M840,660 C920,660 1100,760 1100,850" class="rel-line" marker-end="url(#arrow)"/>
+    <circle cx="840" cy="660" r="3" class="rel-dot"/>
+  </g>
+
+  <!-- ═══════════════════════════════════════ -->
+  <!-- Table: user_settings                    -->
+  <!-- x=30 y=100 w=260 h=112 (4 cols)        -->
+  <!-- ═══════════════════════════════════════ -->
+  <g transform="translate(30, 100)" filter="url(#shadow)">
+    <rect width="260" height="112" rx="6" class="table-bg"/>
+    <rect width="260" height="32" rx="6" class="table-header"/>
+    <rect y="26" width="260" height="6" class="table-header"/>
+    <line x1="0" y1="32" x2="260" y2="32" class="row-sep"/>
+    <text x="130" y="22" text-anchor="middle" class="header-text">user_settings</text>
+    <!-- Alt rows -->
+    <rect x="1" y="52" width="258" height="20" class="row-alt"/>
+    <rect x="1" y="92" width="258" height="20" class="row-alt"/>
+    <!-- Columns -->
+    <text x="8" y="47" class="pk">PK</text>
+    <text x="28" y="47" class="col-name">id</text>
+    <text x="252" y="47" text-anchor="end" class="col-type">serial</text>
+
+    <text x="28" y="67" class="col-name">key</text>
+    <text x="252" y="67" text-anchor="end" class="col-type">varchar(100)</text>
+
+    <text x="28" y="87" class="col-name">value</text>
+    <text x="252" y="87" text-anchor="end" class="col-type">jsonb</text>
+
+    <text x="28" y="107" class="col-name">updated_at</text>
+    <text x="252" y="107" text-anchor="end" class="col-type">timestamp</text>
+  </g>
+
+  <!-- ═══════════════════════════════════════ -->
+  <!-- Table: users                            -->
+  <!-- x=350 y=100 w=300 h=292 (13 cols)       -->
+  <!-- ═══════════════════════════════════════ -->
+  <g transform="translate(350, 100)" filter="url(#shadow)">
+    <rect width="300" height="292" rx="6" class="table-bg"/>
+    <rect width="300" height="32" rx="6" class="table-header"/>
+    <rect y="26" width="300" height="6" class="table-header"/>
+    <line x1="0" y1="32" x2="300" y2="32" class="row-sep"/>
+    <text x="150" y="22" text-anchor="middle" class="header-text">users</text>
+    <!-- Alt rows -->
+    <rect x="1" y="52" width="298" height="20" class="row-alt"/>
+    <rect x="1" y="92" width="298" height="20" class="row-alt"/>
+    <rect x="1" y="132" width="298" height="20" class="row-alt"/>
+    <rect x="1" y="172" width="298" height="20" class="row-alt"/>
+    <rect x="1" y="212" width="298" height="20" class="row-alt"/>
+    <rect x="1" y="252" width="298" height="20" class="row-alt"/>
+    <!-- Columns -->
+    <text x="8" y="47" class="pk">PK</text>
+    <text x="28" y="47" class="col-name">id</text>
+    <text x="292" y="47" text-anchor="end" class="col-type">serial</text>
+
+    <text x="28" y="67" class="col-name">username</text>
+    <text x="292" y="67" text-anchor="end" class="col-type">varchar(50)</text>
+
+    <text x="28" y="87" class="col-name">email</text>
+    <text x="292" y="87" text-anchor="end" class="col-type">varchar(255)</text>
+
+    <text x="28" y="107" class="col-name">is_active</text>
+    <text x="292" y="107" text-anchor="end" class="col-type">bool</text>
+
+    <text x="28" y="127" class="col-name">identity_provider</text>
+    <text x="292" y="127" text-anchor="end" class="col-type">varchar(20)</text>
+
+    <text x="28" y="147" class="col-name">identity_sub</text>
+    <text x="292" y="147" text-anchor="end" class="col-type">varchar(255)</text>
+
+    <text x="28" y="167" class="col-name">display_name</text>
+    <text x="292" y="167" text-anchor="end" class="col-type">varchar(100)</text>
+
+    <text x="28" y="187" class="col-name">identity_picture_url</text>
+    <text x="292" y="187" text-anchor="end" class="col-type">text</text>
+
+    <text x="28" y="207" class="col-name">role</text>
+    <text x="292" y="207" text-anchor="end" class="col-type">varchar(20)</text>
+
+    <text x="28" y="227" class="col-name">last_login_at</text>
+    <text x="292" y="227" text-anchor="end" class="col-type">timestamp</text>
+
+    <text x="28" y="247" class="col-name">settings</text>
+    <text x="292" y="247" text-anchor="end" class="col-type">jsonb</text>
+
+    <text x="28" y="267" class="col-name">created_at</text>
+    <text x="292" y="267" text-anchor="end" class="col-type">timestamp</text>
+
+    <text x="28" y="287" class="col-name">updated_at</text>
+    <text x="292" y="287" text-anchor="end" class="col-type">timestamp</text>
+  </g>
+
+  <!-- ═══════════════════════════════════════ -->
+  <!-- Table: exchanges                        -->
+  <!-- x=1100 y=100 w=310 h=272 (12 cols)      -->
+  <!-- ═══════════════════════════════════════ -->
+  <g transform="translate(1100, 100)" filter="url(#shadow)">
+    <rect width="310" height="272" rx="6" class="table-bg"/>
+    <rect width="310" height="32" rx="6" class="table-header"/>
+    <rect y="26" width="310" height="6" class="table-header"/>
+    <line x1="0" y1="32" x2="310" y2="32" class="row-sep"/>
+    <text x="155" y="22" text-anchor="middle" class="header-text">exchanges</text>
+    <!-- Alt rows -->
+    <rect x="1" y="52" width="308" height="20" class="row-alt"/>
+    <rect x="1" y="92" width="308" height="20" class="row-alt"/>
+    <rect x="1" y="132" width="308" height="20" class="row-alt"/>
+    <rect x="1" y="172" width="308" height="20" class="row-alt"/>
+    <rect x="1" y="212" width="308" height="20" class="row-alt"/>
+    <rect x="1" y="252" width="308" height="20" class="row-alt"/>
+    <!-- Columns -->
+    <text x="8" y="47" class="pk">PK</text>
+    <text x="28" y="47" class="col-name">id</text>
+    <text x="302" y="47" text-anchor="end" class="col-type">serial</text>
+
+    <text x="28" y="67" class="col-name">name</text>
+    <text x="302" y="67" text-anchor="end" class="col-type">varchar(50)</text>
+
+    <text x="28" y="87" class="col-name">display_name</text>
+    <text x="302" y="87" text-anchor="end" class="col-type">varchar(100)</text>
+
+    <text x="28" y="107" class="col-name">ws_url</text>
+    <text x="302" y="107" text-anchor="end" class="col-type">varchar(255)</text>
+
+    <text x="28" y="127" class="col-name">rest_url</text>
+    <text x="302" y="127" text-anchor="end" class="col-type">varchar(255)</text>
+
+    <text x="28" y="147" class="col-name">supported_timeframes</text>
+    <text x="302" y="147" text-anchor="end" class="col-type">jsonb</text>
+
+    <text x="28" y="167" class="col-name">api_limits</text>
+    <text x="302" y="167" text-anchor="end" class="col-type">jsonb</text>
+
+    <text x="28" y="187" class="col-name">fee_schedule</text>
+    <text x="302" y="187" text-anchor="end" class="col-type">jsonb</text>
+
+    <text x="28" y="207" class="col-name">geo_restrictions</text>
+    <text x="302" y="207" text-anchor="end" class="col-type">jsonb</text>
+
+    <text x="28" y="227" class="col-name">is_active</text>
+    <text x="302" y="227" text-anchor="end" class="col-type">bool</text>
+
+    <text x="28" y="247" class="col-name">created_at</text>
+    <text x="302" y="247" text-anchor="end" class="col-type">timestamp</text>
+
+    <text x="28" y="267" class="col-name">updated_at</text>
+    <text x="302" y="267" text-anchor="end" class="col-type">timestamp</text>
+  </g>
+
+  <!-- ═══════════════════════════════════════ -->
+  <!-- Table: user_exchanges                   -->
+  <!-- x=500 y=460 w=340 h=292 (13 cols)       -->
+  <!-- ═══════════════════════════════════════ -->
+  <g transform="translate(500, 460)" filter="url(#shadow)">
+    <rect width="340" height="292" rx="6" class="table-bg"/>
+    <rect width="340" height="32" rx="6" class="table-header"/>
+    <rect y="26" width="340" height="6" class="table-header"/>
+    <line x1="0" y1="32" x2="340" y2="32" class="row-sep"/>
+    <text x="170" y="22" text-anchor="middle" class="header-text">user_exchanges</text>
+    <!-- Alt rows -->
+    <rect x="1" y="52" width="338" height="20" class="row-alt"/>
+    <rect x="1" y="92" width="338" height="20" class="row-alt"/>
+    <rect x="1" y="132" width="338" height="20" class="row-alt"/>
+    <rect x="1" y="172" width="338" height="20" class="row-alt"/>
+    <rect x="1" y="212" width="338" height="20" class="row-alt"/>
+    <rect x="1" y="252" width="338" height="20" class="row-alt"/>
+    <!-- Columns -->
+    <text x="8" y="47" class="pk">PK</text>
+    <text x="28" y="47" class="col-name">id</text>
+    <text x="332" y="47" text-anchor="end" class="col-type">serial</text>
+
+    <text x="8" y="67" class="fk">FK</text>
+    <text x="28" y="67" class="col-name">user_id</text>
+    <text x="332" y="67" text-anchor="end" class="col-type">serial</text>
+
+    <text x="8" y="87" class="fk">FK</text>
+    <text x="28" y="87" class="col-name">exchange_id</text>
+    <text x="332" y="87" text-anchor="end" class="col-type">int</text>
+
+    <text x="28" y="107" class="col-name">exchange_name</text>
+    <text x="332" y="107" text-anchor="end" class="col-type">varchar(50)</text>
+
+    <text x="28" y="127" class="col-name">display_name</text>
+    <text x="332" y="127" text-anchor="end" class="col-type">varchar(100)</text>
+
+    <text x="28" y="147" class="col-name">api_key_env_var</text>
+    <text x="332" y="147" text-anchor="end" class="col-type">varchar(100)</text>
+
+    <text x="28" y="167" class="col-name">api_secret_env_var</text>
+    <text x="332" y="167" text-anchor="end" class="col-type">varchar(100)</text>
+
+    <text x="28" y="187" class="col-name">addl_credentials_env_vars</text>
+    <text x="332" y="187" text-anchor="end" class="col-type">text</text>
+
+    <text x="28" y="207" class="col-name">is_active</text>
+    <text x="332" y="207" text-anchor="end" class="col-type">bool</text>
+
+    <text x="28" y="227" class="col-name">is_default</text>
+    <text x="332" y="227" text-anchor="end" class="col-type">bool</text>
+
+    <text x="28" y="247" class="col-name">last_connected_at</text>
+    <text x="332" y="247" text-anchor="end" class="col-type">timestamp</text>
+
+    <text x="28" y="267" class="col-name">created_at</text>
+    <text x="332" y="267" text-anchor="end" class="col-type">timestamp</text>
+
+    <text x="28" y="287" class="col-name">updated_at</text>
+    <text x="332" y="287" text-anchor="end" class="col-type">timestamp</text>
+  </g>
+
+  <!-- ═══════════════════════════════════════ -->
+  <!-- Table: exchange_symbols                 -->
+  <!-- x=1080 y=440 w=320 h=332 (15 cols)      -->
+  <!-- ═══════════════════════════════════════ -->
+  <g transform="translate(1080, 440)" filter="url(#shadow)">
+    <rect width="320" height="332" rx="6" class="table-bg"/>
+    <rect width="320" height="32" rx="6" class="table-header"/>
+    <rect y="26" width="320" height="6" class="table-header"/>
+    <line x1="0" y1="32" x2="320" y2="32" class="row-sep"/>
+    <text x="160" y="22" text-anchor="middle" class="header-text">exchange_symbols</text>
+    <!-- Alt rows -->
+    <rect x="1" y="52" width="318" height="20" class="row-alt"/>
+    <rect x="1" y="92" width="318" height="20" class="row-alt"/>
+    <rect x="1" y="132" width="318" height="20" class="row-alt"/>
+    <rect x="1" y="172" width="318" height="20" class="row-alt"/>
+    <rect x="1" y="212" width="318" height="20" class="row-alt"/>
+    <rect x="1" y="252" width="318" height="20" class="row-alt"/>
+    <rect x="1" y="292" width="318" height="20" class="row-alt"/>
+    <!-- Columns -->
+    <text x="8" y="47" class="pk">PK</text>
+    <text x="28" y="47" class="col-name">id</text>
+    <text x="312" y="47" text-anchor="end" class="col-type">serial</text>
+
+    <text x="8" y="67" class="fk">FK</text>
+    <text x="28" y="67" class="col-name">exchange_id</text>
+    <text x="312" y="67" text-anchor="end" class="col-type">int</text>
+
+    <text x="28" y="87" class="col-name">symbol</text>
+    <text x="312" y="87" text-anchor="end" class="col-type">varchar(20)</text>
+
+    <text x="28" y="107" class="col-name">base_currency</text>
+    <text x="312" y="107" text-anchor="end" class="col-type">varchar(10)</text>
+
+    <text x="28" y="127" class="col-name">quote_currency</text>
+    <text x="312" y="127" text-anchor="end" class="col-type">varchar(10)</text>
+
+    <text x="28" y="147" class="col-name">volume_24h</text>
+    <text x="312" y="147" text-anchor="end" class="col-type">numeric(30,8)</text>
+
+    <text x="28" y="167" class="col-name">volume_rank</text>
+    <text x="312" y="167" text-anchor="end" class="col-type">int</text>
+
+    <text x="28" y="187" class="col-name">global_rank</text>
+    <text x="312" y="187" text-anchor="end" class="col-type">int</text>
+
+    <text x="28" y="207" class="col-name">market_cap</text>
+    <text x="312" y="207" text-anchor="end" class="col-type">numeric(30,2)</text>
+
+    <text x="28" y="227" class="col-name">coingecko_id</text>
+    <text x="312" y="227" text-anchor="end" class="col-type">varchar(100)</text>
+
+    <text x="28" y="247" class="col-name">display_name</text>
+    <text x="312" y="247" text-anchor="end" class="col-type">varchar(100)</text>
+
+    <text x="28" y="267" class="col-name">is_active</text>
+    <text x="312" y="267" text-anchor="end" class="col-type">bool</text>
+
+    <text x="28" y="287" class="col-name">last_volume_update</text>
+    <text x="312" y="287" text-anchor="end" class="col-type">timestamp</text>
+
+    <text x="28" y="307" class="col-name">created_at</text>
+    <text x="312" y="307" text-anchor="end" class="col-type">timestamp</text>
+
+    <text x="28" y="327" class="col-name">updated_at</text>
+    <text x="312" y="327" text-anchor="end" class="col-type">timestamp</text>
+  </g>
+
+  <!-- ═══════════════════════════════════════ -->
+  <!-- Table: candles                          -->
+  <!-- x=30 y=850 w=290 h=272 (12 cols)        -->
+  <!-- ═══════════════════════════════════════ -->
+  <g transform="translate(30, 850)" filter="url(#shadow)">
+    <rect width="290" height="272" rx="6" class="table-bg"/>
+    <rect width="290" height="32" rx="6" class="table-header"/>
+    <rect y="26" width="290" height="6" class="table-header"/>
+    <line x1="0" y1="32" x2="290" y2="32" class="row-sep"/>
+    <text x="145" y="22" text-anchor="middle" class="header-text">candles</text>
+    <!-- Alt rows -->
+    <rect x="1" y="52" width="288" height="20" class="row-alt"/>
+    <rect x="1" y="92" width="288" height="20" class="row-alt"/>
+    <rect x="1" y="132" width="288" height="20" class="row-alt"/>
+    <rect x="1" y="172" width="288" height="20" class="row-alt"/>
+    <rect x="1" y="212" width="288" height="20" class="row-alt"/>
+    <rect x="1" y="252" width="288" height="20" class="row-alt"/>
+    <!-- Columns -->
+    <text x="8" y="47" class="pk">PK</text>
+    <text x="28" y="47" class="col-name">id</text>
+    <text x="282" y="47" text-anchor="end" class="col-type">serial</text>
+
+    <text x="8" y="67" class="fk">FK</text>
+    <text x="28" y="67" class="col-name">user_id</text>
+    <text x="282" y="67" text-anchor="end" class="col-type">serial</text>
+
+    <text x="8" y="87" class="fk">FK</text>
+    <text x="28" y="87" class="col-name">exchange_id</text>
+    <text x="282" y="87" text-anchor="end" class="col-type">serial</text>
+
+    <text x="28" y="107" class="col-name">symbol</text>
+    <text x="282" y="107" text-anchor="end" class="col-type">varchar(20)</text>
+
+    <text x="28" y="127" class="col-name">timeframe</text>
+    <text x="282" y="127" text-anchor="end" class="col-type">varchar(5)</text>
+
+    <text x="28" y="147" class="col-name">timestamp</text>
+    <text x="282" y="147" text-anchor="end" class="col-type">bigint</text>
+
+    <text x="28" y="167" class="col-name">open</text>
+    <text x="282" y="167" text-anchor="end" class="col-type">numeric(20,8)</text>
+
+    <text x="28" y="187" class="col-name">high</text>
+    <text x="282" y="187" text-anchor="end" class="col-type">numeric(20,8)</text>
+
+    <text x="28" y="207" class="col-name">low</text>
+    <text x="282" y="207" text-anchor="end" class="col-type">numeric(20,8)</text>
+
+    <text x="28" y="227" class="col-name">close</text>
+    <text x="282" y="227" text-anchor="end" class="col-type">numeric(20,8)</text>
+
+    <text x="28" y="247" class="col-name">volume</text>
+    <text x="282" y="247" text-anchor="end" class="col-type">numeric(20,8)</text>
+
+    <text x="28" y="267" class="col-name">created_at</text>
+    <text x="282" y="267" text-anchor="end" class="col-type">timestamp</text>
+  </g>
+
+  <!-- ═══════════════════════════════════════ -->
+  <!-- Table: indicators                       -->
+  <!-- x=360 y=850 w=290 h=212 (9 cols)        -->
+  <!-- ═══════════════════════════════════════ -->
+  <g transform="translate(360, 850)" filter="url(#shadow)">
+    <rect width="290" height="212" rx="6" class="table-bg"/>
+    <rect width="290" height="32" rx="6" class="table-header"/>
+    <rect y="26" width="290" height="6" class="table-header"/>
+    <line x1="0" y1="32" x2="290" y2="32" class="row-sep"/>
+    <text x="145" y="22" text-anchor="middle" class="header-text">indicators</text>
+    <!-- Alt rows -->
+    <rect x="1" y="52" width="288" height="20" class="row-alt"/>
+    <rect x="1" y="92" width="288" height="20" class="row-alt"/>
+    <rect x="1" y="132" width="288" height="20" class="row-alt"/>
+    <rect x="1" y="172" width="288" height="20" class="row-alt"/>
+    <!-- Columns -->
+    <text x="8" y="47" class="pk">PK</text>
+    <text x="28" y="47" class="col-name">id</text>
+    <text x="282" y="47" text-anchor="end" class="col-type">serial</text>
+
+    <text x="8" y="67" class="fk">FK</text>
+    <text x="28" y="67" class="col-name">user_id</text>
+    <text x="282" y="67" text-anchor="end" class="col-type">serial</text>
+
+    <text x="8" y="87" class="fk">FK</text>
+    <text x="28" y="87" class="col-name">exchange_id</text>
+    <text x="282" y="87" text-anchor="end" class="col-type">serial</text>
+
+    <text x="28" y="107" class="col-name">symbol</text>
+    <text x="282" y="107" text-anchor="end" class="col-type">varchar(20)</text>
+
+    <text x="28" y="127" class="col-name">timeframe</text>
+    <text x="282" y="127" text-anchor="end" class="col-type">varchar(5)</text>
+
+    <text x="28" y="147" class="col-name">type</text>
+    <text x="282" y="147" text-anchor="end" class="col-type">varchar(20)</text>
+
+    <text x="28" y="167" class="col-name">timestamp</text>
+    <text x="282" y="167" text-anchor="end" class="col-type">bigint</text>
+
+    <text x="28" y="187" class="col-name">value</text>
+    <text x="282" y="187" text-anchor="end" class="col-type">jsonb</text>
+
+    <text x="28" y="207" class="col-name">created_at</text>
+    <text x="282" y="207" text-anchor="end" class="col-type">timestamp</text>
+  </g>
+
+  <!-- ═══════════════════════════════════════ -->
+  <!-- Table: positions                        -->
+  <!-- x=690 y=850 w=310 h=272 (12 cols)       -->
+  <!-- ═══════════════════════════════════════ -->
+  <g transform="translate(690, 850)" filter="url(#shadow)">
+    <rect width="310" height="272" rx="6" class="table-bg"/>
+    <rect width="310" height="32" rx="6" class="table-header"/>
+    <rect y="26" width="310" height="6" class="table-header"/>
+    <line x1="0" y1="32" x2="310" y2="32" class="row-sep"/>
+    <text x="155" y="22" text-anchor="middle" class="header-text">positions</text>
+    <!-- Alt rows -->
+    <rect x="1" y="52" width="308" height="20" class="row-alt"/>
+    <rect x="1" y="92" width="308" height="20" class="row-alt"/>
+    <rect x="1" y="132" width="308" height="20" class="row-alt"/>
+    <rect x="1" y="172" width="308" height="20" class="row-alt"/>
+    <rect x="1" y="212" width="308" height="20" class="row-alt"/>
+    <rect x="1" y="252" width="308" height="20" class="row-alt"/>
+    <!-- Columns -->
+    <text x="8" y="47" class="pk">PK</text>
+    <text x="28" y="47" class="col-name">id</text>
+    <text x="302" y="47" text-anchor="end" class="col-type">serial</text>
+
+    <text x="8" y="67" class="fk">FK</text>
+    <text x="28" y="67" class="col-name">user_id</text>
+    <text x="302" y="67" text-anchor="end" class="col-type">serial</text>
+
+    <text x="8" y="87" class="fk">FK</text>
+    <text x="28" y="87" class="col-name">exchange_id</text>
+    <text x="302" y="87" text-anchor="end" class="col-type">serial</text>
+
+    <text x="28" y="107" class="col-name">symbol</text>
+    <text x="302" y="107" text-anchor="end" class="col-type">varchar(20)</text>
+
+    <text x="28" y="127" class="col-name">display_name</text>
+    <text x="302" y="127" text-anchor="end" class="col-type">varchar(100)</text>
+
+    <text x="28" y="147" class="col-name">coinbase_account_id</text>
+    <text x="302" y="147" text-anchor="end" class="col-type">varchar(100)</text>
+
+    <text x="28" y="167" class="col-name">quantity</text>
+    <text x="302" y="167" text-anchor="end" class="col-type">numeric(30,18)</text>
+
+    <text x="28" y="187" class="col-name">available_quantity</text>
+    <text x="302" y="187" text-anchor="end" class="col-type">numeric(30,18)</text>
+
+    <text x="28" y="207" class="col-name">cost_basis</text>
+    <text x="302" y="207" text-anchor="end" class="col-type">numeric(20,2)</text>
+
+    <text x="28" y="227" class="col-name">last_synced_at</text>
+    <text x="302" y="227" text-anchor="end" class="col-type">timestamp</text>
+
+    <text x="28" y="247" class="col-name">created_at</text>
+    <text x="302" y="247" text-anchor="end" class="col-type">timestamp</text>
+
+    <text x="28" y="267" class="col-name">updated_at</text>
+    <text x="302" y="267" text-anchor="end" class="col-type">timestamp</text>
+  </g>
+
+  <!-- ═══════════════════════════════════════ -->
+  <!-- Table: alert_history                    -->
+  <!-- x=1050 y=850 w=340 h=312 (14 cols)      -->
+  <!-- ═══════════════════════════════════════ -->
+  <g transform="translate(1050, 850)" filter="url(#shadow)">
+    <rect width="340" height="312" rx="6" class="table-bg"/>
+    <rect width="340" height="32" rx="6" class="table-header"/>
+    <rect y="26" width="340" height="6" class="table-header"/>
+    <line x1="0" y1="32" x2="340" y2="32" class="row-sep"/>
+    <text x="170" y="22" text-anchor="middle" class="header-text">alert_history</text>
+    <!-- Alt rows -->
+    <rect x="1" y="52" width="338" height="20" class="row-alt"/>
+    <rect x="1" y="92" width="338" height="20" class="row-alt"/>
+    <rect x="1" y="132" width="338" height="20" class="row-alt"/>
+    <rect x="1" y="172" width="338" height="20" class="row-alt"/>
+    <rect x="1" y="212" width="338" height="20" class="row-alt"/>
+    <rect x="1" y="252" width="338" height="20" class="row-alt"/>
+    <rect x="1" y="292" width="338" height="20" class="row-alt"/>
+    <!-- Columns -->
+    <text x="8" y="47" class="pk">PK</text>
+    <text x="28" y="47" class="col-name">id</text>
+    <text x="332" y="47" text-anchor="end" class="col-type">serial</text>
+
+    <text x="8" y="67" class="fk">FK</text>
+    <text x="28" y="67" class="col-name">exchange_id</text>
+    <text x="332" y="67" text-anchor="end" class="col-type">serial</text>
+
+    <text x="28" y="87" class="col-name">symbol</text>
+    <text x="332" y="87" text-anchor="end" class="col-type">varchar(20)</text>
+
+    <text x="28" y="107" class="col-name">timeframe</text>
+    <text x="332" y="107" text-anchor="end" class="col-type">varchar(5)</text>
+
+    <text x="28" y="127" class="col-name">alert_type</text>
+    <text x="332" y="127" text-anchor="end" class="col-type">varchar(50)</text>
+
+    <text x="28" y="147" class="col-name">triggered_at_epoch</text>
+    <text x="332" y="147" text-anchor="end" class="col-type">bigint</text>
+
+    <text x="28" y="167" class="col-name">triggered_at</text>
+    <text x="332" y="167" text-anchor="end" class="col-type">timestamptz</text>
+
+    <text x="28" y="187" class="col-name">price</text>
+    <text x="332" y="187" text-anchor="end" class="col-type">numeric(20,8)</text>
+
+    <text x="28" y="207" class="col-name">trigger_value</text>
+    <text x="332" y="207" text-anchor="end" class="col-type">numeric(20,8)</text>
+
+    <text x="28" y="227" class="col-name">trigger_label</text>
+    <text x="332" y="227" text-anchor="end" class="col-type">varchar(100)</text>
+
+    <text x="28" y="247" class="col-name">previous_label</text>
+    <text x="332" y="247" text-anchor="end" class="col-type">varchar(100)</text>
+
+    <text x="28" y="267" class="col-name">details</text>
+    <text x="332" y="267" text-anchor="end" class="col-type">jsonb</text>
+
+    <text x="28" y="287" class="col-name">notification_sent</text>
+    <text x="332" y="287" text-anchor="end" class="col-type">bool</text>
+
+    <text x="28" y="307" class="col-name">notification_error</text>
+    <text x="332" y="307" text-anchor="end" class="col-type">varchar(500)</text>
+  </g>
+
+  <!-- ═══════════════════════════════════════ -->
+  <!-- Legend                                  -->
+  <!-- ═══════════════════════════════════════ -->
+  <g transform="translate(1280, 20)">
+    <text x="0" y="12" class="pk" style="font-size:10px">PK</text>
+    <text x="20" y="12" class="col-type" style="font-size:10px">Primary Key</text>
+    <text x="0" y="28" class="fk" style="font-size:10px">FK</text>
+    <text x="20" y="28" class="col-type" style="font-size:10px">Foreign Key</text>
+    <line x1="0" y1="38" x2="30" y2="38" class="rel-line" style="stroke-opacity:0.7"/>
+    <text x="38" y="42" class="col-type" style="font-size:10px">Relationship</text>
+  </g>
+</svg>
