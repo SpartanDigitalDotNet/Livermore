@@ -1,7 +1,7 @@
 {
-  "name": "@livermore/coinbase-client",
+  "name": "@livermore/exchange-core",
   "version": "1.0.0",
-  "description": "Coinbase API client (REST + WebSocket)",
+  "description": "Exchange core services (REST clients, backfill, boundary detection)",
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
   "types": "./dist/index.d.ts",

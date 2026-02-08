@@ -18,7 +18,7 @@
     "@livermore/cache": "workspace:*",
     "@livermore/charts": "workspace:*",
     "@livermore/binance-client": "workspace:*",
-    "@livermore/coinbase-client": "workspace:*",
+    "@livermore/exchange-core": "workspace:*",
     "@livermore/database": "workspace:*",
     "@livermore/indicators": "workspace:*",
     "@livermore/schemas": "workspace:*",

@@ -56,6 +56,17 @@ export class BoundaryRestService {
   }
 
   /**
+   * Update exchange identity at runtime (called by handleStart when user's exchange is resolved)
+   */
+  setExchange(exchangeId: number, exchangeName: string, restClient?: IRestClient): void {
+    this.config.exchangeId = exchangeId;
+    this.exchangeName = exchangeName;
+    if (restClient) {
+      this.restClient = restClient;
+    }
+  }
+
+  /**
    * Start listening for 5m candle close events
    *
    * @param symbols - Array of trading symbols to fetch at boundaries

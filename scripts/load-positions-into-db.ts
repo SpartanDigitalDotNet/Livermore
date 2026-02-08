@@ -7,7 +7,7 @@
  * Uses the existing PositionSyncService for consistency with production code.
  */
 
-import { CoinbaseRestClient } from '@livermore/coinbase-client';
+import { CoinbaseRestClient } from '@livermore/exchange-core';
 import { getDbClient, positions, userExchanges } from '@livermore/database';
 import { logger } from '@livermore/utils';
 import { eq, and } from 'drizzle-orm';

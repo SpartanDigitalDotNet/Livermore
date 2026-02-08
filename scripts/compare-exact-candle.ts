@@ -1,5 +1,5 @@
 import Redis from 'ioredis';
-import { CoinbaseRestClient } from '@livermore/coinbase-client';
+import { CoinbaseRestClient } from '@livermore/exchange-core';
 
 const redis = new Redis(process.env.LIVERMORE_REDIS_URL!);
 const client = new CoinbaseRestClient(

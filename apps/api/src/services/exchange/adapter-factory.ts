@@ -1,7 +1,7 @@
 import { getDbClient, exchanges } from '@livermore/database';
 import { eq } from 'drizzle-orm';
 import type { RedisClient } from '@livermore/cache';
-import { CoinbaseAdapter, type CoinbaseAdapterOptions } from '@livermore/coinbase-client';
+import { CoinbaseAdapter, type CoinbaseAdapterOptions } from '@livermore/exchange-core';
 import { logger } from '@livermore/utils';
 import type { IExchangeAdapter } from '@livermore/schemas';
 

@@ -7,7 +7,7 @@ import {
   type CommandType,
   type Timeframe,
 } from '@livermore/schemas';
-import { StartupBackfillService } from '@livermore/coinbase-client';
+import { StartupBackfillService } from '@livermore/exchange-core';
 import { createRestClient } from './exchange/rest-client-factory';
 import { SymbolSourceService } from './symbol-source.service';
 import { eq, and, sql } from 'drizzle-orm';
@@ -482,6 +482,7 @@ export class ControlChannelService {
         // Update services with resolved exchange ID
         this.services.indicatorService.setExchangeId(userExchange.exchangeId);
         this.services.alertService.setExchange(userExchange.exchangeId, userExchange.exchangeName);
+        this.services.boundaryRestService.setExchange(userExchange.exchangeId, userExchange.exchangeName, restClient);
 
         const symbolSourceService = new SymbolSourceService(userExchange.exchangeId);
         const tier1 = await symbolSourceService.getTier1Symbols();

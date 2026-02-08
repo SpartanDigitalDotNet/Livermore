@@ -1,5 +1,5 @@
 import type { IRestClient } from '@livermore/schemas';
-import { CoinbaseRestClient } from '@livermore/coinbase-client';
+import { CoinbaseRestClient } from '@livermore/exchange-core';
 import { BinanceRestClient } from '@livermore/binance-client';
 
 export function createRestClient(

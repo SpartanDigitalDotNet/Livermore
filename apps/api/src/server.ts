@@ -10,7 +10,7 @@ import { logger, validateEnv } from '@livermore/utils';
 import { getDbClient, testDatabaseConnection } from '@livermore/database';
 import { getRedisClient, testRedisConnection, deleteKeysClusterSafe, exchangeCandleKey, exchangeIndicatorKey } from '@livermore/cache';
 import { createContext as baseCreateContext } from '@livermore/trpc-config';
-import { CoinbaseRestClient, StartupBackfillService, BoundaryRestService, DEFAULT_BOUNDARY_CONFIG } from '@livermore/coinbase-client';
+import { CoinbaseRestClient, StartupBackfillService, BoundaryRestService, DEFAULT_BOUNDARY_CONFIG } from '@livermore/exchange-core';
 import type { IRestClient } from '@livermore/schemas';
 import { ExchangeAdapterFactory } from './services/exchange/adapter-factory';
 import { SymbolSourceService } from './services/symbol-source.service';

@@ -159,12 +159,12 @@ importers:
       '@livermore/charts':
         specifier: workspace:*
         version: link:../../packages/charts
-      '@livermore/coinbase-client':
-        specifier: workspace:*
-        version: link:../../packages/coinbase-client
       '@livermore/database':
         specifier: workspace:*
         version: link:../../packages/database
+      '@livermore/exchange-core':
+        specifier: workspace:*
+        version: link:../../packages/exchange-core
       '@livermore/indicators':
         specifier: workspace:*
         version: link:../../packages/indicators
@@ -278,7 +278,38 @@ importers:
         specifier: ^5.6.3
         version: 5.9.3
 
-  packages/coinbase-client:
+  packages/database:
+    dependencies:
+      '@livermore/schemas':
+        specifier: workspace:*
+        version: link:../schemas
+      '@livermore/utils':
+        specifier: workspace:*
+        version: link:../utils
+      drizzle-orm:
+        specifier: ^0.36.4
+        version: 0.36.4(@types/pg@8.16.0)(@types/react@19.2.10)(pg@8.17.1)(postgres@3.4.8)(react@19.2.4)
+      postgres:
+        specifier: ^3.4.5
+        version: 3.4.8
+    devDependencies:
+      '@types/pg':
+        specifier: ^8.16.0
+        version: 8.16.0
+      drizzle-kit:
+        specifier: ^0.28.1
+        version: 0.28.1
+      tsup:
+        specifier: ^8.3.5
+        version: 8.5.1(jiti@2.6.1)(postcss@8.5.6)(tsx@4.21.0)(typescript@5.9.3)
+      tsx:
+        specifier: ^4.19.2
+        version: 4.21.0
+      typescript:
+        specifier: ^5.6.3
+        version: 5.9.3
+
+  packages/exchange-core:
     dependencies:
       '@livermore/cache':
         specifier: workspace:*
@@ -308,37 +339,6 @@ importers:
       tsup:
         specifier: ^8.3.5
         version: 8.5.1(jiti@2.6.1)(postcss@8.5.6)(tsx@4.21.0)(typescript@5.9.3)
-      typescript:
-        specifier: ^5.6.3
-        version: 5.9.3
-
-  packages/database:
-    dependencies:
-      '@livermore/schemas':
-        specifier: workspace:*
-        version: link:../schemas
-      '@livermore/utils':
-        specifier: workspace:*
-        version: link:../utils
-      drizzle-orm:
-        specifier: ^0.36.4
-        version: 0.36.4(@types/pg@8.16.0)(@types/react@19.2.10)(pg@8.17.1)(postgres@3.4.8)(react@19.2.4)
-      postgres:
-        specifier: ^3.4.5
-        version: 3.4.8
-    devDependencies:
-      '@types/pg':
-        specifier: ^8.16.0
-        version: 8.16.0
-      drizzle-kit:
-        specifier: ^0.28.1
-        version: 0.28.1
-      tsup:
-        specifier: ^8.3.5
-        version: 8.5.1(jiti@2.6.1)(postcss@8.5.6)(tsx@4.21.0)(typescript@5.9.3)
-      tsx:
-        specifier: ^4.19.2
-        version: 4.21.0
       typescript:
         specifier: ^5.6.3
         version: 5.9.3
@@ -445,9 +445,9 @@ importers:
 
   spikes/fee-analysis:
     dependencies:
-      '@livermore/coinbase-client':
+      '@livermore/exchange-core':
         specifier: workspace:*
-        version: link:../../packages/coinbase-client
+        version: link:../../packages/exchange-core
       tsx:
         specifier: ^4.19.0
         version: 4.21.0

@@ -1,4 +1,4 @@
-import { CoinbaseRestClient } from '@livermore/coinbase-client';
+import { CoinbaseRestClient } from '@livermore/exchange-core';
 import { createLogger } from '@livermore/utils';
 
 const logger = createLogger({ name: 'account-symbols' });

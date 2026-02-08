@@ -11,7 +11,7 @@
  *   redis-cli -p 6400
  *   HGETALL orders:open:1:1
  */
-import { CoinbaseRestClient, type CoinbaseOrder } from '@livermore/coinbase-client';
+import { CoinbaseRestClient, type CoinbaseOrder } from '@livermore/exchange-core';
 import Redis from 'ioredis';
 
 // Hardcoded for test - in production these come from database

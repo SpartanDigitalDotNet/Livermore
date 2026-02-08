@@ -13,7 +13,7 @@
 import { writeFile, mkdir } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { CoinbaseRestClient, type CoinbaseOrder, type CoinbaseTransactionSummary } from '@livermore/coinbase-client';
+import { CoinbaseRestClient, type CoinbaseOrder, type CoinbaseTransactionSummary } from '@livermore/exchange-core';
 import {
   calculateSymbolFees,
   calculateSideFees,

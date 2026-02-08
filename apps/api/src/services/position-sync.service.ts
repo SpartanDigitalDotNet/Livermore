@@ -1,4 +1,4 @@
-import { CoinbaseRestClient, type CoinbaseAccount } from '@livermore/coinbase-client';
+import { CoinbaseRestClient, type CoinbaseAccount } from '@livermore/exchange-core';
 import { getRedisClient, TickerCacheStrategy } from '@livermore/cache';
 import { getDbClient, positions, userExchanges } from '@livermore/database';
 import { logger } from '@livermore/utils';

@@ -1,4 +1,4 @@
-import type { BoundaryRestService } from '@livermore/coinbase-client';
+import type { BoundaryRestService } from '@livermore/exchange-core';
 import type { Database } from '@livermore/database';
 import type { Timeframe, IExchangeAdapter, IRestClient } from '@livermore/schemas';
 import type { RedisClient } from '@livermore/cache';

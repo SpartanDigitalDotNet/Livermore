@@ -62,7 +62,8 @@
       "Bash(dir:*)",
       "Bash(npx turbo run build:*)",
       "WebFetch(domain:www.coingecko.com)",
-      "WebFetch(domain:docs.coingecko.com)"
+      "WebFetch(domain:docs.coingecko.com)",
+      "Bash(cmd /c \"dir /b C:\\\\Dev\\\\claude\\\\Livermore\\\\packages\")"
     ]
   }
 }

@@ -2,7 +2,7 @@
  * @deprecated This entire module is deprecated as of v2.0.
  * Use packages/coinbase-client/src/adapter/coinbase-adapter.ts instead.
  */
-import { CoinbaseWebSocketClient, type CoinbaseWSMessage } from '@livermore/coinbase-client';
+import { CoinbaseWebSocketClient, type CoinbaseWSMessage } from '@livermore/exchange-core';
 import { getRedisClient, TickerCacheStrategy, CandleCacheStrategy } from '@livermore/cache';
 import { logger, getCandleTimestamp } from '@livermore/utils';
 import type { Ticker, Timeframe, Candle } from '@livermore/schemas';
@@ -33,7 +33,7 @@ export interface CandleData {
 }
 
 /**
- * @deprecated Use CoinbaseAdapter from @livermore/coinbase-client instead.
+ * @deprecated Use CoinbaseAdapter from @livermore/exchange-core instead.
  * This service builds 1m candles from ticker data which causes data gaps
  * for low-liquidity symbols. CoinbaseAdapter uses native 5m candles channel.
  *
@@ -61,7 +61,7 @@ export class CoinbaseWebSocketService {
 
   constructor(apiKeyId: string, privateKeyPem: string) {
     logger.warn(
-      'CoinbaseWebSocketService is deprecated. Use CoinbaseAdapter from @livermore/coinbase-client instead.'
+      'CoinbaseWebSocketService is deprecated. Use CoinbaseAdapter from @livermore/exchange-core instead.'
     );
 
     this.wsClient = new CoinbaseWebSocketClient(apiKeyId, privateKeyPem);
