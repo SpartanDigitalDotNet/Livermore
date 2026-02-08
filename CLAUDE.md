@@ -6,11 +6,11 @@ Notes for Claude to avoid repeating mistakes.
 
 **Production: Azure Managed Redis**
 
-The codebase uses Azure Managed Redis with OSS Cluster mode. Connection is handled via `REDIS_URL` environment variable.
+The codebase uses Azure Managed Redis with OSS Cluster mode. Connection is handled via `LIVERMORE_REDIS_URL` environment variable.
 
 **Required environment variable:**
 ```
-REDIS_URL=rediss://:PASSWORD@HOST:PORT
+LIVERMORE_REDIS_URL=rediss://:PASSWORD@HOST:PORT
 ```
 
 **To connect programmatically, use the cache package:**
@@ -21,7 +21,7 @@ const redis = getRedisClient();  // Auto-detects Azure and uses Cluster mode
 ```
 
 The `createRedisClient()` function in `packages/cache/src/client.ts`:
-- Parses `REDIS_URL` to extract host, port, password
+- Parses `LIVERMORE_REDIS_URL` to extract host, port, password
 - Detects Azure Redis by hostname (`*.redis.azure.net` or `*.redis.cache.windows.net`)
 - Uses ioredis Cluster mode with TLS for Azure
 - Falls back to regular Redis for local development
@@ -33,7 +33,7 @@ If using a local Docker Redis container:
 - **Host:** `127.0.0.1`
 - **Port:** `6400`
 
-**Debug scripts (use REDIS_URL):**
+**Debug scripts (use LIVERMORE_REDIS_URL):**
 
 ```powershell
 # Check candles

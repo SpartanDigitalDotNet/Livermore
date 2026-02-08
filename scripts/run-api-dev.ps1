@@ -4,7 +4,7 @@ $env:DATABASE_PORT = [Environment]::GetEnvironmentVariable('DATABASE_PORT', 'Use
 $env:DATABASE_LIVERMORE_USERNAME = [Environment]::GetEnvironmentVariable('DATABASE_LIVERMORE_USERNAME', 'User')
 $env:DATABASE_LIVERMORE_PASSWORD = [Environment]::GetEnvironmentVariable('DATABASE_LIVERMORE_PASSWORD', 'User')
 $env:LIVERMORE_DATABASE_NAME = [Environment]::GetEnvironmentVariable('LIVERMORE_DATABASE_NAME', 'User')
-$env:REDIS_URL = [Environment]::GetEnvironmentVariable('REDIS_URL', 'User')
+$env:LIVERMORE_REDIS_URL = [Environment]::GetEnvironmentVariable('LIVERMORE_REDIS_URL', 'User')
 $env:Coinbase_ApiKeyId = [Environment]::GetEnvironmentVariable('Coinbase_ApiKeyId', 'User')
 $env:Coinbase_EcPrivateKeyPem = [Environment]::GetEnvironmentVariable('Coinbase_EcPrivateKeyPem', 'User')
 $env:DISCORD_LIVERMORE_BOT = [Environment]::GetEnvironmentVariable('DISCORD_LIVERMORE_BOT', 'User')
@@ -25,7 +25,7 @@ Write-Host "Loaded DATABASE_HOST: $($env:DATABASE_HOST)"
 Write-Host "Loaded DATABASE_PORT: $($env:DATABASE_PORT)"
 Write-Host "Loaded DATABASE_LIVERMORE_USERNAME: $($env:DATABASE_LIVERMORE_USERNAME)"
 Write-Host "Loaded LIVERMORE_DATABASE_NAME: $($env:LIVERMORE_DATABASE_NAME)"
-Write-Host "Loaded REDIS_URL: $(if ($env:REDIS_URL) { 'set' } else { 'NOT SET' })"
+Write-Host "Loaded LIVERMORE_REDIS_URL: $(if ($env:LIVERMORE_REDIS_URL) { 'set' } else { 'NOT SET' })"
 Write-Host "Loaded DISCORD_LIVERMORE_BOT: $(if ($env:DISCORD_LIVERMORE_BOT) { 'set' } else { 'NOT SET' })"
 Write-Host "Loaded Coinbase_ApiKeyId: $(if ($env:Coinbase_ApiKeyId) { 'set' } else { 'NOT SET' })"
 Write-Host "Loaded Coinbase_EcPrivateKeyPem: $(if ($env:Coinbase_EcPrivateKeyPem) { 'set' } else { 'NOT SET' })"

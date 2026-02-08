@@ -422,7 +422,7 @@ DATABASE_LIVERMORE_PASSWORD=<ask Mike>
 LIVERMORE_DATABASE_NAME=Livermore
 
 # Redis
-REDIS_URL=redis://127.0.0.1:6400
+LIVERMORE_REDIS_URL=redis://127.0.0.1:6400
 
 # Coinbase (for market data)
 Coinbase_ApiKeyId=<ask Mike>

@@ -1,6 +1,6 @@
 import Redis from 'ioredis';
 
-const redis = new Redis(process.env.REDIS_URL || 'redis://127.0.0.1:6400');
+const redis = new Redis(process.env.LIVERMORE_REDIS_URL!);
 
 async function check() {
   const timeframes = ['1m', '5m', '15m', '1h'];

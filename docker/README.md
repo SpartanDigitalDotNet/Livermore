@@ -65,7 +65,7 @@ DB_CONNECTION_STRING=postgresql://livermore:livermore_dev_password@localhost:543
 LIVERMORE_DATABASE_NAME=livermore
 
 # Redis
-REDIS_URL=redis://localhost:6379
+LIVERMORE_REDIS_URL=redis://localhost:6379
 ```
 
 ## Accessing Services

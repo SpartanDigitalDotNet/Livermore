@@ -49,7 +49,7 @@ function parseRedisUrl(url: string): { host: string; port: number; password?: st
 export function createRedisClient(config: EnvConfig): Redis | Cluster {
   logger.info('Connecting to Redis...');
 
-  const { host, port, password, useTls } = parseRedisUrl(config.REDIS_URL);
+  const { host, port, password, useTls } = parseRedisUrl(config.LIVERMORE_REDIS_URL);
 
   // Use Cluster mode for Azure Redis (which has OSS Cluster enabled)
   if (isAzureRedis(host)) {
