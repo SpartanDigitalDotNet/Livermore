@@ -147,12 +147,10 @@ function parseCliArgs(): { autostart: string | null } {
 async function cleanupExcludedSymbols(
   redis: ReturnType<typeof getRedisClient>,
   excludedSymbols: string[],
-  timeframes: Timeframe[]
+  timeframes: Timeframe[],
+  exchangeId: number
 ): Promise<void> {
   if (excludedSymbols.length === 0) return;
-
-  // Phase 29: Use exchange-scoped keys (v5.0) instead of user-scoped
-  const exchangeId = 1; // Coinbase
 
   const keysToDelete: string[] = [];
 
@@ -248,7 +246,9 @@ async function start() {
     logger.warn('Discord notifications disabled (DISCORD_LIVERMORE_BOT not set)');
   }
 
-  const EXCHANGE_ID = 1; // Coinbase
+  // Autostart uses Coinbase (exchangeId=1). Idle mode resolves from DB on "start" command.
+  let activeExchangeId: number | null = isAutostart ? 1 : null;
+  let activeExchangeName: string | null = isAutostart ? 'coinbase' : null;
 
   // Symbol loading: only fetch from exchange on autostart, otherwise defer to start command
   let monitoredSymbols: string[] = [];
@@ -256,7 +256,7 @@ async function start() {
 
   if (isAutostart) {
     // Autostart: fetch symbols now (we have API keys, need data before connecting)
-    const symbolSourceService = new SymbolSourceService(EXCHANGE_ID);
+    const symbolSourceService = new SymbolSourceService(activeExchangeId!);
     logger.info('Fetching symbols from Coinbase account...');
     const { monitored: userPositionSymbols, excluded: excludedSymbols } = await getAccountSymbols(
       config.Coinbase_ApiKeyId,
@@ -271,13 +271,16 @@ async function start() {
       'Loaded and classified symbols from account'
     );
 
-    await cleanupExcludedSymbols(redis, excludedSymbols, SUPPORTED_TIMEFRAMES);
+    await cleanupExcludedSymbols(redis, excludedSymbols, SUPPORTED_TIMEFRAMES, activeExchangeId!);
 
     // Backfill cache with historical candles
     logger.info('Starting cache backfill...');
     const backfillTimeframes: Timeframe[] = ['1m', '5m', '15m', '1h', '4h', '1d'];
     restClient = new CoinbaseRestClient(config.Coinbase_ApiKeyId, config.Coinbase_EcPrivateKeyPem);
-    const backfillService = new StartupBackfillService(restClient, redis);
+    const backfillService = new StartupBackfillService(restClient, redis, {
+      userId: 1, // legacy
+      exchangeId: activeExchangeId!,
+    });
     await backfillService.backfill(monitoredSymbols, backfillTimeframes);
     logger.info('Cache backfill complete');
   } else {
@@ -335,10 +338,8 @@ async function start() {
   });
 
   // Create service instances (but don't start them yet in idle mode)
-  const indicatorService = new IndicatorCalculationService(
-    config.Coinbase_ApiKeyId,
-    config.Coinbase_EcPrivateKeyPem
-  );
+  // exchangeId defaults to 1 (Coinbase) for autostart; updated by handleStart for other exchanges
+  const indicatorService = new IndicatorCalculationService(activeExchangeId ?? 1);
 
   // Build indicator configs for all symbol/timeframe combinations
   const indicatorConfigs = monitoredSymbols.flatMap((symbol) =>
@@ -364,9 +365,9 @@ async function start() {
     redis,
     userId: 1,  // TODO: Get from authenticated user context
   });
-  const coinbaseAdapter = await adapterFactory.create(EXCHANGE_ID);
+  const coinbaseAdapter = await adapterFactory.create(activeExchangeId ?? 1);
 
-  const alertService = new AlertEvaluationService();
+  const alertService = new AlertEvaluationService(activeExchangeId ?? 1, activeExchangeName ?? 'unknown');
 
   // Phase 26: Only start data services if autostart is enabled
   if (isAutostart) {
@@ -441,6 +442,7 @@ async function start() {
     monitoredSymbols,
     indicatorConfigs,
     timeframes: SUPPORTED_TIMEFRAMES,
+    exchangeId: activeExchangeId,
     restClient,
     // Phase 29: New services (populated during autostart, otherwise set by start command)
     adapterFactory,

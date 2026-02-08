@@ -477,6 +477,11 @@ export class ControlChannelService {
           userExchange.apiSecretEnvVar
         );
         this.services.restClient = restClient;
+        this.services.exchangeId = userExchange.exchangeId;
+
+        // Update services with resolved exchange ID
+        this.services.indicatorService.setExchangeId(userExchange.exchangeId);
+        this.services.alertService.setExchange(userExchange.exchangeId, userExchange.exchangeName);
 
         const symbolSourceService = new SymbolSourceService(userExchange.exchangeId);
         const tier1 = await symbolSourceService.getTier1Symbols();
@@ -505,7 +510,13 @@ export class ControlChannelService {
       if (!this.services.restClient) {
         throw new Error('No REST client available. Exchange setup may be incomplete.');
       }
-      const backfillService = new StartupBackfillService(this.services.restClient, this.services.redis);
+      if (!this.services.exchangeId) {
+        throw new Error('No exchange ID resolved. Exchange setup may be incomplete.');
+      }
+      const backfillService = new StartupBackfillService(this.services.restClient, this.services.redis, {
+        userId: 1, // legacy
+        exchangeId: this.services.exchangeId,
+      });
       await backfillService.backfill(this.services.monitoredSymbols, backfillTimeframes);
       logger.info('Cache backfill complete');
 
@@ -763,10 +774,13 @@ export class ControlChannelService {
 
     logger.info({ symbol, timeframes }, 'Starting force backfill');
 
-    if (!this.services.restClient) {
+    if (!this.services.restClient || !this.services.exchangeId) {
       throw new Error('No REST client available. Run "start" first.');
     }
-    const backfillService = new StartupBackfillService(this.services.restClient, this.services.redis);
+    const backfillService = new StartupBackfillService(this.services.restClient, this.services.redis, {
+      userId: 1, // legacy
+      exchangeId: this.services.exchangeId,
+    });
 
     // Run backfill for the symbol
     await backfillService.backfill([symbol], timeframes);
@@ -808,8 +822,10 @@ export class ControlChannelService {
     const symbol = payload?.symbol as string | undefined;
     const timeframe = payload?.timeframe as Timeframe | undefined;
 
-    // Phase 29: Use exchange-scoped keys (v5.0) - no userId in key patterns
-    const exchangeId = 1; // Coinbase
+    if (!this.services.exchangeId) {
+      throw new Error('No exchange ID available. Run "start" first.');
+    }
+    const exchangeId = this.services.exchangeId;
 
     let deletedCount = 0;
 
@@ -956,10 +972,13 @@ export class ControlChannelService {
     // 5. If not paused, start monitoring the new symbol
     if (!this.isPaused) {
       // 5a. Backfill historical data first
-      if (!this.services.restClient) {
+      if (!this.services.restClient || !this.services.exchangeId) {
         throw new Error('No REST client available. Run "start" first.');
       }
-      const backfillService = new StartupBackfillService(this.services.restClient, this.services.redis);
+      const backfillService = new StartupBackfillService(this.services.restClient, this.services.redis, {
+        userId: 1, // legacy
+        exchangeId: this.services.exchangeId,
+      });
       await backfillService.backfill([normalizedSymbol], this.services.timeframes);
 
       // 5b. Add indicator configs
@@ -1166,10 +1185,13 @@ export class ControlChannelService {
 
     if (!this.isPaused) {
       // Backfill all new symbols
-      if (!this.services.restClient) {
+      if (!this.services.restClient || !this.services.exchangeId) {
         throw new Error('No REST client available. Run "start" first.');
       }
-      const backfillService = new StartupBackfillService(this.services.restClient, this.services.redis);
+      const backfillService = new StartupBackfillService(this.services.restClient, this.services.redis, {
+        userId: 1, // legacy
+        exchangeId: this.services.exchangeId,
+      });
       await backfillService.backfill(toAdd, this.services.timeframes);
 
       // Add indicator configs for all new symbols
@@ -1216,8 +1238,7 @@ export class ControlChannelService {
    * Deletes ticker, candles, and indicator keys (exchange-scoped)
    */
   private async cleanupSymbolCache(symbol: string): Promise<void> {
-    // Phase 29: Use exchange-scoped keys (v5.0) - no userId in key patterns
-    const exchangeId = 1; // Coinbase
+    const exchangeId = this.services!.exchangeId ?? 1;
     const keysToDelete: string[] = [];
 
     // Ticker key (exchange-scoped)

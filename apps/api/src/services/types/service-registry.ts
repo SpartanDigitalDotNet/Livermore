@@ -62,6 +62,9 @@ export interface ServiceRegistry {
   /** Supported timeframes for alert service */
   timeframes: Timeframe[];
 
+  /** Active exchange ID (null until start, set from user_exchanges) */
+  exchangeId: number | null;
+
   /** REST client for the active exchange (null until start) */
   restClient: IRestClient | null;
 

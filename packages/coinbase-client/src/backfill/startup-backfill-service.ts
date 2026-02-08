@@ -1,7 +1,7 @@
 import type { Timeframe, IRestClient } from '@livermore/schemas';
 import { CandleCacheStrategy, type RedisClient } from '@livermore/cache';
 import { logger } from '@livermore/utils';
-import { BackfillConfig, DEFAULT_BACKFILL_CONFIG, TIMEFRAME_PRIORITY } from './types';
+import { BackfillConfig, DEFAULT_BACKFILL_DEFAULTS, TIMEFRAME_PRIORITY } from './types';
 
 /**
  * Startup backfill service for populating Redis cache with historical candles
@@ -24,11 +24,11 @@ export class StartupBackfillService {
   constructor(
     restClient: IRestClient,
     redis: RedisClient,
-    config: Partial<BackfillConfig> = {}
+    config: Pick<BackfillConfig, 'userId' | 'exchangeId'> & Partial<BackfillConfig>
   ) {
     this.restClient = restClient;
     this.candleCache = new CandleCacheStrategy(redis);
-    this.config = { ...DEFAULT_BACKFILL_CONFIG, ...config };
+    this.config = { ...DEFAULT_BACKFILL_DEFAULTS, ...config };
   }
 
   /**

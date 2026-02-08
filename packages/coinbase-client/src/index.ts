@@ -10,7 +10,7 @@ export { CoinbaseWebSocketClient, type CoinbaseWSMessage, type MessageHandler } 
 export * from './adapter';
 
 // Backfill service
-export { StartupBackfillService, DEFAULT_BACKFILL_CONFIG, TIMEFRAME_PRIORITY } from './backfill';
+export { StartupBackfillService, DEFAULT_BACKFILL_DEFAULTS, TIMEFRAME_PRIORITY } from './backfill';
 export type { BackfillConfig } from './backfill';
 
 // Reconciliation service (event-driven boundary REST fetching)

@@ -17,21 +17,15 @@ export interface BackfillConfig {
 }
 
 /**
- * Default backfill configuration
+ * Default backfill configuration (rate-limiting only)
  *
- * - candleCount: 100 (request 100 to ensure 60+ available after filtering)
- * - batchSize: 5 (conservative - 5 req/sec well under Coinbase's 30 limit)
- * - batchDelayMs: 1000 (1 second between batches)
- * - userId: 1 (hardcoded test user)
- * - exchangeId: 1 (hardcoded exchange)
+ * userId and exchangeId are intentionally omitted — callers MUST provide them.
  */
-export const DEFAULT_BACKFILL_CONFIG: BackfillConfig = {
+export const DEFAULT_BACKFILL_DEFAULTS = {
   candleCount: 100,
   batchSize: 5,
   batchDelayMs: 1000,
-  userId: 1,
-  exchangeId: 1,
-};
+} as const;
 
 /**
  * Timeframe priority order for backfill operations
