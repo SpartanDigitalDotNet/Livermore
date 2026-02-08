@@ -1,5 +1,5 @@
 import { getDbClient, exchangeSymbols, exchanges } from '@livermore/database';
-import { eq, and, notInArray } from 'drizzle-orm';
+import { eq, and, notInArray, isNull } from 'drizzle-orm';
 import { logger } from '@livermore/utils';
 import { CoinGeckoService, type CoinGeckoCoin } from './coingecko.service';
 import { ExchangeProductService, type ExchangeProduct } from './exchange-product.service';
@@ -42,10 +42,13 @@ export class SymbolRefreshService {
 
   /**
    * Run the full refresh: CoinGecko global list → exchange intersection → upsert
+   *
+   * @param limit - Number of top coins to fetch from CoinGecko
+   * @param exchangeId - If provided, refresh only this exchange (bypasses geo-restriction filter)
    */
-  async refresh(limit: number = 100): Promise<RefreshSummary> {
+  async refresh(limit: number = 100, exchangeId?: number): Promise<RefreshSummary> {
     const startTime = Date.now();
-    logger.info({ limit }, 'Starting symbol universe refresh');
+    logger.info({ limit, exchangeId }, 'Starting symbol universe refresh');
 
     // Step 1: Fetch global coin rankings from CoinGecko
     const coins = await this.coingecko.getTopCoinsByMarketCap(limit);
@@ -61,9 +64,9 @@ export class SymbolRefreshService {
     }
 
     // Step 2: Get exchange configs from database
-    const exchangeConfigs = await this.getExchangeConfigs();
+    const exchangeConfigs = await this.getExchangeConfigs(exchangeId);
 
-    // Step 3: Process each exchange
+    // Step 3: Process exchanges in parallel
     const summary: RefreshSummary = {
       added: 0,
       updated: 0,
@@ -72,12 +75,18 @@ export class SymbolRefreshService {
       timestamp: new Date().toISOString(),
     };
 
-    for (const exchange of exchangeConfigs) {
-      const exchangeSummary = await this.refreshExchange(exchange, coinBySymbol);
-      summary.added += exchangeSummary.added;
-      summary.updated += exchangeSummary.updated;
-      summary.deactivated += exchangeSummary.deactivated;
-      summary.perExchange[exchange.name] = exchangeSummary;
+    const results = await Promise.all(
+      exchangeConfigs.map(async (exchange) => ({
+        name: exchange.name,
+        result: await this.refreshExchange(exchange, coinBySymbol),
+      }))
+    );
+
+    for (const { name, result } of results) {
+      summary.added += result.added;
+      summary.updated += result.updated;
+      summary.deactivated += result.deactivated;
+      summary.perExchange[name] = result;
     }
 
     const elapsed = Date.now() - startTime;
@@ -91,12 +100,19 @@ export class SymbolRefreshService {
 
   /**
    * Get exchange configurations with their product fetchers
+   *
+   * @param exchangeId - If provided, return only this exchange (bypasses geo-restriction filter).
+   *                     If omitted, return all active exchanges without geo restrictions.
    */
-  private async getExchangeConfigs(): Promise<ExchangeConfig[]> {
+  private async getExchangeConfigs(exchangeId?: number): Promise<ExchangeConfig[]> {
+    const whereClause = exchangeId
+      ? and(eq(exchanges.isActive, true), eq(exchanges.id, exchangeId))
+      : and(eq(exchanges.isActive, true), isNull(exchanges.geoRestrictions));
+
     const allExchanges = await this.db
       .select({ id: exchanges.id, name: exchanges.name })
       .from(exchanges)
-      .where(eq(exchanges.isActive, true));
+      .where(whereClause);
 
     const configs: ExchangeConfig[] = [];
 

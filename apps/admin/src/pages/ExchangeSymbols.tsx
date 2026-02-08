@@ -186,7 +186,7 @@ export function ExchangeSymbols() {
                 <Badge className="bg-yellow-600 text-white text-xs">No API Keys</Badge>
               )}
               {!selectedStatus && (
-                <Badge variant="secondary" className="text-xs">Not Set Up</Badge>
+                <Badge className="bg-gray-500 text-white text-xs">Not Set Up</Badge>
               )}
               {geo && (
                 <Badge className="bg-yellow-600 text-white text-xs">{geo.note ?? 'Geo-restricted'}</Badge>
