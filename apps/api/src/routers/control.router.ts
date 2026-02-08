@@ -22,14 +22,20 @@ const PRIORITY: Record<string, number> = {
 };
 
 /**
+ * Long-running commands that should fire-and-forget (publish only, no subscriber).
+ * Progress is monitored via the status polling endpoint.
+ */
+const FIRE_AND_FORGET = new Set(['force-backfill', 'start']);
+
+/**
  * Control Router
  *
  * Provides endpoints for Admin UI to:
  * - Poll API runtime status
  * - Execute control commands via Redis pub/sub
  *
- * Commands are published to Redis and processed by ControlChannelService.
- * Admin UI receives ACK immediately, then final result when complete.
+ * Short commands (pause, resume, etc.) use request-response over pub/sub.
+ * Long-running commands (backfill, start) publish and return immediately.
  */
 export const controlRouter = router({
   /**
@@ -64,15 +70,10 @@ export const controlRouter = router({
    * POST /control.executeCommand
    *
    * Execute a control command via Redis pub/sub.
-   * Publishes command to Redis channel, subscribes to response channel,
-   * waits for success/error response (with 30s timeout).
    *
-   * Flow:
-   * 1. Create command with correlationId
-   * 2. Subscribe to response channel
-   * 3. Publish command to command channel
-   * 4. Wait for response matching correlationId
-   * 5. Return response data or throw error
+   * Long-running commands (backfill, start): publish and return immediately.
+   * Short commands (pause, resume, etc.): publish, subscribe for response,
+   * wait up to 30s for success/error.
    */
   executeCommand: protectedProcedure
     .input(
@@ -94,63 +95,95 @@ export const controlRouter = router({
         priority: PRIORITY[input.type] ?? 50,
       };
 
+      const commandChannelKey = commandChannel(clerkId);
+
       ctx.logger.info(
         { correlationId, type: input.type },
         'Executing control command'
       );
 
-      // Create subscriber for response
+      // Long-running commands: just publish and return
+      if (FIRE_AND_FORGET.has(input.type)) {
+        await redis.publish(commandChannelKey, JSON.stringify(command));
+        ctx.logger.debug(
+          { correlationId, channel: commandChannelKey },
+          'Command published (fire-and-forget)'
+        );
+        return { success: true };
+      }
+
+      // Short commands: publish and wait for response
       const subscriber = redis.duplicate();
       const responseChannelKey = responseChannel(clerkId);
-      const commandChannelKey = commandChannel(clerkId);
 
       return new Promise<{ success: boolean; data?: unknown; message?: string }>(
         async (resolve, reject) => {
-          // 30 second timeout
+          let settled = false;
+
+          const cleanup = () => {
+            if (subscriber.status === 'ready') {
+              subscriber.unsubscribe().catch((err: unknown) => {
+                ctx.logger.error({ err }, 'Failed to unsubscribe Redis subscriber');
+              });
+            }
+            subscriber.quit().catch((err: unknown) => {
+              ctx.logger.error({ err }, 'Failed to quit Redis subscriber');
+            });
+          };
+
+          subscriber.on('error', (err) => {
+            ctx.logger.error({ err }, 'Redis subscriber connection error');
+            if (!settled) {
+              settled = true;
+              clearTimeout(timeout);
+              cleanup();
+              reject(
+                new TRPCError({
+                  code: 'INTERNAL_SERVER_ERROR',
+                  message: 'Redis subscriber error',
+                })
+              );
+            }
+          });
+
           const timeout = setTimeout(() => {
-            subscriber.unsubscribe();
-            subscriber.quit();
-            reject(
-              new TRPCError({
-                code: 'TIMEOUT',
-                message: 'Command timed out after 30 seconds',
-              })
-            );
+            if (!settled) {
+              settled = true;
+              cleanup();
+              reject(
+                new TRPCError({
+                  code: 'TIMEOUT',
+                  message: 'Command timed out after 30 seconds',
+                })
+              );
+            }
           }, 30_000);
 
           subscriber.on('message', (_channel: string, message: string) => {
             try {
               const response = JSON.parse(message) as CommandResponse;
+              if (response.correlationId !== correlationId) return;
 
-              // Only process responses for our command
-              if (response.correlationId !== correlationId) {
-                return;
-              }
-
-              if (response.status === 'success') {
+              if (response.status === 'success' && !settled) {
+                settled = true;
                 clearTimeout(timeout);
-                subscriber.unsubscribe();
-                subscriber.quit();
+                cleanup();
                 resolve({ success: true, data: response.data });
-              } else if (response.status === 'error') {
+              } else if (response.status === 'error' && !settled) {
+                settled = true;
                 clearTimeout(timeout);
-                subscriber.unsubscribe();
-                subscriber.quit();
+                cleanup();
                 resolve({
                   success: false,
                   message: response.message ?? 'Command failed',
                 });
               }
-              // 'ack' status is ignored - wait for final status
             } catch (err) {
               ctx.logger.error({ err, message }, 'Failed to parse response');
             }
           });
 
-          // Subscribe before publishing to avoid race condition
           await subscriber.subscribe(responseChannelKey);
-
-          // Publish command
           await redis.publish(commandChannelKey, JSON.stringify(command));
 
           ctx.logger.debug(

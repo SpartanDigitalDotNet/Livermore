@@ -9,7 +9,7 @@ import { fastifyTRPCPlugin } from '@trpc/server/adapters/fastify';
 import { logger, validateEnv } from '@livermore/utils';
 import { getDbClient, testDatabaseConnection } from '@livermore/database';
 import { getRedisClient, testRedisConnection, deleteKeysClusterSafe, exchangeCandleKey, exchangeIndicatorKey } from '@livermore/cache';
-import { createContext } from '@livermore/trpc-config';
+import { createContext as baseCreateContext } from '@livermore/trpc-config';
 import { StartupBackfillService, BoundaryRestService, DEFAULT_BOUNDARY_CONFIG } from '@livermore/coinbase-client';
 import { ExchangeAdapterFactory } from './services/exchange/adapter-factory';
 import { SymbolSourceService } from './services/symbol-source.service';
@@ -24,6 +24,20 @@ import { clerkWebhookHandler } from './routes/webhooks/clerk';
 import type { Timeframe } from '@livermore/schemas';
 import type { ServiceRegistry, RuntimeConfig } from './services/types/service-registry';
 import type { WebSocket } from 'ws';
+
+/**
+ * Wrapped createContext that lazily initializes the Control Channel Service
+ * on the first authenticated request after API restart.
+ */
+function createContext(opts: Parameters<typeof baseCreateContext>[0]) {
+  const ctx = baseCreateContext(opts);
+  if (ctx.auth.userId) {
+    initControlChannelService(ctx.auth.userId).catch((err) => {
+      logger.error({ err }, 'Failed to init control channel from request context');
+    });
+  }
+  return ctx;
+}
 
 // WebSocket clients for alert broadcasts
 const alertClients = new Set<WebSocket>();

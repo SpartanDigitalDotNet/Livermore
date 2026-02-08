@@ -10,7 +10,7 @@ import {
 import { StartupBackfillService } from '@livermore/coinbase-client';
 import { SymbolSourceService } from './symbol-source.service';
 import { eq, and, sql } from 'drizzle-orm';
-import { users } from '@livermore/database';
+import { users, userExchanges } from '@livermore/database';
 import type { ServiceRegistry } from './types/service-registry';
 import { updateRuntimeState, type ConnectionState, type StartupProgress } from './runtime-state';
 
@@ -441,10 +441,30 @@ export class ControlChannelService {
     };
 
     try {
-      // If symbols not yet loaded (idle startup), load Tier 1 from exchange_symbols table
+      // If symbols not yet loaded (idle startup), load Tier 1 from user's exchange
       if (this.services.monitoredSymbols.length === 0) {
         setProgress({ phase: 'indicators', phaseLabel: 'Loading Tier 1 symbols', percent: 5 });
-        const symbolSourceService = new SymbolSourceService(1); // Coinbase
+
+        // Resolve user's default exchange from user_exchanges
+        const [userExchange] = await this.services.db
+          .select({ exchangeId: userExchanges.exchangeId })
+          .from(userExchanges)
+          .innerJoin(users, eq(users.id, userExchanges.userId))
+          .where(
+            and(
+              eq(users.identityProvider, 'clerk'),
+              eq(users.identitySub, this.identitySub),
+              eq(userExchanges.isDefault, true),
+              eq(userExchanges.isActive, true)
+            )
+          )
+          .limit(1);
+
+        if (!userExchange?.exchangeId) {
+          throw new Error('No exchange configured. Set up your exchange in Admin first.');
+        }
+
+        const symbolSourceService = new SymbolSourceService(userExchange.exchangeId);
         const tier1 = await symbolSourceService.getTier1Symbols();
 
         if (tier1.length === 0) {
@@ -460,8 +480,8 @@ export class ControlChannelService {
         );
 
         logger.info(
-          { total: this.services.monitoredSymbols.length, symbols: this.services.monitoredSymbols },
-          'Loaded Tier 1 symbols from exchange_symbols'
+          { total: this.services.monitoredSymbols.length, exchangeId: userExchange.exchangeId, symbols: this.services.monitoredSymbols },
+          'Loaded Tier 1 symbols from user exchange'
         );
       }
 
