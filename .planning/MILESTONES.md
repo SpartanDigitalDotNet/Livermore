@@ -28,12 +28,12 @@
 **Git range:** `00f27ea` to `6bb4182`
 
 **Tech debt accepted:**
-- SymbolSourceService and ExchangeAdapterFactory built but not wired into server.ts startup
-- Hardcoded userId=1, exchangeId=1 in 4 locations
-- Router auth hardening still deferred (publicProcedure)
+- Autostart path hardcodes exchangeId=1 (Coinbase) — no user context by design
+- Router auth hardening still deferred (publicProcedure with hardcoded TEST_USER_ID/TEST_EXCHANGE_ID)
 - switch-mode still a stub
+- Legacy userId param in cache API calls (exchange-scoped keys don't use it)
 
-**What's next:** v5.1 - Wire orphaned services, Binance live testing, hardcoded ID removal
+**What's next:** v5.1 - Binance live testing, router auth hardening, autostart user context
 
 ---
 

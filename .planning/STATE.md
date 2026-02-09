@@ -40,10 +40,10 @@ See `.planning/MILESTONES.md` for full history.
 | alert.router.ts uses publicProcedure | High | Unprotected API access | v3.0 |
 | position.router.ts uses publicProcedure | High | Unprotected API access | v3.0 |
 | switch-mode is a stub | Medium | Mode doesn't actually switch | v4.0 |
-| SymbolSourceService not wired into startup | Medium | Uses legacy getAccountSymbols | v5.0 |
-| ExchangeAdapterFactory not wired into startup | Medium | Direct CoinbaseAdapter creation | v5.0 |
-| Hardcoded userId=1, exchangeId=1 (4 locations) | Medium | Single-user only | v5.0 |
 | Autostart has no user context | High | Can't load user settings/symbols | v5.0 |
+| Autostart hardcodes exchangeId=1 (Coinbase) | Medium | Autostart only supports Coinbase | v5.0 |
+| Routers hardcode TEST_USER_ID/TEST_EXCHANGE_ID | Medium | Tied to publicProcedure debt | v3.0 |
+| Legacy userId param in cache calls | Low | Cache API signature requires unused param | v5.0 |
 
 ## Accumulated Context
 
