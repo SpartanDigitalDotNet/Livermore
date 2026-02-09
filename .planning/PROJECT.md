@@ -2,7 +2,7 @@
 
 ## What This Is
 
-A real-time cryptocurrency trading analysis platform that monitors exchange data (starting with Coinbase), calculates technical indicators (MACD-V), and fires alerts when signal conditions are met. Now includes user-specific configuration, runtime control via Redis pub/sub, and Admin UI for settings and symbol management. Designed for multi-exchange support with Binance.us and Binance.com planned for future milestones.
+A real-time cryptocurrency trading analysis platform with multi-exchange support (Coinbase and Binance). Monitors exchange data via WebSocket, calculates technical indicators (MACD-V), and fires alerts when signal conditions are met. Features exchange-scoped distributed data architecture enabling cross-exchange visibility, idle startup with runtime control via Redis pub/sub, and Admin UI for settings, symbols, and exchange management.
 
 ## Core Value
 
@@ -10,24 +10,10 @@ Data accuracy and timely alerts — indicators must calculate on complete, accur
 
 ## Current State
 
-**Status:** v5.0 planning
-**Current focus:** Exchange-scoped data architecture, distributed cross-exchange visibility
+**Status:** v5.0 shipped
+**Current focus:** Planning next milestone
 
-## Current Milestone: v5.0 Distributed Exchange Architecture
-
-**Goal:** Refactor from user-scoped to exchange-scoped candles/indicators, enabling cross-exchange visibility for distributed soft-arbitrage ("trigger remotely, buy locally").
-
-**Target features:**
-- Exchange-scoped candle keys: `candles:<exchange_id>:<symbol>:<timeframe>` (shared pool)
-- Exchange-scoped indicator keys: `indicator:<exchange_id>:<symbol>:<timeframe>:macdv`
-- User-defined overflow: `usercandles:` / `userindicator:` keys with TTL for positions/manual adds
-- New `exchanges` table with full metadata (API limits, fees, geo restrictions, supported timeframes)
-- Idle startup mode: API starts without exchange connections, awaits `start` command
-- `user_exchanges` refactor with FK to `exchanges` table
-- Symbol sourcing: Tier 1 (Top N by volume, shared) + Tier 2 (user positions + manual, de-duped)
-- New startup script with `--autostart <exchange>` parameter option
-
-**Architecture change:**
+**Architecture (v5.0):**
 ```
 Mike's API (Coinbase)  ──publishes──►  Redis  ◄──subscribes── Kaia's PerseusWeb
                                          │
@@ -69,14 +55,24 @@ Cross-exchange visibility via Redis pub/sub. Any client can subscribe to any exc
 - ✓ Admin Control Panel (status, pause/resume, mode switcher, command history) — v4.0
 - ✓ Admin Symbols UI (watchlist, add/remove, bulk import) — v4.0
 - ✓ Real-time WebSocket alerts with MACD-V colored UI elements — v4.0
+- ✓ `exchanges` metadata table with API limits, fees, geo restrictions — v5.0
+- ✓ `user_exchanges` FK refactor to reference `exchanges` table — v5.0
+- ✓ Exchange adapter factory (Coinbase/Binance) — v5.0
+- ✓ Exchange connection status tracking — v5.0
+- ✓ Exchange-scoped Redis keys (candles, indicators, pub/sub channels) — v5.0
+- ✓ User overflow keys with TTL for Tier 2 symbols — v5.0
+- ✓ Dual-read pattern (exchange-scoped first, user-scoped fallback) — v5.0
+- ✓ Two-tier symbol management (Tier 1 shared, Tier 2 user positions) — v5.0
+- ✓ Idle startup mode with start/stop commands — v5.0
+- ✓ `--autostart` CLI flag for automation — v5.0
+- ✓ Connection lifecycle events — v5.0
+- ✓ Cross-exchange alert channels with source attribution — v5.0
+- ✓ IRestClient interface with pluggable REST clients — v5.0
+- ✓ BinanceRestClient and BinanceAdapter — v5.0
 
-### Next Milestone Goals (v5.1+)
+### Active
 
-- Router auth hardening (convert publicProcedure to protectedProcedure) — tech debt from v3.0
-- Orderbook imbalance detection (scalper-orderbook mode implementation)
-- Trading contracts (orders, positions, paper trading)
-- Runtime exchange switching via Admin (connect to different exchange without restart)
-- Azure pub/sub for multi-instance deployment (identity_sub as channel)
+(None — planning next milestone)
 
 ### Out of Scope
 
@@ -85,66 +81,17 @@ Cross-exchange visibility via Redis pub/sub. Any client can subscribe to any exc
 - CCXT Library — performance overhead unnecessary
 - Cross-Region Replication — single-region sufficient
 - Azure pub/sub — Redis pub/sub sufficient for single-instance, Azure deferred
-- Runtime exchange switching — API connects to one exchange per startup; switch requires restart
-- Router auth hardening — tech debt accepted, defer to v5.1
-
-## Context
-
-**Current architecture (v4.0):**
-```
-Admin UI (Vite + React + tRPC)
-    │
-    │ tRPC calls + WebSocket alerts
-    ▼
-┌─────────────────────────────────────────┐
-│                 API                      │
-│  ┌─────────────┐  ┌──────────────────┐  │
-│  │ Control     │  │ Settings Router  │  │
-│  │ Channel     │  │ Symbol Router    │  │
-│  │ Service     │  │ Control Router   │  │
-│  └─────────────┘  └──────────────────┘  │
-│         │                │               │
-│         ▼                ▼               │
-│  ┌─────────────────────────────┐        │
-│  │    Redis Pub/Sub            │        │
-│  │  (commands + responses)     │        │
-│  └─────────────────────────────┘        │
-│                                          │
-│  ┌─────────────────────────────┐        │
-│  │   WebSocket Layer           │        │
-│  │   (CoinbaseAdapter)         │        │
-│  └─────────────────────────────┘        │
-│         │                                │
-│         │ Native 5m candles + ticker     │
-│         ▼                                │
-│  ┌─────────────┐                         │
-│  │ Redis Cache │◄── Backfill Service    │
-│  └─────────────┘◄── BoundaryRestService │
-│         │                                │
-│         │ candle:close events            │
-│         ▼                                │
-│  Indicator Service → Alert Evaluation   │
-└─────────────────────────────────────────┘
-    │
-    │ WebSocket broadcast
-    ▼
-Admin UI (real-time alerts)
-```
-
-**What v4.0 added:**
-- User settings stored in PostgreSQL JSONB
-- Admin→API command communication via Redis pub/sub
-- Runtime control without restart (pause/resume/reload)
-- Symbol management with exchange validation
-- Full Admin UI for settings, control, and symbols
+- 1m candle support — Coinbase WebSocket only provides native 5m
+- Real-time arbitrage execution — soft-arbitrage (signals only) is safer
 
 ## Constraints
 
 - **Event-driven**: No timer-based polling for indicator calculations. System must be driven by exchange data.
 - **60-candle minimum**: MACDV requires at least 60 candles per symbol/timeframe for accurate alignment with charts.
 - **Latency targets**: 1m/5m signals <10s, 4h/1d signals can tolerate 30s-1m delay.
-- **Coinbase rate limits**: Must respect API limits, hence move to WebSocket + cache-first.
+- **Rate limits**: Must respect per-exchange API limits, hence WebSocket + cache-first.
 - **Incremental refactor**: Existing MACDV functionality must work throughout refactor.
+- **No silent defaults**: If exchange or configuration is unknown, surface the error — never silently fall back to Coinbase.
 
 ## Key Decisions
 
@@ -155,17 +102,22 @@ Admin UI (real-time alerts)
 | Native 5m candles | Eliminates data gaps from ticker-built candles | ✓ Shipped v2.0 |
 | Boundary-triggered REST | Higher timeframes fetched at 5m boundaries (no cron) | ✓ Shipped v2.0 |
 | Exchange adapter pattern | Multi-exchange support without indicator changes | ✓ Shipped v2.0 |
-| Preserve legacy service | Deprecated but kept for rollback during observation | ✓ Shipped v2.0 |
 | Atlas-only migrations | Database schema (schema.sql) is source of truth; Drizzle migrations BANNED | ✓ Shipped v3.0 |
 | Database-first ORM | Use `drizzle-kit pull` to generate TypeScript from database (like EF scaffolding) | ✓ Shipped v3.0 |
 | Sandbox as shared DB | Azure PostgreSQL (Sandbox) shared between Livermore and Kaia's UI | ✓ Shipped v3.0 |
 | Settings as JSONB | Single JSONB column on users table for flexible settings schema | ✓ Shipped v4.0 |
 | Redis pub/sub for control | Admin→API commands via Redis, future Azure pub/sub | ✓ Shipped v4.0 |
-| Pause mode not shutdown | API stays running but idles; keeps pub/sub channel open | ✓ Shipped v4.0 |
 | Credentials in env vars | Settings store env var names, not actual secrets | ✓ Shipped v4.0 |
-| Hybrid symbol management | Scanner from exchange + user curation in Admin | ✓ Shipped v4.0 |
-| Bidirectional form/JSON sync | lastEditSource ref prevents infinite loops | ✓ Shipped v4.0 |
 | Manual shadcn components | Project doesn't use shadcn CLI; components created manually with CVA | ✓ Shipped v4.0 |
+| Exchange-scoped shared keys | Tier 1 symbols share data across users/instances | ✓ Shipped v5.0 |
+| User overflow with TTL | Tier 2 symbols have TTL-based auto-cleanup | ✓ Shipped v5.0 |
+| Idle startup mode | API doesn't connect until `start` command | ✓ Shipped v5.0 |
+| Adapter factory pattern | Factory instantiates correct adapter by exchange type | ✓ Shipped v5.0 |
+| Dual-read for migration | Check exchange-scoped first, fall back to user-scoped | ✓ Shipped v5.0 |
+| IRestClient interface | Decouple REST clients from exchange-specific implementations | ✓ Shipped v5.0 |
+| Package rename (exchange-core) | coinbase-client contained exchange-agnostic services | ✓ Shipped v5.0 |
+| 3 separate Redis env vars | Never store full connection URL; construct at runtime | ✓ Shipped v5.0 |
+| No silent exchange defaults | If exchange unknown, surface error — never default to Coinbase | ✓ Shipped v5.0 |
 
 ## Partnership Context
 
@@ -173,13 +125,10 @@ Admin UI (real-time alerts)
 
 **Integration points:**
 - Sandbox PostgreSQL: Shared database for IAM and user settings
-- WebSocket: Real-time data feed (candles, indicators, signals) — future milestone
-- Contracts: Shared TypeScript models for API communication — future milestone
-- Redis pub/sub: PerseusWeb can subscribe to Livermore control channels
+- Redis pub/sub: Cross-exchange visibility — Kaia subscribes to Coinbase alerts, Mike subscribes to Binance alerts
+- Binance support: Kaia runs Binance exchange, data flows through same architecture
 
-**v3.0 unblocked Kaia:** IAM tables deployed, KAIA-IAM-HANDOFF.md delivered.
-
-**v4.0 added:** User settings schema that Kaia's PerseusWeb can also leverage for her Binance.com configuration. PerseusWeb integration guide for Redis pub/sub and API setup.
+**v5.0 enabled:** Kaia's Binance instance publishes to Redis, Mike's Coinbase instance subscribes. Cross-exchange soft-arbitrage signals operational.
 
 ---
-*Last updated: 2026-02-06 — v5.0 milestone started*
+*Last updated: 2026-02-08 — after v5.0 milestone*

@@ -1,5 +1,42 @@
 # Project Milestones: Livermore
 
+## v5.0 Distributed Exchange Architecture (Shipped: 2026-02-08)
+
+**Status:** Shipped (2026-02-08)
+
+**Delivered:** Exchange-scoped distributed data architecture enabling cross-exchange visibility for soft-arbitrage patterns. Multi-exchange support with Coinbase and Binance clients, pluggable REST interfaces, idle startup with start/stop control, and two-tier symbol management.
+
+**Phases completed:** 23-29 (7 phases)
+
+**Key accomplishments:**
+
+- `exchanges` metadata table with 6 exchange seed data and normalized `user_exchanges` FK
+- Exchange-scoped Redis keys with dual-read pattern (shared Tier 1, user overflow Tier 2)
+- `SymbolSourceService` with two-tier symbol sourcing and de-duplication
+- Idle startup mode with `start`/`stop` commands and `--autostart` CLI flag
+- Cross-exchange alert channels with source attribution (`source_exchange_id`)
+- `ExchangeAdapterFactory` + `BinanceAdapter` + `BinanceRestClient`
+- `IRestClient` interface decoupling REST clients from exchange-specific implementations
+- Package rename: `@livermore/coinbase-client` to `@livermore/exchange-core`
+
+**Stats:**
+
+- 7 phases, 19 requirements, 23 commits
+- 121 source files changed, ~6,000 lines of TypeScript
+- 2 days from start to ship (2026-02-06 to 2026-02-08)
+
+**Git range:** `00f27ea` to `6bb4182`
+
+**Tech debt accepted:**
+- SymbolSourceService and ExchangeAdapterFactory built but not wired into server.ts startup
+- Hardcoded userId=1, exchangeId=1 in 4 locations
+- Router auth hardening still deferred (publicProcedure)
+- switch-mode still a stub
+
+**What's next:** v5.1 - Wire orphaned services, Binance live testing, hardcoded ID removal
+
+---
+
 ## v4.0 User Settings + Runtime Control (Shipped: 2026-02-06)
 
 **Status:** Shipped (2026-02-06)
