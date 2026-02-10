@@ -5,21 +5,21 @@
 See: .planning/PROJECT.md (updated 2026-02-08)
 
 **Core value:** Data accuracy and timely alerts
-**Current focus:** v6.0 Perseus Network -- Instance Registration and Health
+**Current focus:** v6.0 Perseus Network -- Network Activity Logging
 
 ## Current Position
 
 **Milestone:** v6.0 Perseus Network
-**Phase:** 30 of 33 (Instance Registry and State Machine) -- COMPLETE
-**Plan:** 3 of 3 complete
-**Status:** Phase complete
+**Phase:** 31 of 33 (Network Activity Logging) -- In Progress
+**Plan:** 1 of 2 complete
+**Status:** In progress
 
 ```
-Progress: [######....] 25%
-Phase 30 [===]  Phase 31 [ ]  Phase 32 [ ]  Phase 33 [ ]
+Progress: [#######...] 33%
+Phase 30 [===]  Phase 31 [= ]  Phase 32 [ ]  Phase 33 [ ]
 ```
 
-**Last activity:** 2026-02-10 -- Completed 30-03-PLAN.md (Integration: Wire Services into Lifecycle)
+**Last activity:** 2026-02-10 -- Completed 31-01-PLAN.md (Activity Log Schemas and Logger Service)
 
 ## Milestones
 
@@ -37,15 +37,16 @@ See `.planning/MILESTONES.md` for full history.
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 3
-- Average duration: 4m 31s
-- Total execution time: 13m 54s
+- Total plans completed: 4
+- Average duration: 4m 17s
+- Total execution time: 17m 29s
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 30 | 3 | 13m 54s | 4m 38s |
+| 31 | 1 | 3m 35s | 3m 35s |
 
 ## Tech Debt (Carried Forward)
 
@@ -87,6 +88,9 @@ Recent decisions affecting current work:
 - 30-03-D1: Placeholder registry with exchangeId=0 for idle mode (replaced in handleStart)
 - 30-03-D2: Fresh InstanceRegistryService in handleStart (immutable exchangeId)
 - 30-03-D3: Migrated exchange-symbol.router to new key format (exchange:{id}:status)
+- 31-01-D1: networkActivityStreamKey uses exchange name (not ID) with lowercase normalization
+- 31-01-D2: BaseLogEntrySchema is internal-only (not exported)
+- 31-01-D3: Empty string defaults for ip and adminEmail in logger constructor
 
 ### Pending Todos
 
@@ -101,22 +105,20 @@ None yet.
 ### Last Session
 
 **Date:** 2026-02-10
-**Activity:** Executed 30-03-PLAN.md (Integration: Wire Services into Lifecycle, 2 tasks)
-**Stopped At:** Completed 30-03-PLAN.md -- Phase 30 complete
+**Activity:** Executed 31-01-PLAN.md (Activity Log Schemas and Logger Service, 2 tasks)
+**Stopped At:** Completed 31-01-PLAN.md
 
 ### Resume Context
 
-**PHASE 30 COMPLETE**
+Phase 31 in progress. Plan 01 complete, Plan 02 next.
 
-All 3 plans delivered:
-- 30-01: Foundation types (ConnectionState, InstanceStatus, VALID_TRANSITIONS, instanceStatusKey, detectPublicIp)
-- 30-02: Core services (StateMachineService, InstanceRegistryService)
-- 30-03: Integration (wired into server.ts startup/shutdown, control-channel handleStart/handleStop, removed prototype)
+Delivered in 31-01:
+- Activity log Zod schemas (StateTransitionEntry, ErrorEntry, NetworkActivityEntry discriminated union)
+- networkActivityStreamKey in cache/keys.ts
+- NetworkActivityLogger service with logTransition, logError, setIp, setAdminEmail
 
-All 17 requirements (REG-01 through REG-06, HB-01 through HB-04, LOCK-01 through LOCK-04, FIX-01 through FIX-03) verified complete.
-
-Next: Phase 31 (Health Monitoring Dashboard or Network Status).
+Plan 31-02 will wire the logger into StateMachineService transitions and error paths.
 
 ---
 *State initialized: 2026-01-18*
-*Last updated: 2026-02-10 -- Completed 30-03-PLAN.md (Phase 30 complete)*
+*Last updated: 2026-02-10 -- Completed 31-01-PLAN.md*
