@@ -12,9 +12,12 @@ import { getRedisClient, testRedisConnection, deleteKeysClusterSafe, exchangeCan
 import { createContext as baseCreateContext } from '@livermore/trpc-config';
 import { CoinbaseRestClient, StartupBackfillService, BoundaryRestService, DEFAULT_BOUNDARY_CONFIG } from '@livermore/exchange-core';
 import type { IRestClient } from '@livermore/schemas';
+import { hostname } from 'node:os';
 import { ExchangeAdapterFactory } from './services/exchange/adapter-factory';
 import { InstanceRegistryService } from './services/instance-registry.service';
 import { StateMachineService } from './services/state-machine.service';
+import { NetworkActivityLogger } from './services/network-activity-logger';
+import { detectPublicIp } from './utils/detect-public-ip';
 import { SymbolSourceService } from './services/symbol-source.service';
 import { getAccountSymbols } from './services/account-symbols.service';
 import { IndicatorCalculationService } from './services/indicator-calculation.service';
@@ -118,6 +121,11 @@ export async function initControlChannelService(clerkUserId: string): Promise<vo
     // Phase 30: Set admin info on instance registry
     if (globalServiceRegistry?.instanceRegistry) {
       globalServiceRegistry.instanceRegistry.setAdminInfo(clerkUserId, clerkUserId);
+    }
+
+    // Phase 31: Set admin email on activity logger
+    if (globalServiceRegistry?.activityLogger) {
+      globalServiceRegistry.activityLogger.setAdminEmail(clerkUserId);
     }
 
     logger.info({ clerkUserId, hasServices: true }, 'Control Channel Service started');
@@ -257,7 +265,23 @@ async function start() {
     exchangeName: activeExchangeName ?? 'unknown',
     redis,
   });
-  const stateMachine = new StateMachineService(instanceRegistry);
+
+  // Phase 31: Create activity logger for Redis Streams event recording
+  const activityLogger = new NetworkActivityLogger({
+    redis,
+    exchangeId: activeExchangeId ?? 0,
+    exchangeName: activeExchangeName ?? 'unknown',
+    hostname: hostname(),
+  });
+
+  const stateMachine = new StateMachineService(instanceRegistry, activityLogger);
+
+  // Phase 31: Update activity logger IP asynchronously
+  detectPublicIp().then((ip) => {
+    if (ip) {
+      activityLogger.setIp(ip);
+    }
+  });
 
   // Register instance if autostart mode (atomic claim for this exchange)
   if (isAutostart && activeExchangeId) {
@@ -486,6 +510,8 @@ async function start() {
     // Phase 30: Instance registry and state machine
     instanceRegistry,
     stateMachine,
+    // Phase 31: Network activity logger for Redis Streams
+    activityLogger,
   };
 
   // Store service registry globally for lazy control channel initialization

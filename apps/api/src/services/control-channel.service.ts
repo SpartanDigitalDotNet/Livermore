@@ -10,8 +10,11 @@ import {
 import { StartupBackfillService } from '@livermore/exchange-core';
 import { createRestClient } from './exchange/rest-client-factory';
 import { SymbolSourceService } from './symbol-source.service';
+import { hostname } from 'node:os';
 import { InstanceRegistryService } from './instance-registry.service';
 import { StateMachineService } from './state-machine.service';
+import { NetworkActivityLogger } from './network-activity-logger';
+import { detectPublicIp } from '../utils/detect-public-ip';
 import { eq, and, sql } from 'drizzle-orm';
 import { users, userExchanges } from '@livermore/database';
 import type { ServiceRegistry } from './types/service-registry';
@@ -511,7 +514,22 @@ export class ControlChannelService {
         redis: this.services.redis,
       });
       this.services.instanceRegistry = registry;
-      this.services.stateMachine = new StateMachineService(registry);
+
+      // Phase 31: Create activity logger for this exchange
+      const activityLogger = new NetworkActivityLogger({
+        redis: this.services.redis,
+        exchangeId: this.services.exchangeId!,
+        exchangeName: exchangeName,
+        hostname: hostname(),
+        adminEmail: this.identitySub,
+      });
+      this.services.activityLogger = activityLogger;
+      this.services.stateMachine = new StateMachineService(registry, activityLogger);
+
+      // Update logger IP asynchronously
+      detectPublicIp().then((ip) => {
+        if (ip) activityLogger.setIp(ip);
+      });
 
       const registered = await registry.register();
       if (!registered) {
@@ -609,6 +627,15 @@ export class ControlChannelService {
       try {
         await this.services.instanceRegistry.recordError(errorMessage);
       } catch { /* registry may not be initialized yet */ }
+
+      // Phase 31: Log error to Redis Stream (fire-and-forget)
+      if (this.services.activityLogger) {
+        this.services.activityLogger.logError(
+          errorMessage,
+          this.services.stateMachine.getCurrentState()
+        ).catch(() => {});
+      }
+
       this.services.stateMachine.resetToIdle();
 
       throw error;
