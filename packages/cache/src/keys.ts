@@ -23,6 +23,16 @@ export function instanceStatusKey(exchangeId: number): string {
   return `exchange:${exchangeId}:status`;
 }
 
+/**
+ * Build Redis Stream key for network activity logging.
+ * Phase 31: One stream per exchange, keyed by normalized name.
+ *
+ * @example networkActivityStreamKey('Coinbase') // 'logs:network:coinbase'
+ */
+export function networkActivityStreamKey(exchangeName: string): string {
+  return `logs:network:${exchangeName.toLowerCase()}`;
+}
+
 // ============================================
 // TIER 1: Exchange-Scoped Keys (Shared Data)
 // ============================================

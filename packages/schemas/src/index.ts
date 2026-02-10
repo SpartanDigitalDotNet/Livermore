@@ -40,3 +40,4 @@ export * from './control/command.schema';
 
 // Network schemas
 export * from './network/instance-status.schema';
+export * from './network/activity-log.schema';
