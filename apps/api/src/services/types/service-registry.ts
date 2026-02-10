@@ -8,6 +8,7 @@ import type { ExchangeAdapterFactory } from '../exchange/adapter-factory';
 import type { SymbolSourceService, ClassifiedSymbol } from '../symbol-source.service';
 import type { InstanceRegistryService } from '../instance-registry.service';
 import type { StateMachineService } from '../state-machine.service';
+import type { NetworkActivityLogger } from '../network-activity-logger';
 
 /**
  * Runtime configuration for services that need API credentials
@@ -84,4 +85,7 @@ export interface ServiceRegistry {
 
   /** Phase 30: State machine for validated connection state transitions */
   stateMachine: StateMachineService;
+
+  /** Phase 31: Network activity logger for Redis Streams event recording */
+  activityLogger?: NetworkActivityLogger;
 }

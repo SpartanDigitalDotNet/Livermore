@@ -3,6 +3,7 @@ import { VALID_TRANSITIONS } from '@livermore/schemas';
 import { createLogger } from '@livermore/utils';
 import { updateRuntimeState } from './runtime-state';
 import type { InstanceRegistryService } from './instance-registry.service';
+import type { NetworkActivityLogger } from './network-activity-logger';
 
 const logger = createLogger({ name: 'state-machine', service: 'network' });
 
@@ -56,10 +57,12 @@ const MAX_HISTORY = 50;
 export class StateMachineService {
   private currentState: ConnectionState = 'idle';
   private registry: InstanceRegistryService;
+  private activityLogger: NetworkActivityLogger | null;
   private transitionHistory: TransitionRecord[] = [];
 
-  constructor(registry: InstanceRegistryService) {
+  constructor(registry: InstanceRegistryService, activityLogger?: NetworkActivityLogger) {
     this.registry = registry;
+    this.activityLogger = activityLogger ?? null;
   }
 
   /**
@@ -105,6 +108,13 @@ export class StateMachineService {
     });
 
     logger.info({ from, to }, 'State transition');
+
+    // Phase 31: Log transition to Redis Stream (fire-and-forget)
+    if (this.activityLogger) {
+      this.activityLogger.logTransition(from, to).catch(() => {
+        // Already logged inside logTransition; swallow here
+      });
+    }
   }
 
   /**
