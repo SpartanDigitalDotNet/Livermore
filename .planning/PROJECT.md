@@ -10,17 +10,21 @@ Data accuracy and timely alerts — indicators must calculate on complete, accur
 
 ## Current State
 
-**Status:** v5.0 shipped
-**Current focus:** Planning next milestone
+**Status:** v6.0 in progress
+**Current focus:** Perseus Network — instance registration and health
 
-**Architecture (v5.0):**
+**Architecture (v6.0):**
 ```
-Mike's API (Coinbase)  ──publishes──►  Redis  ◄──subscribes── Kaia's PerseusWeb
+Mike's API (Coinbase) ──registers──► exchange:1:status  ◄──reads── Admin UI (Network View)
+                      ──heartbeat──► (TTL-based)
+                      ──logs──────► logs:network:coinbase (Redis Stream, 90d TTL)
                                          │
-Kaia's API (Binance)   ──publishes──►────┘
+Kaia's API (Binance)  ──registers──► exchange:2:status  ◄──reads── Admin UI (Network View)
+                      ──heartbeat──► (TTL-based)
+                      ──logs──────► logs:network:binance (Redis Stream, 90d TTL)
 ```
 
-Cross-exchange visibility via Redis pub/sub. Any client can subscribe to any exchange's feed.
+Each Livermore API instance registers itself in Redis with full identity (hostname, IP, admin, exchange, symbol count). Heartbeat TTL ensures stale instances are detected automatically. Network activity logged to Redis Streams for 90-day audit trail.
 
 ## Requirements
 
@@ -72,7 +76,18 @@ Cross-exchange visibility via Redis pub/sub. Any client can subscribe to any exc
 
 ### Active
 
-(None — planning next milestone)
+**v6.0 Perseus Network — Instance Registration & Health**
+
+- [ ] Exchange-scoped instance status key `exchange:<exchange_id>:status` (replaces prototype `exchange:status`)
+- [ ] Full status payload: exchangeId, exchangeName, connectionState, connectedAt, lastHeartbeat, symbolCount, adminEmail, adminDisplayName, ipAddress (public), hostname, lastError
+- [ ] Connection state machine: `idle → starting → warming → active → stopping → stopped`
+- [ ] State transitions maintained throughout full API lifecycle (startup, warmup, active, shutdown)
+- [ ] Heartbeat with Redis TTL (key expiry = instance is dead, no clean shutdown)
+- [ ] Public IP detection via external service at startup
+- [ ] Network activity log via Redis Streams (`logs:network:<exchange_name>`) with 90-day retention
+- [ ] Log events: state transitions and errors
+- [ ] Admin UI "Network" view showing all registered instances with real-time status and activity feed
+- [ ] Fix existing bugs: heartbeat not updating, error not populating, connectionState stuck on `idle` when instance is down
 
 ### Out of Scope
 
@@ -83,6 +98,10 @@ Cross-exchange visibility via Redis pub/sub. Any client can subscribe to any exc
 - Azure pub/sub — Redis pub/sub sufficient for single-instance, Azure deferred
 - 1m candle support — Coinbase WebSocket only provides native 5m
 - Real-time arbitrage execution — soft-arbitrage (signals only) is safer
+- Standby/passive instance registration — foundation first, failover in v6.1+
+- Graceful handoff protocol (notify → takeover → confirm → shutdown) — requires standby, deferred
+- Remote Admin control (ngrok tunnels, cross-instance management) — requires handoff, deferred
+- Authorization/permission schema for remote control — requires remote admin, deferred
 
 ## Constraints
 
@@ -92,6 +111,8 @@ Cross-exchange visibility via Redis pub/sub. Any client can subscribe to any exc
 - **Rate limits**: Must respect per-exchange API limits, hence WebSocket + cache-first.
 - **Incremental refactor**: Existing MACDV functionality must work throughout refactor.
 - **No silent defaults**: If exchange or configuration is unknown, surface the error — never silently fall back to Coinbase.
+- **One instance per exchange**: Only one Livermore API may actively serve a given exchange at any time. Enforced via Redis status keys.
+- **Heartbeat TTL**: If an instance stops heartbeating, it is considered dead. No separate health-check service.
 
 ## Key Decisions
 
@@ -130,5 +151,7 @@ Cross-exchange visibility via Redis pub/sub. Any client can subscribe to any exc
 
 **v5.0 enabled:** Kaia's Binance instance publishes to Redis, Mike's Coinbase instance subscribes. Cross-exchange soft-arbitrage signals operational.
 
+**v6.0 goal:** Each Livermore API instance becomes a visible, identifiable node in the Perseus Network. Admins can see who's running what, where, and whether it's healthy — the foundation for future active/passive failover and remote administration.
+
 ---
-*Last updated: 2026-02-08 — after v5.0 milestone*
+*Last updated: 2026-02-08 — start v6.0 Perseus Network milestone*
