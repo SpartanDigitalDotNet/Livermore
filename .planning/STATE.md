@@ -11,15 +11,15 @@ See: .planning/PROJECT.md (updated 2026-02-08)
 
 **Milestone:** v6.0 Perseus Network
 **Phase:** 30 of 33 (Instance Registry and State Machine)
-**Plan:** 1 of 3 complete
+**Plan:** 2 of 3 complete
 **Status:** In progress
 
 ```
-Progress: [###.......] 8%
-Phase 30 [=..]  Phase 31 [ ]  Phase 32 [ ]  Phase 33 [ ]
+Progress: [######....] 17%
+Phase 30 [==.]  Phase 31 [ ]  Phase 32 [ ]  Phase 33 [ ]
 ```
 
-**Last activity:** 2026-02-10 -- Completed 30-01-PLAN.md (Foundation Types and Utilities)
+**Last activity:** 2026-02-10 -- Completed 30-02-PLAN.md (Core Services: StateMachine + InstanceRegistry)
 
 ## Milestones
 
@@ -37,15 +37,15 @@ See `.planning/MILESTONES.md` for full history.
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 1
-- Average duration: 3m 44s
-- Total execution time: 3m 44s
+- Total plans completed: 2
+- Average duration: 4m 12s
+- Total execution time: 8m 24s
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| 30 | 1 | 3m 44s | 3m 44s |
+| 30 | 2 | 8m 24s | 4m 12s |
 
 ## Tech Debt (Carried Forward)
 
@@ -81,6 +81,9 @@ Recent decisions affecting current work:
 - 30-01-D1: adminEmail/adminDisplayName nullable in InstanceStatus (user identity unavailable at registration)
 - 30-01-D2: Key pattern `exchange:{id}:status` (consistent with existing exchange-scoped keys)
 - 30-01-D3: Separate HEARTBEAT_TTL_SECONDS constant (Redis EX takes seconds, not ms)
+- 30-02-D1: Self-restart detection uses hostname match, not full instanceId (PID/timestamp change on restart)
+- 30-02-D2: setAdminInfo/setSymbolCount defer Redis write to next heartbeat (reduces round-trips)
+- 30-02-D3: Register retries on NX fail + GET null race (key can expire between operations)
 
 ### Pending Todos
 
@@ -95,16 +98,16 @@ None yet.
 ### Last Session
 
 **Date:** 2026-02-10
-**Activity:** Executed 30-01-PLAN.md (Foundation Types and Utilities, 2 tasks)
-**Stopped At:** Completed 30-01-PLAN.md
+**Activity:** Executed 30-02-PLAN.md (Core Services: StateMachine + InstanceRegistry, 2 tasks)
+**Stopped At:** Completed 30-02-PLAN.md
 
 ### Resume Context
 
-**30-01 COMPLETE**
+**30-02 COMPLETE**
 
-Foundation artifacts created: ConnectionState enum, InstanceStatus schema, instanceStatusKey, detectPublicIp.
-Next: Execute 30-02-PLAN.md (InstanceRegistryService) or plan it if not yet planned.
+Core services created: StateMachineService (validated transitions, legacy state mapping) and InstanceRegistryService (atomic claims, heartbeat, KEEPTTL updates, error recording).
+Next: Execute 30-03-PLAN.md (Integration: wire services into adapter-factory lifecycle).
 
 ---
 *State initialized: 2026-01-18*
-*Last updated: 2026-02-10 -- Completed 30-01-PLAN.md*
+*Last updated: 2026-02-10 -- Completed 30-02-PLAN.md*
