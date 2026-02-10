@@ -1,351 +1,591 @@
-# Stack Research: v5.0 Multi-Exchange Architecture
+# Stack Research: v6.0 Perseus Network - Distributed Instance Coordination
 
-**Project:** Livermore Trading Platform - Multi-Exchange Support
-**Researched:** 2026-02-06
-**Confidence:** HIGH (official documentation verified)
+**Project:** Livermore Trading Platform - Instance Registration, Heartbeat, Activity Logging
+**Researched:** 2026-02-10
+**Confidence:** HIGH (verified against installed ioredis 5.4.2 type definitions and Redis official docs)
 
 ## Executive Summary
 
-Supporting five crypto exchanges (Coinbase, Binance.com, Binance.US, MEXC, KuCoin) requires exchange-specific adapters rather than a unified abstraction library like CCXT. Each exchange has different WebSocket protocols, rate limits, candle intervals, and geo-restrictions. The recommended approach is to extend the existing `BaseExchangeAdapter` pattern with exchange-specific implementations, using official/semi-official SDKs where available and direct API integration where not.
+v6.0 Perseus Network requires distributed instance registration, heartbeat health monitoring, and network activity logging. The good news: the existing stack (ioredis 5.4.2 on Azure Managed Redis with OSS Cluster mode) already has full support for every Redis primitive needed. No new Redis client library is required. Redis Streams (XADD, XRANGE, XTRIM with MINID) are natively supported by ioredis 5.4.2 with complete TypeScript type definitions. The key additions are: (1) a lightweight state machine for instance lifecycle, (2) public IP detection for instance identity, and (3) a disciplined approach to Redis key design for cluster compatibility.
 
-**Key Findings:**
-- Binance.com and Binance.US share similar APIs but have separate endpoints and auth
-- MEXC uses protobuf encoding for WebSocket messages (unique among targets)
-- KuCoin requires a token fetch before WebSocket connection
-- Coinbase's native WebSocket candles are 5m only; 1m requires trade aggregation (already implemented)
-- All exchanges support native kline/candle WebSocket streams
-
-## Exchange APIs
-
-### Coinbase (US) - Already Implemented
-
-**Status:** PRODUCTION (existing adapter)
-
-| Property | Value |
-|----------|-------|
-| **WebSocket URL** | `wss://advanced-trade-ws.coinbase.com` |
-| **REST URL** | `https://api.coinbase.com/api/v3/brokerage` |
-| **Rate Limits (WS)** | 750 connections/sec/IP, 8 unauth messages/sec/IP |
-| **Rate Limits (REST)** | Endpoint-specific, generally 30 req/sec |
-| **Max Symbols/WS** | Unlimited (practical limit ~50 for stability) |
-| **Native Candle TFs (WS)** | 5m only |
-| **Native Candle TFs (REST)** | 1m, 5m, 15m, 30m, 1h, 2h, 4h, 6h, 1d |
-| **Auth Method** | JWT with ES256 (CDP API key + PEM private key) |
-| **Geo Restrictions** | Available in US |
-
-**Implementation Notes:**
-- WebSocket candles channel only supports 5m granularity
-- 1m candles aggregated from `market_trades` channel (current implementation)
-- Heartbeat subscription prevents idle disconnect (90s timeout)
-- Sequence numbers for gap detection
-
-**Documentation:**
-- [WebSocket Channels](https://docs.cdp.coinbase.com/advanced-trade/docs/ws-channels)
-- [REST API Candles](https://docs.cdp.coinbase.com/api-reference/advanced-trade-api/rest-api/products/get-product-candles)
+**Key Decision:** Build the state machine in-house rather than importing a library. The instance lifecycle has exactly 5 states and 7 transitions -- XState is extreme overkill, and the micro-libraries (typescript-fsm, typestate) add dependencies for what amounts to ~80 lines of typed code.
 
 ---
 
-### Binance.com (Non-US, Geo-Restricted)
+## Recommended Stack
 
-**Status:** TO IMPLEMENT
+### Core Infrastructure (Already Installed -- No Changes)
 
-| Property | Value |
-|----------|-------|
-| **WebSocket URL** | `wss://stream.binance.com:9443` or `wss://stream.binance.com:443` |
-| **REST URL** | `https://api.binance.com` |
-| **Rate Limits (WS)** | 300 connections/5min/IP, 5 messages/sec inbound |
-| **Rate Limits (REST)** | 1200 weight/min/IP |
-| **Max Streams/WS** | 1024 |
-| **Native Candle TFs** | 1s, 1m, 3m, 5m, 15m, 30m, 1h, 2h, 4h, 6h, 8h, 12h, 1d, 3d, 1w, 1M |
-| **Connection Lifetime** | 24 hours max |
-| **Auth Method** | HMAC-SHA256 (API key + secret) |
-| **Geo Restrictions** | **BLOCKED in US and 70+ countries** |
+| Technology | Version | Purpose | Status |
+|------------|---------|---------|--------|
+| ioredis | 5.4.2 (pinned) | Redis client with Cluster + Streams support | INSTALLED |
+| Redis (Azure Managed) | 6.x+ (OSS Cluster) | Coordination bus, streams, TTL-based heartbeat | PRODUCTION |
+| TypeScript | 5.9.3 | Type safety for state machine, stream entries | INSTALLED |
+| Zod | 3.25.x | Schema validation for stream entries, registration payloads | INSTALLED |
+| Pino | 9.x/10.x | Structured logging | INSTALLED |
 
-**Implementation Notes:**
-- Combined streams via `/stream?streams=btcusdt@kline_5m/ethusdt@kline_5m`
-- Kline stream format: `<symbol>@kline_<interval>` (e.g., `btcusdt@kline_5m`)
-- Server sends ping every 20 seconds; must respond with pong within 60s
-- Symbol format: lowercase concatenated (e.g., `btcusdt` not `BTC-USDT`)
+### New Dependencies
 
-**Geo-Restriction Warning:**
-Binance.com actively blocks US IPs and uses sophisticated VPN detection (GPS, IP, SIM card data). Using VPN violates ToS and risks account ban. **Only deploy on non-US infrastructure with proper compliance.**
+| Technology | Version | Purpose | Rationale |
+|------------|---------|---------|-----------|
+| **None required** | -- | -- | Everything builds on existing stack |
 
-**Documentation:**
-- [WebSocket Streams](https://developers.binance.com/docs/binance-spot-api-docs/web-socket-streams)
-- [Rate Limits](https://developers.binance.com/docs/binance-spot-api-docs/websocket-api/rate-limits)
+**This is a zero-new-dependency milestone.** All capabilities come from ioredis primitives already available.
 
----
+### Public IP Detection (No Library)
 
-### Binance.US (US)
+**Recommendation: Use Node.js built-in `https` module to query a single service.**
 
-**Status:** TO IMPLEMENT
+Do NOT install `public-ip` (sindresorhus). Reasons:
+- v7+ and v8.0.0 are **ESM-only** (pure ESM package). The Livermore monorepo builds with tsup to both ESM and CJS (`--format esm,cjs`). Importing a pure-ESM package from CJS output causes runtime failures.
+- The package's DNS-based detection (OpenDNS, Google DNS) is overkill for a server that needs its IP once at startup.
+- Zero-dependency alternatives like `node-public-ip` have 1 weekly download and are effectively abandoned.
 
-| Property | Value |
-|----------|-------|
-| **WebSocket URL** | `wss://stream.binance.us:9443` |
-| **REST URL** | `https://api.binance.us` |
-| **Rate Limits (WS)** | 5 messages/sec inbound |
-| **Max Streams/WS** | 1024 |
-| **Native Candle TFs** | 1m, 3m, 5m, 15m, 30m, 1h, 2h, 4h, 6h, 8h, 12h, 1d, 3d, 1w, 1M |
-| **Connection Lifetime** | 24 hours max |
-| **Ping/Pong** | Server ping every 3 min, must respond within 10 min |
-| **Auth Method** | HMAC-SHA256 (API key + secret) |
-| **Geo Restrictions** | US only |
+**Instead, use a 10-line utility function:**
 
-**Implementation Notes:**
-- API structure nearly identical to Binance.com
-- Can share adapter code with Binance.com using configurable base URLs
-- Different auth keys required (separate account)
-- Smaller selection of trading pairs than Binance.com
+```typescript
+import https from 'node:https';
 
-**Documentation:**
-- [WebSocket Streams (GitHub)](https://github.com/binance-us/binance-us-api-docs/blob/master/web-socket-streams.md)
-- [Official Docs](https://docs.binance.us/)
+/**
+ * Detect public IPv4 address by querying a lightweight HTTP service.
+ * Falls back gracefully if detection fails (non-critical for operation).
+ */
+export async function detectPublicIp(timeoutMs = 5000): Promise<string | null> {
+  return new Promise((resolve) => {
+    const req = https.get('https://api.ipify.org', { timeout: timeoutMs }, (res) => {
+      let data = '';
+      res.on('data', (chunk) => { data += chunk; });
+      res.on('end', () => resolve(data.trim() || null));
+    });
+    req.on('error', () => resolve(null));
+    req.on('timeout', () => { req.destroy(); resolve(null); });
+  });
+}
+```
 
----
+**Why ipify.org:**
+- Free, no API key required
+- Returns plain-text IPv4 address (no JSON parsing needed)
+- High availability, used by millions of services
+- Single HTTPS call, no DNS tricks
 
-### MEXC (Non-US)
+**Fallback chain (if ipify fails):**
+- `https://icanhazip.com` (Cloudflare-owned)
+- `https://ifconfig.me/ip`
+- Return `null` (public IP is informational, not critical)
 
-**Status:** TO IMPLEMENT
-
-| Property | Value |
-|----------|-------|
-| **WebSocket URL** | `wss://wbs.mexc.com/ws` |
-| **REST URL** | `https://api.mexc.com` |
-| **Rate Limits (WS)** | 100 messages/sec |
-| **Max Subscriptions/WS** | 30 |
-| **Native Candle TFs** | Min1, Min5, Min15, Min30, Min60, Hour4, Hour8, Day1, Week1, Month1 |
-| **Connection Lifetime** | 24 hours max |
-| **Connection Timeout** | 30s without subscription, 60s without data |
-| **Message Format** | **Protobuf** (not JSON) |
-| **Auth Method** | HMAC-SHA256 (API key + secret) |
-| **Geo Restrictions** | Not available in US |
-
-**Implementation Notes:**
-- **Unique: Uses protobuf encoding** - requires protobuf parser
-- Kline subscription: `spot@public.kline.v3.api.pb@<SYMBOL>@<INTERVAL>`
-- Symbol format: uppercase concatenated (e.g., `BTCUSDT`)
-- Interval format: `Min1`, `Min5`, `Min15`, etc.
-- Low subscription limit (30) means multiple connections for many symbols
-- Protobuf definitions at: https://github.com/mexcdevelop/websocket-proto
-
-**Documentation:**
-- [WebSocket Market Streams](https://www.mexc.com/api-docs/spot-v3/websocket-market-streams)
-- [Introduction](https://www.mexc.com/api-docs/spot-v3/introduction)
+**Confidence:** HIGH -- ipify.org is a well-established service. The implementation uses only Node.js built-in `https`.
 
 ---
 
-### KuCoin (Non-US)
+## Redis Streams: ioredis API Reference
 
-**Status:** TO IMPLEMENT
+**Verified:** All method signatures confirmed present in `ioredis@5.4.2` type definitions at `node_modules/.pnpm/ioredis@5.4.2/.../RedisCommander.d.ts`.
 
-| Property | Value |
-|----------|-------|
-| **WebSocket URL** | Dynamic (obtained via REST token request) |
-| **REST URL** | `https://api.kucoin.com` |
-| **Rate Limits (WS)** | 100 subscriptions/10sec batch |
-| **Max Subscriptions/WS** | 300 |
-| **Max Connections/User** | 500 (recently increased from 150) |
-| **Native Candle TFs** | 1min, 3min, 5min, 15min, 30min, 1hour, 2hour, 4hour, 6hour, 8hour, 12hour, 1day, 1week |
-| **Push Frequency** | Up to 1 push/sec per kline |
-| **Auth Method** | KC-API-KEY + KC-API-SIGN + KC-API-PASSPHRASE |
-| **Geo Restrictions** | Not officially available in US |
+### XADD -- Add Entry to Stream
 
-**Implementation Notes:**
-- **Unique: Must request WebSocket token first** via `POST /api/v1/bullet-public`
-- Token returns dynamic WebSocket URL with connection ID
-- Kline topic format: `/market/candles:<SYMBOL>_<INTERVAL>` (e.g., `/market/candles:BTC-USDT_1hour`)
-- Symbol format: hyphenated (e.g., `BTC-USDT`)
-- Ping/pong required every 60 seconds
+```typescript
+// Auto-generated ID (timestamp-based)
+const entryId = await redis.xadd(
+  'perseus:activity',         // stream key
+  '*',                        // auto-generate ID
+  'instanceId', instanceId,   // field-value pairs
+  'event', 'REGISTERED',
+  'exchange', 'coinbase',
+  'timestamp', Date.now().toString()
+);
+// Returns: "1707580800000-0" (timestamp-sequence)
 
-**Documentation:**
-- [WebSocket Klines](https://www.kucoin.com/docs/websocket/spot-trading/public-channels/klines)
-- [Rate Limits](https://www.kucoin.com/docs/basic-info/request-rate-limit/websocket)
+// With MAXLEN trimming on write (approximate)
+const entryId = await redis.xadd(
+  'perseus:activity',
+  'MAXLEN', '~', '100000',    // keep ~100K entries max
+  '*',
+  'instanceId', instanceId,
+  'event', 'HEARTBEAT'
+);
+```
+
+**Type signature (from RedisCommander.d.ts):**
+```typescript
+xadd(...args: [key: RedisKey, ...args: RedisValue[]]): Result<string | null, Context>;
+```
+
+### XRANGE -- Read Range of Entries
+
+```typescript
+// Read all entries
+const entries = await redis.xrange('perseus:activity', '-', '+');
+// Returns: [["1707580800000-0", ["instanceId", "abc", "event", "REGISTERED"]], ...]
+
+// Read entries in a time window (last 24 hours)
+const since = (Date.now() - 86400000).toString();
+const entries = await redis.xrange('perseus:activity', since, '+');
+
+// Read with COUNT limit
+const entries = await redis.xrange('perseus:activity', '-', '+', 'COUNT', '100');
+```
+
+**Type signature:**
+```typescript
+xrange(
+  key: RedisKey,
+  start: string | Buffer | number,
+  end: string | Buffer | number,
+  callback?: Callback<[id: string, fields: string[]][]>
+): Result<[id: string, fields: string[]][], Context>;
+
+xrange(
+  key: RedisKey,
+  start: string | Buffer | number,
+  end: string | Buffer | number,
+  countToken: "COUNT",
+  count: number | string,
+  callback?: Callback<[id: string, fields: string[]][]>
+): Result<[id: string, fields: string[]][], Context>;
+```
+
+**Return format:** Array of `[id, [field1, value1, field2, value2, ...]]` tuples. The fields array is flat (not key-value pairs), so parsing requires stepping by 2.
+
+### XREAD -- Blocking Read (Consumer Pattern)
+
+```typescript
+// Non-blocking read from a position
+const result = await redis.xread('COUNT', '10', 'STREAMS', 'perseus:activity', lastId);
+
+// Blocking read (for real-time consumers)
+const result = await redis.xread('BLOCK', 5000, 'STREAMS', 'perseus:activity', '$');
+// Blocks up to 5 seconds waiting for new entries
+```
+
+**Important for Cluster Mode:** XREAD with multiple streams requires all stream keys to hash to the same slot. Use hash tags if reading multiple streams atomically.
+
+### XTRIM -- Retention Management with MINID
+
+```typescript
+// Remove all entries older than 90 days (MINID strategy)
+const ninetyDaysAgo = Date.now() - (90 * 24 * 60 * 60 * 1000);
+const trimmed = await redis.xtrim('perseus:activity', 'MINID', ninetyDaysAgo.toString());
+// Returns: number of entries removed
+
+// Approximate trimming (more efficient, recommended for periodic cleanup)
+const trimmed = await redis.xtrim('perseus:activity', 'MINID', '~', ninetyDaysAgo.toString());
+
+// With LIMIT (process in batches to avoid blocking)
+const trimmed = await redis.xtrim(
+  'perseus:activity',
+  'MINID', '~', ninetyDaysAgo.toString(),
+  'LIMIT', '1000'
+);
+```
+
+**Type signatures (verified in RedisCommander.d.ts):**
+```typescript
+xtrim(key: RedisKey, minid: "MINID", threshold: string | Buffer | number,
+      callback?: Callback<number>): Result<number, Context>;
+xtrim(key: RedisKey, minid: "MINID", approximately: "~", threshold: string | Buffer | number,
+      callback?: Callback<number>): Result<number, Context>;
+xtrim(key: RedisKey, minid: "MINID", approximately: "~", threshold: string | Buffer | number,
+      countToken: "LIMIT", count: number | string,
+      callback?: Callback<number>): Result<number, Context>;
+```
+
+**MINID works because Redis Stream IDs are timestamp-based.** When using auto-generated IDs (`*`), the ID is `<millisecond-timestamp>-<sequence>`. XTRIM MINID treats the threshold as a stream ID, removing all entries with IDs numerically less than the threshold. Passing a millisecond timestamp as the threshold effectively means "remove everything older than this time."
+
+**Confidence:** HIGH -- verified against installed ioredis 5.4.2 type definitions and Redis official documentation.
+
+### XLEN -- Stream Length
+
+```typescript
+const length = await redis.xlen('perseus:activity');
+// Returns: number
+```
+
+### XINFO -- Stream Metadata
+
+```typescript
+const info = await redis.xinfo('STREAM', 'perseus:activity');
+// Returns stream metadata (first/last entry ID, length, etc.)
+```
 
 ---
 
-## Libraries
+## Heartbeat with TTL-Based Dead Instance Detection
 
-### Recommended Stack
+### Pattern: SET with EX + Periodic Renewal
 
-| Exchange | Library | Version | Notes |
-|----------|---------|---------|-------|
-| Coinbase | Direct API | N/A | Already implemented in `packages/coinbase-client` |
-| Binance.com | `binance` | ^2.x | tiagosiebler SDK - TypeScript, actively maintained, full WS support |
-| Binance.US | `binance` | ^2.x | Same library, different config (base URLs) |
-| MEXC | Direct API + protobuf | N/A | Official SDK lacks TypeScript; use `protobufjs` for message parsing |
-| KuCoin | `kucoin-universal-sdk` | latest | Official new SDK (old `kucoin-node-sdk` archived March 2025) |
+The standard Redis heartbeat pattern uses `SET key value EX ttl` and periodic renewal. If an instance dies, the key expires automatically, and the absence of the key indicates a dead instance.
 
-### Alternative Options
+```typescript
+// Instance heartbeat (every 15 seconds, with 45-second TTL)
+// TTL should be 3x the heartbeat interval for tolerance
+const HEARTBEAT_INTERVAL_MS = 15_000;
+const HEARTBEAT_TTL_SECONDS = 45;
 
-| Exchange | Alternative | Why Not Primary |
-|----------|-------------|-----------------|
-| Binance | `@binance/connector` | Official but less ergonomic than tiagosiebler's TypeScript SDK |
-| KuCoin | `kucoin-api` | Community SDK by tiagosiebler - excellent but prefer official for support |
-| MEXC | `@theothergothamdev/mexc-sdk` | Unofficial fork, prefer direct implementation for control |
+// Write heartbeat
+await redis.set(
+  `perseus:heartbeat:${instanceId}`,
+  JSON.stringify({ lastBeat: Date.now(), state: 'running', exchange: 'coinbase' }),
+  'EX', HEARTBEAT_TTL_SECONDS
+);
 
-### Supporting Libraries
+// Check if instance is alive
+const heartbeat = await redis.get(`perseus:heartbeat:${instanceId}`);
+if (!heartbeat) {
+  // Instance is dead (key expired)
+}
 
-| Library | Version | Purpose |
-|---------|---------|---------|
-| `ioredis` | ^5.x | Redis client with Cluster support (already in use) |
-| `protobufjs` | ^7.x | Required for MEXC WebSocket message parsing |
-| `ws` | ^8.x | WebSocket client (already in use) |
-| `zod` | ^3.x | Schema validation (already in use) |
+// Check TTL remaining
+const ttl = await redis.ttl(`perseus:heartbeat:${instanceId}`);
+// Returns: seconds remaining, -2 if key doesn't exist, -1 if no expiry
+```
+
+### Dead Instance Detection Strategy
+
+Two complementary approaches:
+
+**1. Passive Detection (TTL Expiry):** When key expires, the instance is dead. Any consumer checking `GET` returns null.
+
+**2. Active Scanning (Periodic Sweep):** A coordinator periodically scans all `perseus:heartbeat:*` keys to build network state. Use `SCAN` (not `KEYS`) in production:
+
+```typescript
+// Cluster-safe scanning of heartbeat keys
+async function* scanHeartbeatKeys(redis: RedisClient): AsyncGenerator<string> {
+  let cursor = '0';
+  do {
+    const [nextCursor, keys] = await redis.scan(cursor, 'MATCH', 'perseus:heartbeat:*', 'COUNT', '100');
+    cursor = nextCursor;
+    for (const key of keys) yield key;
+  } while (cursor !== '0');
+}
+```
+
+**Why not Redis Keyspace Notifications?**
+Keyspace notifications (`__keyevent@0__:expired`) are unreliable in cluster mode and add pub/sub overhead. Periodic scanning is simpler and more predictable for a small number of instances (2-10).
+
+### Why 15s Interval / 45s TTL
+
+| Parameter | Value | Rationale |
+|-----------|-------|-----------|
+| Heartbeat interval | 15 seconds | Frequent enough for timely detection, infrequent enough to avoid Redis load |
+| TTL | 45 seconds (3x interval) | Tolerates 2 missed heartbeats before declaring dead |
+| Detection latency | 30-45 seconds | Acceptable for network visibility (not trading-critical) |
+| Redis operations | ~4/min per instance | Negligible load on Azure Managed Redis |
+
+**Confidence:** HIGH -- this is a well-established distributed systems pattern.
+
+---
+
+## State Machine: Build In-House
+
+### Why Not Use a Library
+
+| Library | Size | Why Not |
+|---------|------|---------|
+| XState v5 | ~47 KB min | Massive overkill for 5 states. Designed for complex UI interactions, not server lifecycle. |
+| typescript-fsm | 1 KB | Decent but adds npm dependency for ~80 lines of code. Async support via promises is adequate but we can do better with our own types. |
+| typestate | ~3 KB | Last meaningful update 2021. No async transition support. |
+| robot | 1.2 KB | Functional API is elegant but React-focused. |
+| fiume | new | Zero stars, no adoption evidence. |
+
+**Recommendation:** Write a typed state machine in ~80-100 lines. The instance lifecycle is simple and stable:
+
+```
+States: IDLE -> REGISTERING -> RUNNING -> DRAINING -> DEAD
+```
+
+Benefits of in-house:
+- Perfect TypeScript integration with Livermore's patterns (Zod schemas, pino logging)
+- Zero new dependencies
+- Full control over async transitions (heartbeat setup, stream logging)
+- Testable without library-specific test utilities
+- The state machine will never grow complex enough to justify XState
+
+### Recommended Implementation Pattern
+
+```typescript
+/** Instance lifecycle states */
+type InstanceState = 'idle' | 'registering' | 'running' | 'draining' | 'dead';
+
+/** Events that trigger state transitions */
+type InstanceEvent = 'REGISTER' | 'REGISTERED' | 'DRAIN' | 'DRAINED' | 'ERROR' | 'HEARTBEAT_LOST';
+
+/** Transition definition */
+interface Transition {
+  from: InstanceState;
+  event: InstanceEvent;
+  to: InstanceState;
+  action?: () => Promise<void>;
+}
+
+const TRANSITIONS: Transition[] = [
+  { from: 'idle',        event: 'REGISTER',       to: 'registering' },
+  { from: 'registering', event: 'REGISTERED',     to: 'running' },
+  { from: 'registering', event: 'ERROR',          to: 'dead' },
+  { from: 'running',     event: 'DRAIN',          to: 'draining' },
+  { from: 'running',     event: 'ERROR',          to: 'dead' },
+  { from: 'running',     event: 'HEARTBEAT_LOST', to: 'dead' },
+  { from: 'draining',    event: 'DRAINED',        to: 'dead' },
+];
+```
+
+This is explicit, type-safe, and requires no library. Illegal transitions are caught at runtime by checking the transition table.
+
+**Confidence:** HIGH -- straightforward engineering decision.
+
+---
+
+## Redis Key Patterns for Instance Registration
+
+### Namespace Design
+
+All Perseus Network keys use the `perseus:` prefix to avoid collision with existing Livermore keys (`candles:`, `indicator:`, `ticker:`, `channel:`, `livermore:`).
+
+### Key Schema
+
+| Key Pattern | Type | TTL | Purpose |
+|-------------|------|-----|---------|
+| `perseus:instance:{instanceId}` | Hash | None (managed by lifecycle) | Instance registration record |
+| `perseus:heartbeat:{instanceId}` | String | 45s (auto-renewing) | Heartbeat liveness signal |
+| `perseus:activity` | Stream | XTRIM MINID ~90 days | Network activity log |
+| `perseus:network:state` | String (JSON) | None | Aggregated network state snapshot |
+
+### Instance ID Generation
+
+Use `{hostname}:{exchangeId}:{pid}:{startupTimestamp}` format:
+
+```typescript
+const instanceId = `${os.hostname()}:${exchangeId}:${process.pid}:${Date.now()}`;
+// Example: "DESKTOP-ABC:1:12345:1707580800000"
+```
+
+This is:
+- Unique across instances (PID + timestamp)
+- Human-readable for debugging
+- Contains exchange ID for filtering
+- Deterministic (same instance always generates same ID pattern)
+
+### Instance Registration Hash
+
+```typescript
+// Registration uses HSET for structured data
+await redis.hset(`perseus:instance:${instanceId}`, {
+  instanceId,
+  hostname: os.hostname(),
+  exchangeId: exchangeId.toString(),
+  exchangeName: 'coinbase',
+  publicIp: publicIp || 'unknown',
+  privateIp: getPrivateIp(),
+  pid: process.pid.toString(),
+  version: packageVersion,
+  state: 'running',
+  registeredAt: new Date().toISOString(),
+  lastStateChange: new Date().toISOString(),
+});
+```
+
+**Why HSET instead of SET with JSON:**
+- Individual field reads without deserializing (`HGET perseus:instance:abc state`)
+- Atomic field updates (`HSET perseus:instance:abc state draining`)
+- Smaller operations for heartbeat-like field updates
+- Native Redis data structure, no JSON parse overhead
+
+### Azure Cluster Considerations
+
+**Hash Slot Routing:** In Azure Redis with OSS Cluster mode, keys are distributed across slots via CRC16 hashing. This matters for:
+
+1. **No multi-key operations across different instances:** `perseus:instance:abc` and `perseus:instance:def` will likely hash to different slots. Use `deleteKeysClusterSafe()` (already in codebase) for bulk cleanup.
+
+2. **Stream is a single key:** `perseus:activity` is one key on one slot. All XADD/XRANGE/XTRIM operations go to the same node. For a small network (2-10 instances), this is fine and actually desirable (no cross-slot coordination).
+
+3. **Hash tags are NOT recommended here:** Using `{perseus}:instance:abc` would force ALL Perseus keys to the same slot. This defeats cluster distribution and creates a hot spot. The keys are small and operations are infrequent, so natural distribution is fine.
+
+4. **SCAN for discovery:** Use `SCAN` with `MATCH perseus:instance:*` for listing instances. In cluster mode, ioredis Cluster automatically scans all nodes when using the `scanStream()` method.
+
+**Confidence:** HIGH -- consistent with existing codebase patterns (`deleteKeysClusterSafe`, single-key operations).
+
+---
+
+## Activity Stream Entry Schema
+
+### Entry Structure
+
+Each stream entry uses flat field-value pairs (Redis Streams requirement):
+
+```typescript
+interface ActivityEntry {
+  instanceId: string;      // Which instance
+  event: string;           // Event type: REGISTERED, STATE_CHANGE, HEARTBEAT_LOST, DEREGISTERED, ERROR
+  exchange: string;        // Exchange name
+  exchangeId: string;      // Exchange ID
+  fromState?: string;      // Previous state (for STATE_CHANGE)
+  toState?: string;        // New state (for STATE_CHANGE)
+  reason?: string;         // Why (for ERROR, DEREGISTERED)
+  publicIp?: string;       // Instance public IP
+  hostname?: string;       // Instance hostname
+  ts: string;              // ISO timestamp
+}
+```
+
+### Retention Strategy: XTRIM MINID for 90-Day Window
+
+```typescript
+/**
+ * Trim activity stream to retain only the last 90 days.
+ * Called periodically (e.g., daily via cron or setInterval).
+ *
+ * Uses approximate trimming (~) for efficiency -- Redis may keep
+ * a few extra entries beyond the cutoff, which is acceptable.
+ */
+async function trimActivityStream(redis: RedisClient): Promise<number> {
+  const RETENTION_DAYS = 90;
+  const cutoffMs = Date.now() - (RETENTION_DAYS * 24 * 60 * 60 * 1000);
+
+  // MINID with approximate trimming
+  const trimmed = await redis.xtrim(
+    'perseus:activity',
+    'MINID', '~', cutoffMs.toString()
+  );
+
+  return trimmed;
+}
+```
+
+**Why MINID over MAXLEN:**
+- MAXLEN caps by count (e.g., keep last 100K entries). Entry rate varies, so count-based retention doesn't map cleanly to time.
+- MINID caps by time directly. "Remove entries older than 90 days" is exactly what MINID does.
+- Stream IDs are timestamp-based, so MINID naturally aligns with time-based retention.
+
+**Why approximate (`~`) over exact (`=`):**
+- Redis internally stores streams in radix tree nodes. Exact trimming may need to split nodes, which is expensive.
+- Approximate trimming removes whole nodes, which is O(1) per node.
+- The difference is a few extra entries, which is irrelevant for a 90-day window.
+
+**Trimming frequency:** Once per hour is sufficient. Even with 10 instances generating 4 heartbeat entries/minute each, that's ~5,760 entries/day -- tiny.
+
+---
+
+## Alternatives Considered and Rejected
+
+### Redis Pub/Sub for Activity Logging -- REJECTED
+
+| Aspect | Redis Streams | Redis Pub/Sub |
+|--------|---------------|---------------|
+| Persistence | Yes (stored on disk) | No (fire-and-forget) |
+| Historical query | Yes (XRANGE) | No |
+| Retention control | Yes (XTRIM MINID) | N/A |
+| Consumer groups | Yes | No |
+| Existing use in codebase | No (new) | Yes (control channels) |
+
+Pub/Sub is already used for ephemeral command/response patterns. Streams are the correct choice for durable activity logs that need historical query and retention.
+
+### PostgreSQL for Activity Logging -- REJECTED
+
+PostgreSQL could store activity logs, but:
+- Adds write load to the database for high-frequency events
+- Redis Streams are purpose-built for append-only event logs
+- Activity data is operational, not analytical -- Redis is the right tier
+- Keeps the coordination plane entirely in Redis (single technology for all Perseus features)
+
+### Redis Sorted Sets for Heartbeat -- CONSIDERED BUT NOT PRIMARY
+
+Sorted sets (`ZADD perseus:heartbeats instanceId timestamp`) enable range queries by time. However:
+- Requires manual cleanup (no auto-expiry like TTL keys)
+- More complex than the simple SET + EX pattern
+- The SET + EX pattern is self-cleaning -- dead instances' keys vanish automatically
+- Could be added later if network-wide "who was alive at time T?" queries are needed
+
+### External Service Discovery (Consul, etcd) -- REJECTED
+
+Overkill for 2-10 instances. Redis is already the coordination bus. Adding another distributed system increases operational complexity without proportional benefit.
 
 ---
 
 ## What NOT to Use
 
-### CCXT - Do Not Use
-
-**Reasons:**
-1. **Already rejected by project** - explicitly noted in project context
-2. **Abstraction overhead** - Hides exchange-specific behaviors needed for optimization
-3. **Performance concerns** - WebSocket message parsing not optimized for latency
-4. **Dependency bloat** - Pulls in code for 100+ exchanges when we need 5
-5. **Breaking changes** - Large library with frequent API changes
-6. **Control loss** - Can't optimize for specific exchange quirks (MEXC protobuf, KuCoin token flow)
-
-### node-binance-api - Do Not Use
-
-**Reasons:**
-1. Inconsistent maintenance history
-2. Less TypeScript support than `binance` package
-3. Issues with recent Binance API changes
-
-### Legacy kucoin-node-sdk - Do Not Use
-
-**Reasons:**
-1. Archived by KuCoin on March 4, 2025
-2. No longer receiving updates
-3. Use `kucoin-universal-sdk` instead
+| Technology | Why Not |
+|------------|---------|
+| `public-ip` (npm) | ESM-only, breaks CJS builds. Overkill for one-time IP lookup. |
+| `node-public-ip` (npm) | 1 weekly download, abandoned, no types. |
+| XState | 47 KB for 5 states. Designed for complex UI, not server lifecycle. |
+| typescript-fsm | Adequate but unnecessary dependency for ~80 lines of code. |
+| Consul / etcd / ZooKeeper | External service discovery is overkill for 2-10 Redis-connected instances. |
+| Redis Keyspace Notifications | Unreliable in cluster mode for key expiry events. Use periodic scanning. |
+| `bull` / `bullmq` | Job queue libraries. Not needed for simple heartbeat + stream patterns. |
+| `@art-of-coding/stream-utils` | Wrapper around ioredis streams. Adds abstraction over a simple API. |
 
 ---
 
-## Redis Considerations
+## Implementation Checklist
 
-### Key Structure Recommendations
+### No `npm install` Required
 
-Current key structure is user-scoped:
-```
-candles:{userId}:{exchangeId}:{symbol}:{timeframe}
-```
+Everything builds on:
+- `ioredis` 5.4.2 (already installed, pinned in root package.json)
+- `zod` 3.25.x (already installed for schema validation)
+- `node:https` (Node.js built-in for public IP detection)
+- `node:os` (Node.js built-in for hostname, network interfaces)
+- `node:crypto` (Node.js built-in, if needed for instance ID hashing)
 
-For v5.0 exchange-scoped architecture, recommend two tiers:
-
-**Exchange-scoped (shared, no user prefix):**
-```
-candles:{exchangeId}:{symbol}:{timeframe}
-```
-- Shared by all users
-- No TTL (persistent)
-- For commonly-watched symbols
-
-**User-overflow (user-specific, with TTL):**
-```
-usercandles:{exchangeId}:{userId}:{symbol}:{timeframe}
-```
-- User-specific subscriptions
-- TTL-based expiration (e.g., 24h of inactivity)
-- For personal watchlists
-
-### Pub/Sub Channel Design
-
-**Candle close events (cross-exchange visibility):**
-```
-channel:candle:close:{exchangeId}:{symbol}:{timeframe}
-```
-- No user scoping for cross-exchange visibility
-- Allows soft-arbitrage detection across exchanges
-
-**Per-user filtered channels (optional):**
-```
-channel:user:{userId}:candle:close
-```
-- Aggregated feed for user's subscriptions
-- Reduces subscription complexity on client
-
-### TTL Strategies
-
-| Data Type | TTL | Rationale |
-|-----------|-----|-----------|
-| Exchange candles (shared) | None | Persistent cache for common pairs |
-| User overflow candles | 24 hours | Clean up inactive subscriptions |
-| Tickers | 60 seconds | Real-time, high churn |
-| Indicators | Match candle TTL | Derived from candle data |
-
-### Cluster Considerations
-
-Azure Redis Cluster (already in use) requires:
-- No multi-key operations across slots
-- Use `deleteKeysClusterSafe()` (already implemented)
-- Hash tags `{symbol}` can keep related keys on same slot if needed
-
----
-
-## Installation Commands
-
-```bash
-# Core exchange libraries
-npm install binance                    # Binance.com + Binance.US
-npm install kucoin-universal-sdk       # KuCoin official
-
-# MEXC dependencies (direct implementation)
-npm install protobufjs                 # For MEXC protobuf parsing
-
-# Already installed (verify versions)
-npm list ioredis ws zod
-```
-
----
-
-## Adapter Architecture Recommendation
-
-Extend existing pattern from `packages/coinbase-client`:
+### New Module Location
 
 ```
 packages/
-  exchange-adapters/
+  cache/
     src/
-      base/
-        base-adapter.ts           # From coinbase-client (refactor to shared)
-      coinbase/
-        coinbase-adapter.ts       # Move from coinbase-client
-        coinbase-rest-client.ts
-      binance/
-        binance-adapter.ts        # New - works for .com and .us
-        binance-rest-client.ts
-      mexc/
-        mexc-adapter.ts           # New - includes protobuf handling
-        mexc-rest-client.ts
-        proto/                    # Protobuf definitions
-      kucoin/
-        kucoin-adapter.ts         # New - includes token flow
-        kucoin-rest-client.ts
+      keys.ts               # ADD: perseus:* key builders
+      streams/
+        activity-stream.ts   # NEW: XADD/XRANGE/XTRIM wrappers
+      index.ts               # UPDATE: export new modules
 ```
 
-**Shared interface:** `IExchangeAdapter` (already defined in `@livermore/schemas`)
+Or, if Perseus Network is a standalone package:
+
+```
+packages/
+  perseus/
+    src/
+      instance-id.ts         # Instance ID generation
+      state-machine.ts       # Instance lifecycle FSM
+      heartbeat.ts           # SET EX heartbeat loop
+      activity-stream.ts     # Redis Streams wrapper
+      public-ip.ts           # Public IP detection
+      network-manager.ts     # Orchestrates registration, heartbeat, cleanup
+      index.ts
+    package.json             # deps: @livermore/cache, @livermore/schemas, @livermore/utils
+```
+
+**Recommendation:** Create `packages/perseus` as a dedicated package. It has a clear bounded context (network coordination) and shouldn't pollute the cache package with non-caching concerns.
 
 ---
 
 ## Sources
 
-### Official Documentation
-- [Binance WebSocket Streams](https://developers.binance.com/docs/binance-spot-api-docs/web-socket-streams)
-- [Binance Rate Limits](https://developers.binance.com/docs/binance-spot-api-docs/websocket-api/rate-limits)
-- [Binance.US API Docs](https://docs.binance.us/)
-- [Binance.US WebSocket (GitHub)](https://github.com/binance-us/binance-us-api-docs/blob/master/web-socket-streams.md)
-- [MEXC WebSocket Market Streams](https://www.mexc.com/api-docs/spot-v3/websocket-market-streams)
-- [MEXC Protobuf Definitions](https://github.com/mexcdevelop/websocket-proto)
-- [KuCoin WebSocket Klines](https://www.kucoin.com/docs/websocket/spot-trading/public-channels/klines)
-- [KuCoin Rate Limits](https://www.kucoin.com/docs/basic-info/request-rate-limit/websocket)
-- [Coinbase WebSocket Channels](https://docs.cdp.coinbase.com/advanced-trade/docs/ws-channels)
+### Verified Against Installed Code
+- ioredis 5.4.2 type definitions: `node_modules/.pnpm/ioredis@5.4.2/.../RedisCommander.d.ts` (lines 4542-5807)
+- Existing key patterns: `packages/cache/src/keys.ts`
+- Existing Redis client: `packages/cache/src/client.ts`
+- Existing heartbeat pattern: `apps/api/src/services/exchange/adapter-factory.ts`
 
-### Libraries
-- [binance npm (tiagosiebler)](https://www.npmjs.com/package/binance)
-- [kucoin-universal-sdk GitHub](https://github.com/Kucoin/kucoin-universal-sdk)
-- [@binance/connector npm](https://www.npmjs.com/package/@binance/connector)
+### Redis Official Documentation
+- [Redis Streams](https://redis.io/docs/latest/develop/data-types/streams/)
+- [XADD Command](https://redis.io/docs/latest/commands/xadd/)
+- [XTRIM Command](https://redis.io/docs/latest/commands/xtrim/)
+- [XRANGE Command](https://redis.io/docs/latest/commands/xrange/)
+- [XREAD Command](https://redis.io/docs/latest/commands/xread/)
+- [SET Command (EX option)](https://redis.io/docs/latest/commands/set/)
+- [Redis Cluster Specification (Hash Tags)](https://redis.io/docs/latest/operate/oss_and_stack/reference/cluster-spec/)
 
-### Geo-Restrictions
-- [Binance Restricted Countries](https://www.datawallet.com/crypto/binance-restricted-countries)
+### Libraries Evaluated
+- [ioredis GitHub](https://github.com/redis/ioredis)
+- [public-ip npm](https://www.npmjs.com/package/public-ip) -- ESM-only, rejected
+- [node-public-ip npm](https://www.npmjs.com/package/node-public-ip) -- abandoned, rejected
+- [typescript-fsm GitHub](https://github.com/WebLegions/typescript-fsm) -- adequate but unnecessary
+- [XState](https://stately.ai/docs/xstate) -- overkill
+- [ipify.org](https://www.ipify.org/) -- recommended for public IP detection
+
+### Patterns and Best Practices
+- [Redis Heartbeat-Based Session Tracking](https://medium.com/tilt-engineering/redis-powered-user-session-tracking-with-heartbeat-based-expiration-c7308420489f)
+- [Redis Clustering Best Practices with Keys](https://redis.io/blog/redis-clustering-best-practices-with-keys/)
+- [ioredis Streams Example (Gist)](https://gist.github.com/forkfork/c27d741650dd65631578771ab264dd2c)
+- [Azure Container Apps + Redis Streams](https://techcommunity.microsoft.com/blog/appsonazureblog/custom-scaling-on-azure-container-apps-based-on-redis-streams/3723374)

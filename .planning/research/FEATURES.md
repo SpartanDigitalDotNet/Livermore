@@ -1,270 +1,356 @@
-# Features Research: v5.0 Multi-Exchange Architecture
+# Feature Landscape: v6.0 Perseus Network
 
+**Domain:** Distributed instance coordination, service registry, health monitoring
 **Project:** Livermore Trading Platform
-**Milestone:** v5.0 Distributed Exchange Architecture
-**Researched:** 2026-02-06
-**Confidence:** HIGH (based on existing codebase patterns + domain research)
+**Researched:** 2026-02-10
+**Overall Confidence:** HIGH
+
+---
 
 ## Executive Summary
 
-v5.0 transforms Livermore from a user-scoped single-exchange platform to an exchange-scoped distributed architecture enabling cross-exchange visibility. The core innovation is the "trigger remotely, buy locally" soft-arbitrage pattern where signals from one exchange (Mike's Coinbase) can inform trading decisions on another (Kaia's Binance).
+v6.0 transforms Livermore from a "who's connected" status flag into a proper distributed service registry with identity, health monitoring, and audit logging. The current prototype stores an `exchange:status:{exchangeId}` key in Redis with basic connection state, but it has no TTL (dead instances leave stale keys), no identity information (who is running it, where), and no history (state transitions are lost).
 
-Current architecture uses `candles:{userId}:{exchangeId}:{symbol}:{timeframe}` keys, coupling data to individual users. v5.0 transitions to exchange-scoped shared pools (`candles:{exchange_id}:{symbol}:{timeframe}`) for Tier 1 high-volume symbols, with user-specific overflow (`usercandles:`) for positions and manual adds.
+The Perseus Network milestone builds three interconnected subsystems:
 
-Key features: idle startup mode (no connections until `start` command), tiered symbol management (exchange-driven Top N + user positions), and Redis pub/sub cross-exchange visibility enabling any client to subscribe to any exchange's feed.
+1. **Instance Registration** -- Each API instance registers itself in Redis with full identity (hostname, IP, admin user, exchange, symbol count) and maintains that registration via heartbeat with TTL. Key expiry equals instance death.
 
----
+2. **Network Activity Log** -- State transitions and errors are logged to Redis Streams with 90-day time-based retention using MINID trimming. This creates a persistent audit trail that survives instance restarts.
 
-## Table Stakes (Must Have)
+3. **Admin UI Network View** -- A new page showing all registered instances, their real-time status, and a scrollable activity feed sourced from the Redis Streams.
 
-Features required for v5.0 to function. Missing any blocks the milestone.
-
-### Exchange Management
-
-| Feature | Description | Complexity | Rationale |
-|---------|-------------|------------|-----------|
-| **EXC-01: `exchanges` metadata table** | New table with API limits, fees, geo restrictions, supported timeframes, WebSocket URLs | Medium | Foundation for all exchange-specific behavior |
-| **EXC-02: `user_exchanges` FK to `exchanges`** | Refactor `user_exchanges.exchange_name` to `exchange_id` FK | Low | Normalize exchange data, enable metadata lookup |
-| **EXC-03: Exchange adapter factory** | Factory that instantiates correct adapter (Coinbase/Binance) based on exchange type | Low | Support multiple exchange implementations |
-| **EXC-04: Exchange connection status tracking** | Track `connected_at`, `last_heartbeat`, `connection_state` per exchange | Low | Monitor distributed instances |
-
-### Data Architecture
-
-| Feature | Description | Complexity | Rationale |
-|---------|-------------|------------|-----------|
-| **DATA-01: Exchange-scoped candle keys** | `candles:{exchange_id}:{symbol}:{timeframe}` (no userId) | Medium | Shared data pool for Tier 1 symbols |
-| **DATA-02: Exchange-scoped indicator keys** | `indicator:{exchange_id}:{symbol}:{timeframe}:macdv` | Medium | Shared indicator calculations |
-| **DATA-03: User overflow keys** | `usercandles:{userId}:{exchange_id}:{symbol}:{timeframe}` with TTL | Medium | User positions + manual adds with auto-cleanup |
-| **DATA-04: Dual-read pattern** | Indicator service checks exchange-scoped first, falls back to user-scoped | Medium | Backward compatibility during migration |
-| **DATA-05: Cross-exchange pub/sub channels** | `channel:exchange:{exchange_id}:candle:close:{symbol}:{timeframe}` | Medium | Any client can subscribe to any exchange's feed |
-
-### Symbol Management
-
-| Feature | Description | Complexity | Rationale |
-|---------|-------------|------------|-----------|
-| **SYM-01: Tier 1 - Top N by volume** | Exchange-driven symbol list (Top 20-50 by 24h volume) | Medium | Shared pool covers most trading activity |
-| **SYM-02: Tier 2 - User positions** | Auto-subscribe user's held positions (de-duped against Tier 1) | Low | User sees their holdings regardless of Tier 1 |
-| **SYM-03: Tier 2 - Manual adds** | User-added symbols with validation + de-dupe | Low | Power user flexibility |
-| **SYM-04: Symbol de-duplication** | Tier 2 entries that match Tier 1 use shared pool (no duplicate data) | Medium | Avoid redundant data storage and computation |
-| **SYM-05: Symbol metrics endpoint** | 24h volume, price, market cap for add/remove decisions | Low | Informed symbol management |
-
-### Startup/Control
-
-| Feature | Description | Complexity | Rationale |
-|---------|-------------|------------|-----------|
-| **CTL-01: Idle startup mode** | API starts without WebSocket connections, awaits `start` command | Medium | Lazy initialization reduces cold start |
-| **CTL-02: `start` command** | Command to initiate exchange connections (replaces auto-connect) | Low | Explicit control over resource usage |
-| **CTL-03: `--autostart <exchange>` flag** | CLI parameter to bypass idle mode for specific exchange | Low | Backward compatibility, CI/CD friendly |
-| **CTL-04: Connection lifecycle events** | Emit `exchange:connecting`, `exchange:connected`, `exchange:disconnected` | Low | Observable connection state |
-
-### Cross-Exchange Visibility
-
-| Feature | Description | Complexity | Rationale |
-|---------|-------------|------------|-----------|
-| **VIS-01: Exchange-scoped alert channels** | `channel:alerts:{exchange_id}` (not user-scoped) | Low | Any subscriber sees exchange alerts |
-| **VIS-02: Cross-exchange subscription** | Client can subscribe to `channel:exchange:coinbase:*` from Binance instance | Medium | Core soft-arbitrage capability |
-| **VIS-03: Alert source attribution** | Alert payloads include `source_exchange_id` field | Low | Know which exchange triggered the signal |
+The one-instance-per-exchange constraint is enforced at registration time: before an instance starts serving an exchange, it checks whether another instance already holds the registration. This prevents data conflicts from multiple writers.
 
 ---
 
-## Differentiators
+## Table Stakes (Must Have for v6.0)
 
-Features that provide competitive advantage. Not blocking, but valuable.
+Features users expect from a distributed instance coordination system. Missing any means the milestone is incomplete.
 
-| Feature | Value Proposition | Complexity | Priority |
-|---------|-------------------|------------|----------|
-| **DIFF-01: Soft-arbitrage signals** | "BTC moving on Coinbase" notification while viewing Binance | Medium | HIGH - Core v5.0 value prop |
-| **DIFF-02: Exchange latency comparison** | Display price discrepancy between exchanges for same symbol | Medium | MEDIUM - Useful for arbitrage decisions |
-| **DIFF-03: Volume-weighted symbol scoring** | Rank symbols by cross-exchange combined volume | Low | LOW - Nice-to-have for symbol discovery |
-| **DIFF-04: Geographic exchange routing** | Suggest optimal exchange based on user's geo (latency, restrictions) | High | LOW - Future consideration |
-| **DIFF-05: Exchange health dashboard** | Aggregate view of all connected exchanges, WebSocket health, rate limit usage | Medium | MEDIUM - Operational visibility |
+### API-Side: Instance Registration
+
+| ID | Feature | Description | Complexity | Rationale |
+|----|---------|-------------|------------|-----------|
+| **REG-01** | Exchange-scoped status key | `exchange:{exchange_id}:status` replaces prototype `exchange:status:{exchangeId}` | Low | Consistent key naming with v5.0 exchange-scoped pattern |
+| **REG-02** | Full identity payload | Status key stores: `exchangeId`, `exchangeName`, `connectionState`, `connectedAt`, `lastHeartbeat`, `symbolCount`, `adminEmail`, `adminDisplayName`, `ipAddress`, `hostname`, `lastError` | Medium | Admin needs to know who is running what, where |
+| **REG-03** | Connection state machine | States: `idle -> starting -> warming -> active -> stopping -> stopped`. Transitions tracked throughout full API lifecycle | Medium | Current prototype has 5 states (`idle`, `connecting`, `connected`, `disconnected`, `error`) that don't match the actual startup phases (backfill, warmup, websocket). The new 6-state machine maps cleanly to the real lifecycle |
+| **REG-04** | State transitions throughout lifecycle | State updated at each phase: server start (idle), start command (starting), warmup begin (warming), websocket connected (active), stop command (stopping), shutdown (stopped) | Medium | Current bug: connectionState stuck on `idle` when instance is down because no transition fires |
+| **REG-05** | Public IP detection | Detect public IP via external service (ipify.org or similar) at startup, store in status payload | Low | Instances run on different machines; IP identifies the physical host for Admin |
+| **REG-06** | Hostname detection | Use `os.hostname()` to identify the machine name, store in status payload | Low | Complements IP with human-readable machine identifier |
+
+### API-Side: Heartbeat and Health
+
+| ID | Feature | Description | Complexity | Rationale |
+|----|---------|-------------|------------|-----------|
+| **HB-01** | Heartbeat with TTL | Periodically refresh status key TTL using `SET ... EX`. If heartbeat stops, key expires = instance is dead | Medium | Core health detection mechanism. No separate health-check service needed |
+| **HB-02** | Heartbeat interval configuration | Configurable heartbeat interval (default: 15s) with TTL set to 3x interval (default: 45s). Ratio ensures missed heartbeats don't cause false positives | Low | Industry standard: TTL = 3x heartbeat interval. 15s heartbeat with 45s TTL means instance must miss 3 consecutive heartbeats before being declared dead |
+| **HB-03** | Heartbeat timestamp in payload | Each heartbeat updates `lastHeartbeat` ISO timestamp in the status JSON, then refreshes key TTL | Low | Admin UI displays "last seen 5 seconds ago" for real-time health indication |
+| **HB-04** | Graceful shutdown cleanup | On SIGINT/SIGTERM, transition to `stopping` state, log the shutdown event, then let key expire naturally (or delete immediately) | Low | Clean shutdowns should be distinguishable from crashes. State `stopping` vs key-expired-after-TTL tells the Admin whether it was graceful |
+
+### API-Side: One-Instance-Per-Exchange Constraint
+
+| ID | Feature | Description | Complexity | Rationale |
+|----|---------|-------------|------------|-----------|
+| **LOCK-01** | Pre-registration check | Before registering for an exchange, check if `exchange:{exchange_id}:status` key exists and is alive (TTL > 0). If another instance holds it, refuse to start | Medium | Prevents two API instances from writing candles for the same exchange simultaneously, which would cause data conflicts |
+| **LOCK-02** | Atomic registration | Use `SET exchange:{exchange_id}:status NX EX` semantics (set-if-not-exists with TTL) for the initial claim. If SET returns nil, another instance already holds the exchange | Low | Atomic operation prevents race conditions where two instances start simultaneously |
+| **LOCK-03** | Stale lock detection | If key exists but TTL has expired (key gone), treat exchange as available. If key exists with valid TTL, the exchange is claimed | Low | Dead instances auto-release their exchange claim via TTL expiry -- no manual intervention needed |
+| **LOCK-04** | Conflict error message | When lock fails, return clear error: "Exchange {name} is already being served by {hostname} ({ip}) since {connectedAt}. Stop that instance first." | Low | Actionable error message tells the Admin exactly who to contact |
+
+### API-Side: Network Activity Log
+
+| ID | Feature | Description | Complexity | Rationale |
+|----|---------|-------------|------------|-----------|
+| **LOG-01** | Redis Stream per exchange | Log events to `logs:network:{exchange_name}` stream (e.g., `logs:network:coinbase`) | Medium | Per-exchange streams keep logs organized and queryable. Stream key matches the naming convention in PROJECT.md |
+| **LOG-02** | State transition events | Log every state change: `{timestamp, event: "state_change", fromState, toState, exchangeId, hostname, ip}` | Low | Audit trail of instance lifecycle |
+| **LOG-03** | Error events | Log errors with context: `{timestamp, event: "error", error, exchangeId, hostname, ip, state}` | Low | Error history for debugging. Current bug: error not populating in status key |
+| **LOG-04** | 90-day retention via MINID | On each XADD, include `MINID ~ {90_days_ago_timestamp}` to trim entries older than 90 days | Low | Time-based retention without external cleanup jobs. MINID trimming (Redis 6.2+) handles this inline with writes |
+| **LOG-05** | Structured log entry schema | Consistent field names across all events: `timestamp`, `event`, `exchangeId`, `exchangeName`, `hostname`, `ip`, `adminEmail`, plus event-specific fields | Low | Consistent schema enables reliable parsing in Admin UI |
+
+### Admin UI: Network View
+
+| ID | Feature | Description | Complexity | Rationale |
+|----|---------|-------------|------------|-----------|
+| **UI-01** | Network page in nav | New "Network" page accessible from the Admin header navigation bar. Shows all registered instances | Low | Users need visibility into the distributed system |
+| **UI-02** | Instance card per exchange | Card showing: exchange name, connection state (with color-coded badge), hostname, IP, admin name, symbol count, last heartbeat ("3s ago"), connected since timestamp | Medium | At-a-glance health of each instance. Color: green=active, yellow=warming/starting, red=stopped/error, gray=no instance |
+| **UI-03** | Dead instance detection | When an exchange has no status key (TTL expired), show the card as "Offline" with last-known information from the most recent stream entry | Medium | Distinguishes between "never registered" and "was running but died" |
+| **UI-04** | Activity feed | Scrollable, reverse-chronological feed of network events from Redis Streams. Shows state transitions and errors with timestamps | Medium | Operational visibility. "Mike's Coinbase started 2 hours ago", "Kaia's Binance errored 5 minutes ago" |
+| **UI-05** | Polling-based refresh | Poll tRPC endpoint every 5 seconds for status updates (matches existing control panel pattern). No WebSocket needed for v6.0 | Low | Consistent with existing Admin UI polling pattern. Real-time WebSocket upgrades deferred |
+
+### API-Side: tRPC Endpoints
+
+| ID | Feature | Description | Complexity | Rationale |
+|----|---------|-------------|------------|-----------|
+| **RPC-01** | `network.getInstances` | Returns all exchange status keys (scan for `exchange:*:status` pattern). Each includes full identity payload | Low | Admin UI data source for instance cards |
+| **RPC-02** | `network.getActivityLog` | Returns recent events from `logs:network:{exchange}` stream via XREVRANGE. Supports COUNT parameter for pagination | Low | Admin UI data source for activity feed |
+| **RPC-03** | `network.getExchangeStatus` | Returns status for a single exchange by ID. Used for targeted polling | Low | Efficient single-exchange refresh |
+
+### Bug Fixes (Existing Issues)
+
+| ID | Feature | Description | Complexity | Rationale |
+|----|---------|-------------|------------|-----------|
+| **FIX-01** | Heartbeat not updating | Current prototype sets `lastHeartbeat` on connect event only, never refreshes it. Fix: periodic heartbeat timer updates the timestamp | Low | Without periodic refresh, lastHeartbeat becomes stale within seconds of connecting |
+| **FIX-02** | Error not populating | Current `error` handler reads existing status, but status may be null on first error. Fix: handle null status gracefully in error path | Low | Errors silently swallowed, Admin never sees what went wrong |
+| **FIX-03** | connectionState stuck on idle | When instance is down (process exits), status key shows `idle` forever because there is no TTL. Fix: TTL on status key + `stopped` state on shutdown | Low | Without TTL, dead instances look idle forever. Core design flaw that heartbeat-with-TTL solves |
 
 ---
 
-## Anti-Features (Do NOT Build)
+## Differentiators (Would Make It Better)
 
-Features to explicitly avoid in v5.0. Common mistakes or premature optimizations.
+Features that elevate the system beyond basic functionality. Not blocking v6.0, but worth considering.
 
-| Anti-Feature | Reason | Alternative |
-|--------------|--------|-------------|
-| **Trade execution** | Monitoring-only platform; execution adds complexity, liability, regulatory burden | Display signals, let user execute manually on exchange |
-| **Order book aggregation** | Full Level2 orderbook across exchanges is expensive and not needed for MACD-V signals | Keep ticker-based price feeds only |
-| **Cross-exchange position netting** | Complex reconciliation, unclear value for signal platform | Each exchange maintains separate position tracking |
-| **Automatic exchange failover** | Switching exchanges mid-session could confuse signal context | Manual exchange selection; alert if exchange disconnects |
-| **Multi-user shared cache** | User A and User B sharing same Coinbase candle cache adds complexity | Exchange-scoped, but each API instance serves one user |
-| **Azure Service Bus** | Redis pub/sub sufficient for current scale; Azure adds latency and cost | Stay with Redis Cluster pub/sub |
-| **Real-time arbitrage execution** | Actual arbitrage requires sub-second execution, capital on both exchanges | Soft-arbitrage (signals only) is safer and simpler |
-| **CCXT integration** | CCXT adds abstraction overhead; native adapters are faster and more controllable | Continue native adapter pattern |
-| **1m candle support** | Coinbase WebSocket only provides native 5m candles; 1m requires ticker aggregation with accuracy tradeoffs | Keep 5m as minimum timeframe |
+| ID | Feature | Value Proposition | Complexity | Priority |
+|----|---------|-------------------|------------|----------|
+| **DIFF-01** | Instance uptime display | Show "Running for 4h 23m" calculated from `connectedAt` | Low | HIGH -- trivial to implement, high user value |
+| **DIFF-02** | Heartbeat latency indicator | Show "Last heartbeat: 3s ago" with color degradation (green < 10s, yellow < 30s, red > 30s) | Low | HIGH -- gives real-time health confidence |
+| **DIFF-03** | Activity feed filtering | Filter activity feed by exchange, event type (state changes only, errors only), or time range | Medium | MEDIUM -- useful when multiple exchanges are active |
+| **DIFF-04** | Discord notifications for state changes | Send Discord notification when instance goes active, errors, or dies (key expires). Leverages existing Discord service | Low | MEDIUM -- extends existing notification infrastructure |
+| **DIFF-05** | Instance version tracking | Include API version/git commit hash in status payload. Shows "v6.0.0 (abc1234)" on instance card | Low | LOW -- useful for debugging version mismatches |
+| **DIFF-06** | Historical uptime percentage | Calculate uptime from stream events over last 24h/7d/30d. Display as percentage or timeline | High | LOW -- requires stream aggregation, more useful once system is stable |
+| **DIFF-07** | Connection state timeline | Visual timeline showing state transitions over time for an instance (horizontal bar chart) | Medium | LOW -- cool but not essential for v6.0 |
+| **DIFF-08** | Auto-scroll activity feed | New events appear at top with subtle animation, auto-scrolling if user is at top of feed | Low | MEDIUM -- improves real-time feel of network view |
+| **DIFF-09** | Stream entry count display | Show total event count per exchange stream. "1,247 events logged" | Low | LOW -- minor informational value |
 
 ---
 
-## User Stories
+## Anti-Features (Do NOT Build in v6.0)
 
-### Mike (Coinbase user with positions)
+Features to explicitly avoid. These are common in distributed systems but premature or out of scope.
 
-> Mike runs the Coinbase API instance. He holds BTC, ETH, and SOL.
-
-| Story | Acceptance Criteria |
-|-------|---------------------|
-| As Mike, I want my positions auto-subscribed regardless of Tier 1 | Positions in `usercandles:` keys if not in Tier 1, otherwise use shared pool |
-| As Mike, I want to start the API without immediate WebSocket connections | API starts in idle mode, `start` command initiates connections |
-| As Mike, I want Kaia to see my Coinbase signals | Mike's signals published to exchange-scoped channel, Kaia's PerseusWeb subscribes |
-| As Mike, I want to see exchange connection status | Dashboard shows `connected`, `last_heartbeat`, uptime |
-| As Mike, I want to add DOGE manually even if it's not in Tier 1 | Manual add validates against Coinbase API, stores in user overflow keys |
-
-### Kaia (Binance scalper, cross-exchange watcher)
-
-> Kaia runs PerseusWeb frontend. She trades on Binance.com but watches Coinbase for signals.
-
-| Story | Acceptance Criteria |
-|-------|---------------------|
-| As Kaia, I want to see BTC signals from Coinbase while on Binance | Subscribe to `channel:exchange:coinbase:alerts:BTC-USD` from PerseusWeb |
-| As Kaia, I want to know which exchange triggered a signal | Alert payload includes `source_exchange_id: 'coinbase'` |
-| As Kaia, I want to compare BTC price on both exchanges | Ticker data from both exchanges available via pub/sub |
-| As Kaia, I want to buy on Binance when Coinbase signal fires | PerseusWeb displays alert with "Buy on Binance" action (manual execution) |
-| As Kaia, I want to configure which exchanges I watch | Settings UI for cross-exchange subscriptions |
+| Anti-Feature | Reason | What to Do Instead |
+|--------------|--------|-------------------|
+| **Standby/passive instance registration** | Requires fundamentally different registration model (active vs passive slots). v6.0 is the foundation for this -- build the registry first, add standby in v6.1+ | Register only active instances. One slot per exchange |
+| **Graceful handoff protocol** | "Notify -> takeover -> confirm -> shutdown" requires standby instances, which are not in v6.0 scope | Clean shutdown transitions to `stopped`, key expires. New instance can claim after TTL |
+| **Remote Admin control** | Sending commands across instances (Admin UI on Mike's machine controlling Kaia's API) requires ngrok tunnels, auth, and cross-instance pub/sub | Each Admin UI controls only its local API. Network view is read-only |
+| **Authorization for remote operations** | Permission schema for "Mike can restart Kaia's instance" is complex and premature | Defer until remote control is implemented |
+| **Keyspace notifications for death detection** | Redis keyspace events (`__keyevent@0__:expired`) seem ideal for detecting TTL expiry, but they have critical limitations in Redis Cluster: events are node-specific, not broadcast across cluster. Azure Managed Redis with OSS Cluster mode would require subscribing to every cluster node | Use polling from Admin UI. tRPC endpoint reads current status keys every 5s. Missing key = dead instance. Simple, reliable, cluster-safe |
+| **WebSocket-based real-time network view** | Adding WebSocket channels for network status creates complexity for minimal gain over 5s polling | Poll tRPC endpoints every 5s. Matches existing Control Panel pattern. Upgrade to WebSocket in a future milestone if needed |
+| **Separate health-check service** | External service that pings instances adds deployment complexity | TTL-based heartbeat is self-contained. Instance is its own health reporter. Missing heartbeat = dead |
+| **Instance-to-instance communication** | Direct communication between API instances (Mike's Coinbase talks to Kaia's Binance) adds network complexity | All coordination happens through shared Redis. Instances are unaware of each other |
+| **Automatic restart on crash** | Process supervisor (pm2, systemd) responsibility, not application-level | Document recommended process supervisor setup. OS-level restart, not Redis-orchestrated |
+| **Multi-stream consumer groups** | XREADGROUP with consumer groups adds complexity for what is essentially a read-only audit log | Use simple XREVRANGE for reading. No consumer groups needed for display-only activity feed |
+| **Metrics/prometheus integration** | Full observability stack is overkill for 2-3 instances | Keep it simple: status keys + stream events. Add Prometheus later if instance count grows |
 
 ---
 
 ## Feature Dependencies
 
 ```
-EXC-01 (exchanges table)
+REG-01 (exchange-scoped status key)
     |
-    +---> EXC-02 (user_exchanges FK)
+    +---> REG-02 (full identity payload)
     |         |
-    |         +---> DATA-01 (exchange-scoped candle keys)
-    |         |         |
-    |         |         +---> DATA-02 (exchange-scoped indicator keys)
-    |         |         |
-    |         |         +---> DATA-04 (dual-read pattern)
+    |         +---> REG-05 (public IP detection)
     |         |
-    |         +---> DATA-03 (user overflow keys)
+    |         +---> REG-06 (hostname detection)
     |
-    +---> EXC-03 (adapter factory)
+    +---> REG-03 (connection state machine)
     |         |
-    |         +---> CTL-01 (idle startup)
+    |         +---> REG-04 (state transitions throughout lifecycle)
     |                   |
-    |                   +---> CTL-02 (start command)
-    |                   |
-    |                   +---> CTL-03 (--autostart flag)
+    |                   +---> LOG-02 (state transition events)
     |
-    +---> DATA-05 (cross-exchange pub/sub)
+    +---> HB-01 (heartbeat with TTL)
+    |         |
+    |         +---> HB-02 (heartbeat interval config)
+    |         |
+    |         +---> HB-03 (heartbeat timestamp in payload)
+    |         |
+    |         +---> HB-04 (graceful shutdown cleanup)
+    |         |
+    |         +---> FIX-01 (heartbeat not updating)
+    |         |
+    |         +---> FIX-03 (connectionState stuck on idle)
+    |
+    +---> LOCK-01 (pre-registration check)
+    |         |
+    |         +---> LOCK-02 (atomic registration)
+    |         |
+    |         +---> LOCK-03 (stale lock detection)
+    |         |
+    |         +---> LOCK-04 (conflict error message)
+    |
+    +---> LOG-01 (Redis Stream per exchange)
               |
-              +---> VIS-01 (exchange-scoped alerts)
+              +---> LOG-02 (state transition events)
               |
-              +---> VIS-02 (cross-exchange subscription)
+              +---> LOG-03 (error events)
               |
-              +---> DIFF-01 (soft-arbitrage signals)
+              +---> LOG-04 (90-day retention)
+              |
+              +---> LOG-05 (structured log schema)
 
-SYM-01 (Tier 1 volume) ----+
-                           |
-SYM-02 (user positions) ---+---> SYM-04 (de-duplication)
-                           |
-SYM-03 (manual adds) ------+
+RPC-01 (getInstances) ---> UI-02 (instance cards)
+                                   |
+RPC-02 (getActivityLog) ---> UI-04 (activity feed)
+                                   |
+RPC-03 (getExchangeStatus) ---> UI-03 (dead instance detection)
+
+UI-01 (network page) ---> UI-02 + UI-03 + UI-04 + UI-05
 ```
 
 ---
 
-## MVP Recommendation
+## Phase Ordering Recommendation
 
-For v5.0 MVP, prioritize these features in order:
+### Phase 1: Instance Identity and State Machine
 
-### Phase 1: Schema Foundation
-1. **EXC-01**: `exchanges` metadata table
-2. **EXC-02**: `user_exchanges` FK refactor
+Build the registration subsystem. Replaces the prototype `exchange:status` with proper identity.
 
-### Phase 2: Data Architecture
-3. **DATA-01**: Exchange-scoped candle keys
-4. **DATA-02**: Exchange-scoped indicator keys
-5. **DATA-03**: User overflow keys
-6. **DATA-04**: Dual-read pattern (backward compat)
+- **REG-01**: Exchange-scoped status key (new key format)
+- **REG-02**: Full identity payload (schema)
+- **REG-03**: Connection state machine (6-state FSM)
+- **REG-04**: State transitions throughout lifecycle
+- **REG-05**: Public IP detection
+- **REG-06**: Hostname detection
+- **FIX-02**: Error not populating
 
-### Phase 3: Symbol Management
-7. **SYM-01**: Tier 1 Top N by volume
-8. **SYM-02**: Tier 2 user positions
-9. **SYM-04**: De-duplication logic
+**Rationale:** Everything else depends on having a well-structured status key with proper state machine. This phase replaces the broken prototype.
 
-### Phase 4: Startup Control
-10. **CTL-01**: Idle startup mode
-11. **CTL-02**: `start` command
-12. **CTL-03**: `--autostart` flag
+### Phase 2: Heartbeat and Locking
 
-### Phase 5: Cross-Exchange Visibility
-13. **DATA-05**: Cross-exchange pub/sub channels
-14. **VIS-01**: Exchange-scoped alert channels
-15. **VIS-02**: Cross-exchange subscription
-16. **VIS-03**: Alert source attribution
+Add health monitoring and exclusive ownership.
 
-### Defer to v5.1+
-- **DIFF-02**: Exchange latency comparison
-- **DIFF-03**: Volume-weighted symbol scoring
-- **DIFF-04**: Geographic exchange routing
-- **DIFF-05**: Exchange health dashboard
-- **SYM-03**: Manual symbol adds (Tier 2 positions is sufficient for MVP)
+- **HB-01**: Heartbeat with TTL
+- **HB-02**: Heartbeat interval configuration
+- **HB-03**: Heartbeat timestamp in payload
+- **HB-04**: Graceful shutdown cleanup
+- **LOCK-01**: Pre-registration check
+- **LOCK-02**: Atomic registration
+- **LOCK-03**: Stale lock detection
+- **LOCK-04**: Conflict error message
+- **FIX-01**: Heartbeat not updating
+- **FIX-03**: connectionState stuck on idle
+
+**Rationale:** Heartbeat TTL is what makes the registry self-healing. Locking prevents conflicts. Bug fixes are naturally resolved by the new heartbeat design.
+
+### Phase 3: Network Activity Log
+
+Add the audit trail via Redis Streams.
+
+- **LOG-01**: Redis Stream per exchange
+- **LOG-02**: State transition events
+- **LOG-03**: Error events
+- **LOG-04**: 90-day retention via MINID
+- **LOG-05**: Structured log entry schema
+
+**Rationale:** Logging depends on having state transitions to log (Phase 1) and a running heartbeat system to detect lifecycle events (Phase 2).
+
+### Phase 4: Admin UI Network View
+
+Build the visualization layer.
+
+- **UI-01**: Network page in nav
+- **UI-02**: Instance card per exchange
+- **UI-03**: Dead instance detection
+- **UI-04**: Activity feed
+- **UI-05**: Polling-based refresh
+- **RPC-01**: `network.getInstances`
+- **RPC-02**: `network.getActivityLog`
+- **RPC-03**: `network.getExchangeStatus`
+
+**Rationale:** UI consumes all three backend subsystems. Build last so all data sources are available and tested.
 
 ---
 
 ## Technical Considerations
 
-### Redis Key Migration
+### Status Key Format
 
-Current keys (v4.0):
 ```
-candles:{userId}:{exchangeId}:{symbol}:{timeframe}
-indicator:{userId}:{exchangeId}:{symbol}:{timeframe}:{type}
-channel:candle:close:{userId}:{exchangeId}:{symbol}:{timeframe}
+Key:   exchange:{exchange_id}:status
+Type:  String (JSON-encoded)
+TTL:   45 seconds (refreshed by heartbeat every 15 seconds)
+
+Payload:
+{
+  "exchangeId": 1,
+  "exchangeName": "coinbase",
+  "connectionState": "active",
+  "connectedAt": "2026-02-10T14:30:00.000Z",
+  "lastHeartbeat": "2026-02-10T15:42:30.000Z",
+  "symbolCount": 24,
+  "adminEmail": "mike@example.com",
+  "adminDisplayName": "Mike",
+  "ipAddress": "72.34.55.12",
+  "hostname": "MIKE-DESKTOP",
+  "lastError": null
+}
 ```
 
-New keys (v5.0):
+### Redis Stream Entry Format
+
 ```
-# Tier 1 (shared pool)
-candles:{exchange_id}:{symbol}:{timeframe}
-indicator:{exchange_id}:{symbol}:{timeframe}:{type}
-channel:exchange:{exchange_id}:candle:close:{symbol}:{timeframe}
-
-# Tier 2 (user overflow)
-usercandles:{userId}:{exchange_id}:{symbol}:{timeframe}
-userindicator:{userId}:{exchange_id}:{symbol}:{timeframe}:{type}
+Stream: logs:network:coinbase
+Entry:  XADD logs:network:coinbase MINID ~ {90_days_ago_ms} * \
+          timestamp "2026-02-10T14:30:00.000Z" \
+          event "state_change" \
+          fromState "warming" \
+          toState "active" \
+          exchangeId "1" \
+          exchangeName "coinbase" \
+          hostname "MIKE-DESKTOP" \
+          ip "72.34.55.12" \
+          adminEmail "mike@example.com"
 ```
 
-### Backward Compatibility
+### State Machine Transitions
 
-During migration:
-1. Indicator service implements dual-read: check exchange-scoped first, fall back to user-scoped
-2. Cache strategies accept optional `userId` parameter (null = exchange-scoped)
-3. Existing server.ts continues working until explicitly switched to new mode
-
-### Pub/Sub Channel Design
-
-Cross-exchange visibility requires careful channel naming:
 ```
-# Exchange-level (any subscriber can listen)
-channel:exchange:{exchange_id}:candle:close:{symbol}:{timeframe}
-channel:exchange:{exchange_id}:alerts:{symbol}
+idle -----(start command)-----> starting
+starting --(backfill done)----> warming
+warming ---(indicators done)--> active
+active ----(stop command)-----> stopping
+stopping --(cleanup done)----> stopped
 
-# User-level (only that user's clients)
-channel:user:{identity_sub}:alerts
+Any state --(error)-----------> [stays in current state, sets lastError]
+Any state --(TTL expires)-----> [key deleted, instance is dead]
 ```
+
+Note: Errors do NOT change state. An instance that errors during `warming` stays in `warming` with `lastError` populated. Only explicit transitions change state. This prevents error-induced state oscillation.
+
+### Heartbeat Interval Math
+
+| Parameter | Value | Rationale |
+|-----------|-------|-----------|
+| Heartbeat interval | 15 seconds | Balance between freshness and Redis load. At 2-3 instances, this is ~12 writes/minute total |
+| Key TTL | 45 seconds | 3x heartbeat interval. Instance must miss 3 consecutive heartbeats to be declared dead |
+| Admin UI poll | 5 seconds | Matches existing control panel. "Last seen Xs ago" updates every poll cycle |
+| Worst-case detection | ~50 seconds | 45s TTL + 5s poll interval = Admin learns of death within 50s |
+
+### Azure Redis Cluster Compatibility
+
+All operations used are cluster-safe:
+- `SET key value NX EX ttl` -- single-key atomic operation
+- `GET key` -- single-key read
+- `XADD stream ...` -- single-key write
+- `XREVRANGE stream ...` -- single-key read
+- `KEYS exchange:*:status` -- NOTE: KEYS is discouraged in cluster mode. Use `SCAN 0 MATCH exchange:*:status COUNT 100` instead for the getInstances endpoint
+
+The SCAN-based approach is important because KEYS blocks the Redis event loop. With only 2-6 exchange status keys expected, SCAN with COUNT 100 will complete in a single iteration.
 
 ---
 
 ## Sources
 
 Research based on:
-- Existing codebase analysis (v4.0 shipped patterns)
-- PROJECT.md v5.0 milestone goals
+- Existing codebase analysis (v5.0 shipped patterns, adapter-factory.ts prototype)
+- PROJECT.md v6.0 milestone specification
 - Domain research:
-  - [Multi-Exchange Platform Architecture](https://www.hashcodex.com/cryptocurrency-exchange-architecture)
-  - [Gate CrossEx Institutional Trading](https://beincrypto.com/gate-crossex-institutional-trading-platform/)
-  - [Crypto Arbitrage Data Requirements](https://www.coinapi.io/blog/crypto-arbitrage-explained-coinapi-profit-opportunities-2025)
-  - [Redis Pub/Sub Scaling](https://ably.com/blog/scaling-pub-sub-with-websockets-and-redis)
-  - [Multi-Instance Node.js with Redis](https://code.tutsplus.com/multi-instance-nodejs-app-in-paas-using-redis-pubsub--cms-22239t)
-  - [Trading Platform Watchlist Best Practices](https://uk.finance.yahoo.com/news/how-to-build-a-winning-crypto-watchlist-with-advanced-trader-tools-170858414.html)
-  - [Lazy Initialization Patterns](https://learn.microsoft.com/en-us/dotnet/framework/performance/lazy-initialization)
+  - [Redis Heartbeat-Based Session Tracking](https://medium.com/tilt-engineering/redis-powered-user-session-tracking-with-heartbeat-based-expiration-c7308422489f) -- TTL refresh patterns, heartbeat interval ratios
+  - [Redis Distributed Locks with Heartbeats](https://compileandrun.com/redis-distrubuted-locks-with-heartbeats/) -- SET NX EX for atomic claims
+  - [Redis Distributed Locks (Official)](https://redis.io/docs/latest/develop/clients/patterns/distributed-locks/) -- Safety properties, SET NX EX semantics
+  - [Redis Streams Documentation](https://redis.io/docs/latest/develop/data-types/streams/) -- XADD, XREVRANGE, MINID trimming
+  - [Redis XADD Command Reference](https://redis.io/docs/latest/commands/xadd/) -- MINID syntax, approximate trimming
+  - [Redis XREVRANGE Command Reference](https://redis.io/docs/latest/commands/xrevrange/) -- Reverse range queries, COUNT parameter
+  - [Redis Keyspace Notifications](https://redis.io/docs/latest/develop/pubsub/keyspace-notifications/) -- Cluster limitations (events not broadcast across nodes)
+  - [Azure Redis Keyspace Notifications](https://techcommunity.microsoft.com/blog/azurepaasblog/redis-keyspace-events-notifications/1551134) -- Azure-specific limitations
+  - [ipify Public IP API](https://www.ipify.org/) -- Zero-dependency public IP detection
+  - [public-ip npm package](https://github.com/sindresorhus/public-ip) -- Node.js public IP detection with multiple fallback services
+  - [ioredis Streams Example](https://gist.github.com/forkfork/c27d741650dd65631578771ab264dd2c) -- XADD/XREAD with ioredis
+  - [Health Check API Pattern](https://microservices.io/patterns/observability/health-check-api.html) -- Microservices health monitoring patterns
+  - [Health Endpoint Monitoring (Azure)](https://learn.microsoft.com/en-us/azure/architecture/patterns/health-endpoint-monitoring) -- Endpoint monitoring best practices
 
 ---
 
-*Researched: 2026-02-06*
+*Researched: 2026-02-10*
 *Researcher: Claude (gsd-researcher)*
