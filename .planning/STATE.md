@@ -10,16 +10,16 @@ See: .planning/PROJECT.md (updated 2026-02-08)
 ## Current Position
 
 **Milestone:** v6.0 Perseus Network
-**Phase:** 30 of 33 (Instance Registry and State Machine)
-**Plan:** 2 of 3 complete
-**Status:** In progress
+**Phase:** 30 of 33 (Instance Registry and State Machine) -- COMPLETE
+**Plan:** 3 of 3 complete
+**Status:** Phase complete
 
 ```
-Progress: [######....] 17%
-Phase 30 [==.]  Phase 31 [ ]  Phase 32 [ ]  Phase 33 [ ]
+Progress: [######....] 25%
+Phase 30 [===]  Phase 31 [ ]  Phase 32 [ ]  Phase 33 [ ]
 ```
 
-**Last activity:** 2026-02-10 -- Completed 30-02-PLAN.md (Core Services: StateMachine + InstanceRegistry)
+**Last activity:** 2026-02-10 -- Completed 30-03-PLAN.md (Integration: Wire Services into Lifecycle)
 
 ## Milestones
 
@@ -37,15 +37,15 @@ See `.planning/MILESTONES.md` for full history.
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 2
-- Average duration: 4m 12s
-- Total execution time: 8m 24s
+- Total plans completed: 3
+- Average duration: 4m 31s
+- Total execution time: 13m 54s
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| 30 | 2 | 8m 24s | 4m 12s |
+| 30 | 3 | 13m 54s | 4m 38s |
 
 ## Tech Debt (Carried Forward)
 
@@ -84,6 +84,9 @@ Recent decisions affecting current work:
 - 30-02-D1: Self-restart detection uses hostname match, not full instanceId (PID/timestamp change on restart)
 - 30-02-D2: setAdminInfo/setSymbolCount defer Redis write to next heartbeat (reduces round-trips)
 - 30-02-D3: Register retries on NX fail + GET null race (key can expire between operations)
+- 30-03-D1: Placeholder registry with exchangeId=0 for idle mode (replaced in handleStart)
+- 30-03-D2: Fresh InstanceRegistryService in handleStart (immutable exchangeId)
+- 30-03-D3: Migrated exchange-symbol.router to new key format (exchange:{id}:status)
 
 ### Pending Todos
 
@@ -98,16 +101,22 @@ None yet.
 ### Last Session
 
 **Date:** 2026-02-10
-**Activity:** Executed 30-02-PLAN.md (Core Services: StateMachine + InstanceRegistry, 2 tasks)
-**Stopped At:** Completed 30-02-PLAN.md
+**Activity:** Executed 30-03-PLAN.md (Integration: Wire Services into Lifecycle, 2 tasks)
+**Stopped At:** Completed 30-03-PLAN.md -- Phase 30 complete
 
 ### Resume Context
 
-**30-02 COMPLETE**
+**PHASE 30 COMPLETE**
 
-Core services created: StateMachineService (validated transitions, legacy state mapping) and InstanceRegistryService (atomic claims, heartbeat, KEEPTTL updates, error recording).
-Next: Execute 30-03-PLAN.md (Integration: wire services into adapter-factory lifecycle).
+All 3 plans delivered:
+- 30-01: Foundation types (ConnectionState, InstanceStatus, VALID_TRANSITIONS, instanceStatusKey, detectPublicIp)
+- 30-02: Core services (StateMachineService, InstanceRegistryService)
+- 30-03: Integration (wired into server.ts startup/shutdown, control-channel handleStart/handleStop, removed prototype)
+
+All 17 requirements (REG-01 through REG-06, HB-01 through HB-04, LOCK-01 through LOCK-04, FIX-01 through FIX-03) verified complete.
+
+Next: Phase 31 (Health Monitoring Dashboard or Network Status).
 
 ---
 *State initialized: 2026-01-18*
-*Last updated: 2026-02-10 -- Completed 30-02-PLAN.md*
+*Last updated: 2026-02-10 -- Completed 30-03-PLAN.md (Phase 30 complete)*
