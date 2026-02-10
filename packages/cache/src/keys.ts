@@ -10,6 +10,20 @@ import type { Timeframe } from '@livermore/schemas';
  */
 
 // ============================================
+// INSTANCE REGISTRY: Network Status Keys
+// ============================================
+
+/**
+ * Build Redis key for exchange instance status.
+ * Phase 30: Exchange-scoped instance registration with TTL.
+ *
+ * @example instanceStatusKey(1) // 'exchange:1:status'
+ */
+export function instanceStatusKey(exchangeId: number): string {
+  return `exchange:${exchangeId}:status`;
+}
+
+// ============================================
 // TIER 1: Exchange-Scoped Keys (Shared Data)
 // ============================================
 
