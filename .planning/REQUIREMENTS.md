@@ -32,12 +32,12 @@ Requirements for v6.0 release. Each maps to roadmap phases.
 
 ### Network Activity Log
 
-- [ ] **LOG-01**: Redis Stream per exchange (`logs:network:{exchange_name}`) for event storage
-- [ ] **LOG-02**: State transition events logged: timestamp, event, fromState, toState, exchangeId, exchangeName, hostname, ip, adminEmail
-- [ ] **LOG-03**: Error events logged: timestamp, event, error message, exchangeId, exchangeName, hostname, ip, state
-- [ ] **LOG-04**: 90-day retention via inline trimming on every XADD (MAXLEN or MINID)
-- [ ] **LOG-05**: Structured log entry schema with consistent field names across all event types
-- [ ] **LOG-06**: Heartbeat refreshes are NOT logged to the stream — only state transitions and errors
+- [x] **LOG-01**: Redis Stream per exchange (`logs:network:{exchange_name}`) for event storage
+- [x] **LOG-02**: State transition events logged: timestamp, event, fromState, toState, exchangeId, exchangeName, hostname, ip, adminEmail
+- [x] **LOG-03**: Error events logged: timestamp, event, error message, exchangeId, exchangeName, hostname, ip, state
+- [x] **LOG-04**: 90-day retention via inline trimming on every XADD (MAXLEN or MINID)
+- [x] **LOG-05**: Structured log entry schema with consistent field names across all event types
+- [x] **LOG-06**: Heartbeat refreshes are NOT logged to the stream — only state transitions and errors
 
 ### Admin UI Network View
 
@@ -115,12 +115,12 @@ Requirements for v6.0 release. Each maps to roadmap phases.
 | LOCK-02 | Phase 30 | Done |
 | LOCK-03 | Phase 30 | Done |
 | LOCK-04 | Phase 30 | Done |
-| LOG-01 | Phase 31 | Pending |
-| LOG-02 | Phase 31 | Pending |
-| LOG-03 | Phase 31 | Pending |
-| LOG-04 | Phase 31 | Pending |
-| LOG-05 | Phase 31 | Pending |
-| LOG-06 | Phase 31 | Pending |
+| LOG-01 | Phase 31 | Done |
+| LOG-02 | Phase 31 | Done |
+| LOG-03 | Phase 31 | Done |
+| LOG-04 | Phase 31 | Done |
+| LOG-05 | Phase 31 | Done |
+| LOG-06 | Phase 31 | Done |
 | UI-01 | Phase 33 | Pending |
 | UI-02 | Phase 33 | Pending |
 | UI-03 | Phase 33 | Pending |
@@ -143,4 +143,4 @@ Requirements for v6.0 release. Each maps to roadmap phases.
 
 ---
 *Requirements defined: 2026-02-10*
-*Last updated: 2026-02-10 -- Phase 30 requirements complete (17/34 done)*
+*Last updated: 2026-02-10 -- Phase 31 complete (23/34 done)*

@@ -13,7 +13,7 @@ v6.0 transforms Livermore from isolated API instances with no mutual awareness i
 Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 30: Instance Registry and State Machine** - Exchange-scoped registration with typed state machine, TTL heartbeat, and one-instance-per-exchange enforcement
-- [ ] **Phase 31: Network Activity Logging** - Redis Streams event log for state transitions and errors with 90-day retention
+- [x] **Phase 31: Network Activity Logging** - Redis Streams event log for state transitions and errors with 90-day retention
 - [ ] **Phase 32: tRPC Network Router** - API endpoints for reading instance status and activity logs
 - [ ] **Phase 33: Admin UI Network View** - Visual network dashboard with instance cards, status badges, activity feed, and differentiators
 
@@ -48,8 +48,8 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 31-01-PLAN.md -- Foundation: Zod schemas for log entries, key builder, NetworkActivityLogger service
-- [ ] 31-02-PLAN.md -- Integration: Wire logger into StateMachineService, error paths, server.ts lifecycle
+- [x] 31-01-PLAN.md -- Foundation: Zod schemas for log entries, key builder, NetworkActivityLogger service
+- [x] 31-02-PLAN.md -- Integration: Wire logger into StateMachineService, error paths, server.ts lifecycle
 
 ### Phase 32: tRPC Network Router
 **Goal**: The Admin UI has a reliable API surface to read instance status and activity logs without SCAN/KEYS commands
@@ -88,10 +88,10 @@ Phases execute in numeric order: 30 -> 31 -> 32 -> 33
 | Phase | Plans Complete | Status | Completed |
 |-------|---------------|--------|-----------|
 | 30. Instance Registry and State Machine | 3/3 | Complete | 2026-02-10 |
-| 31. Network Activity Logging | 0/2 | Not started | - |
+| 31. Network Activity Logging | 2/2 | Complete | 2026-02-10 |
 | 32. tRPC Network Router | 0/TBD | Not started | - |
 | 33. Admin UI Network View | 0/TBD | Not started | - |
 
 ---
 *Roadmap created: 2026-02-10*
-*Last updated: 2026-02-10 -- Phase 31 planned (2 plans)*
+*Last updated: 2026-02-10 -- Phase 31 complete*
