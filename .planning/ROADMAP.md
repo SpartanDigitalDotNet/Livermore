@@ -12,7 +12,7 @@ v6.0 transforms Livermore from isolated API instances with no mutual awareness i
 
 Decimal phases appear between their surrounding integers in numeric order.
 
-- [ ] **Phase 30: Instance Registry and State Machine** - Exchange-scoped registration with typed state machine, TTL heartbeat, and one-instance-per-exchange enforcement
+- [x] **Phase 30: Instance Registry and State Machine** - Exchange-scoped registration with typed state machine, TTL heartbeat, and one-instance-per-exchange enforcement
 - [ ] **Phase 31: Network Activity Logging** - Redis Streams event log for state transitions and errors with 90-day retention
 - [ ] **Phase 32: tRPC Network Router** - API endpoints for reading instance status and activity logs
 - [ ] **Phase 33: Admin UI Network View** - Visual network dashboard with instance cards, status badges, activity feed, and differentiators
@@ -32,9 +32,9 @@ Decimal phases appear between their surrounding integers in numeric order.
 **Plans**: 3 plans
 
 Plans:
-- [ ] 30-01-PLAN.md -- Foundation: Zod schemas, key builders, IP detection utility
-- [ ] 30-02-PLAN.md -- Core services: StateMachineService and InstanceRegistryService
-- [ ] 30-03-PLAN.md -- Integration: Wire into server.ts, control-channel, cleanup adapter-factory
+- [x] 30-01-PLAN.md -- Foundation: Zod schemas, key builders, IP detection utility
+- [x] 30-02-PLAN.md -- Core services: StateMachineService and InstanceRegistryService
+- [x] 30-03-PLAN.md -- Integration: Wire into server.ts, control-channel, cleanup adapter-factory
 
 ### Phase 31: Network Activity Logging
 **Goal**: Every state transition and error across all instances is durably recorded in Redis Streams with automatic retention management
@@ -86,11 +86,11 @@ Phases execute in numeric order: 30 -> 31 -> 32 -> 33
 
 | Phase | Plans Complete | Status | Completed |
 |-------|---------------|--------|-----------|
-| 30. Instance Registry and State Machine | 0/3 | Planned | - |
+| 30. Instance Registry and State Machine | 3/3 | Complete | 2026-02-10 |
 | 31. Network Activity Logging | 0/TBD | Not started | - |
 | 32. tRPC Network Router | 0/TBD | Not started | - |
 | 33. Admin UI Network View | 0/TBD | Not started | - |
 
 ---
 *Roadmap created: 2026-02-10*
-*Last updated: 2026-02-10*
+*Last updated: 2026-02-10 -- Phase 30 complete*

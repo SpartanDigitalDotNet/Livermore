@@ -9,26 +9,26 @@ Requirements for v6.0 release. Each maps to roadmap phases.
 
 ### Instance Registration
 
-- [ ] **REG-01**: Exchange-scoped status key `exchange:{exchange_id}:status` replaces prototype `exchange:status`
-- [ ] **REG-02**: Full identity payload: exchangeId, exchangeName, connectionState, connectedAt, lastHeartbeat, symbolCount, adminEmail, adminDisplayName, ipAddress, hostname, lastError
-- [ ] **REG-03**: Connection state machine with 6 states: `idle → starting → warming → active → stopping → stopped`
-- [ ] **REG-04**: State transitions maintained at each lifecycle phase (server start, start command, warmup, websocket connected, stop command, shutdown)
-- [ ] **REG-05**: Public IP detection via external service (ipify.org) at startup with timeout and fallback
-- [ ] **REG-06**: Hostname detection via `os.hostname()` stored in status payload
+- [x] **REG-01**: Exchange-scoped status key `exchange:{exchange_id}:status` replaces prototype `exchange:status`
+- [x] **REG-02**: Full identity payload: exchangeId, exchangeName, connectionState, connectedAt, lastHeartbeat, symbolCount, adminEmail, adminDisplayName, ipAddress, hostname, lastError
+- [x] **REG-03**: Connection state machine with 6 states: `idle → starting → warming → active → stopping → stopped`
+- [x] **REG-04**: State transitions maintained at each lifecycle phase (server start, start command, warmup, websocket connected, stop command, shutdown)
+- [x] **REG-05**: Public IP detection via external service (ipify.org) at startup with timeout and fallback
+- [x] **REG-06**: Hostname detection via `os.hostname()` stored in status payload
 
 ### Heartbeat and Health
 
-- [ ] **HB-01**: Heartbeat refreshes status key TTL periodically using `SET ... EX`
-- [ ] **HB-02**: Configurable heartbeat interval (default 15s) with TTL at 3x interval (default 45s)
-- [ ] **HB-03**: Each heartbeat updates `lastHeartbeat` ISO timestamp in status payload
-- [ ] **HB-04**: Graceful shutdown transitions to `stopping` state, logs shutdown event, lets key expire or deletes immediately
+- [x] **HB-01**: Heartbeat refreshes status key TTL periodically using `SET ... EX`
+- [x] **HB-02**: Configurable heartbeat interval (default 15s) with TTL at 3x interval (default 45s)
+- [x] **HB-03**: Each heartbeat updates `lastHeartbeat` ISO timestamp in status payload
+- [x] **HB-04**: Graceful shutdown transitions to `stopping` state, logs shutdown event, lets key expire or deletes immediately
 
 ### One-Instance-Per-Exchange
 
-- [ ] **LOCK-01**: Before registering, check if `exchange:{exchange_id}:status` key exists with valid TTL
-- [ ] **LOCK-02**: Atomic registration via `SET NX EX` (set-if-not-exists with TTL) to prevent race conditions
-- [ ] **LOCK-03**: Stale lock detection — expired key (TTL gone) means exchange is available
-- [ ] **LOCK-04**: Conflict error message includes hostname, IP, and connectedAt of the instance holding the lock
+- [x] **LOCK-01**: Before registering, check if `exchange:{exchange_id}:status` key exists with valid TTL
+- [x] **LOCK-02**: Atomic registration via `SET NX EX` (set-if-not-exists with TTL) to prevent race conditions
+- [x] **LOCK-03**: Stale lock detection — expired key (TTL gone) means exchange is available
+- [x] **LOCK-04**: Conflict error message includes hostname, IP, and connectedAt of the instance holding the lock
 
 ### Network Activity Log
 
@@ -55,9 +55,9 @@ Requirements for v6.0 release. Each maps to roadmap phases.
 
 ### Bug Fixes
 
-- [ ] **FIX-01**: Fix heartbeat not updating — periodic timer refreshes lastHeartbeat timestamp and key TTL
-- [ ] **FIX-02**: Fix error not populating — handle null status in error path, persist lastError to status key
-- [ ] **FIX-03**: Fix connectionState stuck on idle — TTL on status key ensures dead instances don't show as idle forever
+- [x] **FIX-01**: Fix heartbeat not updating — periodic timer refreshes lastHeartbeat timestamp and key TTL
+- [x] **FIX-02**: Fix error not populating — handle null status in error path, persist lastError to status key
+- [x] **FIX-03**: Fix connectionState stuck on idle — TTL on status key ensures dead instances don't show as idle forever
 
 ### Differentiators
 
@@ -101,20 +101,20 @@ Requirements for v6.0 release. Each maps to roadmap phases.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| REG-01 | Phase 30 | Pending |
-| REG-02 | Phase 30 | Pending |
-| REG-03 | Phase 30 | Pending |
-| REG-04 | Phase 30 | Pending |
-| REG-05 | Phase 30 | Pending |
-| REG-06 | Phase 30 | Pending |
-| HB-01 | Phase 30 | Pending |
-| HB-02 | Phase 30 | Pending |
-| HB-03 | Phase 30 | Pending |
-| HB-04 | Phase 30 | Pending |
-| LOCK-01 | Phase 30 | Pending |
-| LOCK-02 | Phase 30 | Pending |
-| LOCK-03 | Phase 30 | Pending |
-| LOCK-04 | Phase 30 | Pending |
+| REG-01 | Phase 30 | Done |
+| REG-02 | Phase 30 | Done |
+| REG-03 | Phase 30 | Done |
+| REG-04 | Phase 30 | Done |
+| REG-05 | Phase 30 | Done |
+| REG-06 | Phase 30 | Done |
+| HB-01 | Phase 30 | Done |
+| HB-02 | Phase 30 | Done |
+| HB-03 | Phase 30 | Done |
+| HB-04 | Phase 30 | Done |
+| LOCK-01 | Phase 30 | Done |
+| LOCK-02 | Phase 30 | Done |
+| LOCK-03 | Phase 30 | Done |
+| LOCK-04 | Phase 30 | Done |
 | LOG-01 | Phase 31 | Pending |
 | LOG-02 | Phase 31 | Pending |
 | LOG-03 | Phase 31 | Pending |
@@ -129,9 +129,9 @@ Requirements for v6.0 release. Each maps to roadmap phases.
 | RPC-01 | Phase 32 | Pending |
 | RPC-02 | Phase 32 | Pending |
 | RPC-03 | Phase 32 | Pending |
-| FIX-01 | Phase 30 | Pending |
-| FIX-02 | Phase 30 | Pending |
-| FIX-03 | Phase 30 | Pending |
+| FIX-01 | Phase 30 | Done |
+| FIX-02 | Phase 30 | Done |
+| FIX-03 | Phase 30 | Done |
 | DIFF-01 | Phase 33 | Pending |
 | DIFF-02 | Phase 33 | Pending |
 | DIFF-04 | Phase 33 | Pending |
@@ -143,4 +143,4 @@ Requirements for v6.0 release. Each maps to roadmap phases.
 
 ---
 *Requirements defined: 2026-02-10*
-*Last updated: 2026-02-10 -- phase traceability mapped*
+*Last updated: 2026-02-10 -- Phase 30 requirements complete (17/34 done)*
