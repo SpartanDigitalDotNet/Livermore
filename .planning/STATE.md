@@ -11,15 +11,15 @@ See: .planning/PROJECT.md (updated 2026-02-08)
 
 **Milestone:** v6.0 Perseus Network
 **Phase:** 30 of 33 (Instance Registry and State Machine)
-**Plan:** Not yet planned
-**Status:** Ready to plan
+**Plan:** 1 of 3 complete
+**Status:** In progress
 
 ```
-Progress: [..........] 0%
-Phase 30 [ ]  Phase 31 [ ]  Phase 32 [ ]  Phase 33 [ ]
+Progress: [###.......] 8%
+Phase 30 [=..]  Phase 31 [ ]  Phase 32 [ ]  Phase 33 [ ]
 ```
 
-**Last activity:** 2026-02-10 -- Roadmap created for v6.0
+**Last activity:** 2026-02-10 -- Completed 30-01-PLAN.md (Foundation Types and Utilities)
 
 ## Milestones
 
@@ -37,15 +37,15 @@ See `.planning/MILESTONES.md` for full history.
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 0
-- Average duration: -
-- Total execution time: -
+- Total plans completed: 1
+- Average duration: 3m 44s
+- Total execution time: 3m 44s
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| - | - | - | - |
+| 30 | 1 | 3m 44s | 3m 44s |
 
 ## Tech Debt (Carried Forward)
 
@@ -78,7 +78,9 @@ See `.planning/MILESTONES.md` for full history.
 Decisions are logged in PROJECT.md Key Decisions table.
 Recent decisions affecting current work:
 
-- None yet for v6.0
+- 30-01-D1: adminEmail/adminDisplayName nullable in InstanceStatus (user identity unavailable at registration)
+- 30-01-D2: Key pattern `exchange:{id}:status` (consistent with existing exchange-scoped keys)
+- 30-01-D3: Separate HEARTBEAT_TTL_SECONDS constant (Redis EX takes seconds, not ms)
 
 ### Pending Todos
 
@@ -93,15 +95,16 @@ None yet.
 ### Last Session
 
 **Date:** 2026-02-10
-**Activity:** Created v6.0 roadmap (4 phases, 34 requirements mapped)
-**Stopped At:** Ready for `/gsd:plan-phase 30`
+**Activity:** Executed 30-01-PLAN.md (Foundation Types and Utilities, 2 tasks)
+**Stopped At:** Completed 30-01-PLAN.md
 
 ### Resume Context
 
-**v6.0 ROADMAP CREATED**
+**30-01 COMPLETE**
 
-Next: Run `/gsd:plan-phase 30` to plan Instance Registry and State Machine
+Foundation artifacts created: ConnectionState enum, InstanceStatus schema, instanceStatusKey, detectPublicIp.
+Next: Execute 30-02-PLAN.md (InstanceRegistryService) or plan it if not yet planned.
 
 ---
 *State initialized: 2026-01-18*
-*Last updated: 2026-02-10 -- v6.0 roadmap created*
+*Last updated: 2026-02-10 -- Completed 30-01-PLAN.md*
