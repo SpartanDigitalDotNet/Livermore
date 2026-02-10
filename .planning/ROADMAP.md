@@ -45,10 +45,11 @@ Plans:
   2. When an error occurs, an error event is logged to the same stream with timestamp, event type, error message, exchangeId, exchangeName, hostname, ip, and current state
   3. Heartbeat refreshes do NOT produce stream entries -- only state transitions and errors appear in the log
   4. Stream entries older than 90 days are automatically trimmed via inline MAXLEN or MINID on every XADD, preventing unbounded memory growth
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 31-01: TBD
+- [ ] 31-01-PLAN.md -- Foundation: Zod schemas for log entries, key builder, NetworkActivityLogger service
+- [ ] 31-02-PLAN.md -- Integration: Wire logger into StateMachineService, error paths, server.ts lifecycle
 
 ### Phase 32: tRPC Network Router
 **Goal**: The Admin UI has a reliable API surface to read instance status and activity logs without SCAN/KEYS commands
@@ -87,10 +88,10 @@ Phases execute in numeric order: 30 -> 31 -> 32 -> 33
 | Phase | Plans Complete | Status | Completed |
 |-------|---------------|--------|-----------|
 | 30. Instance Registry and State Machine | 3/3 | Complete | 2026-02-10 |
-| 31. Network Activity Logging | 0/TBD | Not started | - |
+| 31. Network Activity Logging | 0/2 | Not started | - |
 | 32. tRPC Network Router | 0/TBD | Not started | - |
 | 33. Admin UI Network View | 0/TBD | Not started | - |
 
 ---
 *Roadmap created: 2026-02-10*
-*Last updated: 2026-02-10 -- Phase 30 complete*
+*Last updated: 2026-02-10 -- Phase 31 planned (2 plans)*
