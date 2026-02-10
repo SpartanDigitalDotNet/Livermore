@@ -4,8 +4,8 @@ import { router, protectedProcedure } from '@livermore/trpc-config';
 import { getDbClient, exchangeSymbols, exchanges, userExchanges, users } from '@livermore/database';
 import { eq, and, asc, sql } from 'drizzle-orm';
 import { hasEnvVar } from '@livermore/utils';
-import { getRedisClient } from '@livermore/cache';
-import { connectionStatusKey, type ExchangeConnectionStatus } from '../services/exchange/adapter-factory';
+import { getRedisClient, instanceStatusKey } from '@livermore/cache';
+import type { InstanceStatus } from '@livermore/schemas';
 
 /**
  * Exchange Symbol Router
@@ -232,18 +232,18 @@ export const exchangeSymbolRouter = router({
         .where(eq(exchanges.isActive, true))
         .orderBy(asc(exchanges.id));
 
-      let statusMap = new Map<number, ExchangeConnectionStatus>();
+      let statusMap = new Map<number, InstanceStatus>();
       try {
         const redis = getRedisClient();
         const results = await Promise.all(
           exchangeList.map(async (ex) => {
-            const data = await redis.get(connectionStatusKey(ex.id));
+            const data = await redis.get(instanceStatusKey(ex.id));
             return { id: ex.id, data };
           })
         );
         for (const r of results) {
           if (r.data) {
-            statusMap.set(r.id, JSON.parse(r.data) as ExchangeConnectionStatus);
+            statusMap.set(r.id, JSON.parse(r.data) as InstanceStatus);
           }
         }
       } catch {

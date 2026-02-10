@@ -11,7 +11,7 @@
 /**
  * Connection state for exchange adapters (Phase 26 CTL-04)
  */
-export type ConnectionState = 'idle' | 'connecting' | 'connected' | 'disconnected' | 'error';
+export type ConnectionState = 'idle' | 'connecting' | 'connected' | 'disconnected' | 'error' | 'starting' | 'warming' | 'active' | 'stopping' | 'stopped';
 
 /**
  * Startup phases for progress tracking

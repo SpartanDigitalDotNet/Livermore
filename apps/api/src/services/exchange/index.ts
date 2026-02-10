@@ -1,6 +1,7 @@
 /**
  * Exchange services
- * Phase 28: Adapter factory and connection tracking
+ * Phase 28: Adapter factory
+ * Phase 30: Connection tracking moved to InstanceRegistryService
  */
-export { ExchangeAdapterFactory, connectionStatusKey } from './adapter-factory';
-export type { ExchangeConnectionStatus, AdapterFactoryConfig } from './adapter-factory';
+export { ExchangeAdapterFactory } from './adapter-factory';
+export type { AdapterFactoryConfig } from './adapter-factory';

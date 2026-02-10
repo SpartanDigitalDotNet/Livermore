@@ -6,27 +6,6 @@ import { logger } from '@livermore/utils';
 import type { IExchangeAdapter } from '@livermore/schemas';
 
 /**
- * Connection status stored in Redis for each exchange
- * Phase 28 EXC-04: Connection status tracking
- */
-export interface ExchangeConnectionStatus {
-  exchangeId: number;
-  exchangeName: string;
-  connectionState: 'idle' | 'connecting' | 'connected' | 'disconnected' | 'error';
-  connectedAt: string | null;
-  lastHeartbeat: string | null;
-  error: string | null;
-}
-
-/**
- * Redis key for exchange connection status
- * @example connectionStatusKey(1) // 'exchange:status:1'
- */
-export function connectionStatusKey(exchangeId: number): string {
-  return `exchange:status:${exchangeId}`;
-}
-
-/**
  * Exchange adapter configuration from database lookup
  */
 interface ExchangeConfig {
@@ -113,16 +92,6 @@ export class ExchangeAdapterFactory {
       supportedTimeframes: exchange.supportedTimeframes as string[],
     };
 
-    // Initialize connection status as idle
-    await this.setConnectionStatus(exchangeId, {
-      exchangeId,
-      exchangeName: exchange.name,
-      connectionState: 'idle',
-      connectedAt: null,
-      lastHeartbeat: null,
-      error: null,
-    });
-
     return this.createAdapterByType(exchangeConfig);
   }
 
@@ -159,9 +128,6 @@ export class ExchangeAdapterFactory {
 
     const adapter = new CoinbaseAdapter(config);
 
-    // Wire up connection status tracking
-    this.setupConnectionTracking(adapter, exchange.id, exchange.name);
-
     logger.info(
       { exchangeId: exchange.id, exchangeName: exchange.name },
       'Created Coinbase adapter via factory'
@@ -170,91 +136,4 @@ export class ExchangeAdapterFactory {
     return adapter;
   }
 
-  /**
-   * Set up event listeners to track connection status
-   * Phase 28 EXC-04: Connection status tracking
-   */
-  private setupConnectionTracking(
-    adapter: IExchangeAdapter,
-    exchangeId: number,
-    exchangeName: string
-  ): void {
-    adapter.on('connected', async () => {
-      await this.setConnectionStatus(exchangeId, {
-        exchangeId,
-        exchangeName,
-        connectionState: 'connected',
-        connectedAt: new Date().toISOString(),
-        lastHeartbeat: new Date().toISOString(),
-        error: null,
-      });
-    });
-
-    adapter.on('disconnected', async (reason: string) => {
-      await this.setConnectionStatus(exchangeId, {
-        exchangeId,
-        exchangeName,
-        connectionState: 'disconnected',
-        connectedAt: null,
-        lastHeartbeat: null,
-        error: reason || null,
-      });
-    });
-
-    adapter.on('error', async (error: Error) => {
-      const status = await this.getConnectionStatus(exchangeId);
-      await this.setConnectionStatus(exchangeId, {
-        exchangeId,
-        exchangeName,
-        connectionState: 'error',
-        connectedAt: status?.connectedAt ?? null,
-        lastHeartbeat: status?.lastHeartbeat ?? null,
-        error: error.message,
-      });
-    });
-
-    adapter.on('reconnecting', async () => {
-      await this.setConnectionStatus(exchangeId, {
-        exchangeId,
-        exchangeName,
-        connectionState: 'connecting',
-        connectedAt: null,
-        lastHeartbeat: null,
-        error: null,
-      });
-    });
-  }
-
-  /**
-   * Update heartbeat timestamp (call from adapter on ping/pong)
-   */
-  async updateHeartbeat(exchangeId: number): Promise<void> {
-    const status = await this.getConnectionStatus(exchangeId);
-    if (status) {
-      status.lastHeartbeat = new Date().toISOString();
-      await this.setConnectionStatus(exchangeId, status);
-    }
-  }
-
-  /**
-   * Get current connection status for an exchange
-   */
-  async getConnectionStatus(exchangeId: number): Promise<ExchangeConnectionStatus | null> {
-    const key = connectionStatusKey(exchangeId);
-    const data = await this.redis.get(key);
-    if (!data) return null;
-    return JSON.parse(data) as ExchangeConnectionStatus;
-  }
-
-  /**
-   * Set connection status in Redis
-   */
-  private async setConnectionStatus(
-    exchangeId: number,
-    status: ExchangeConnectionStatus
-  ): Promise<void> {
-    const key = connectionStatusKey(exchangeId);
-    await this.redis.set(key, JSON.stringify(status));
-    logger.debug({ exchangeId, state: status.connectionState }, 'Updated exchange connection status');
-  }
 }

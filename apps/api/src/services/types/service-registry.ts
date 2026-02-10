@@ -6,6 +6,8 @@ import type { IndicatorCalculationService } from '../indicator-calculation.servi
 import type { AlertEvaluationService } from '../alert-evaluation.service';
 import type { ExchangeAdapterFactory } from '../exchange/adapter-factory';
 import type { SymbolSourceService, ClassifiedSymbol } from '../symbol-source.service';
+import type { InstanceRegistryService } from '../instance-registry.service';
+import type { StateMachineService } from '../state-machine.service';
 
 /**
  * Runtime configuration for services that need API credentials
@@ -76,4 +78,10 @@ export interface ServiceRegistry {
 
   /** Phase 29: Classified symbols with tier info */
   classifiedSymbols?: ClassifiedSymbol[];
+
+  /** Phase 30: Instance registry for Redis-backed status and heartbeat */
+  instanceRegistry: InstanceRegistryService;
+
+  /** Phase 30: State machine for validated connection state transitions */
+  stateMachine: StateMachineService;
 }
