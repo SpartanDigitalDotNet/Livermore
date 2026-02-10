@@ -59,10 +59,10 @@ Plans:
   1. Calling `network.getInstances` returns status for all known exchanges (sourced from the `exchanges` database table, not Redis SCAN/KEYS), including instances that are offline (key missing)
   2. Calling `network.getActivityLog` returns recent state transitions and errors from Redis Streams in reverse chronological order with pagination support (COUNT parameter)
   3. Calling `network.getExchangeStatus` returns the full status payload for a single exchange by ID, or a clear "offline" indicator if the key has expired
-**Plans**: TBD
+**Plans**: 1 plan
 
 Plans:
-- [ ] 32-01: TBD
+- [ ] 32-01-PLAN.md -- Network router: getInstances, getActivityLog, getExchangeStatus procedures + registration
 
 ### Phase 33: Admin UI Network View
 **Goal**: Admins can see every instance in the Perseus Network at a glance -- who is running what, where, whether it is healthy, and what happened recently
@@ -89,9 +89,9 @@ Phases execute in numeric order: 30 -> 31 -> 32 -> 33
 |-------|---------------|--------|-----------|
 | 30. Instance Registry and State Machine | 3/3 | Complete | 2026-02-10 |
 | 31. Network Activity Logging | 2/2 | Complete | 2026-02-10 |
-| 32. tRPC Network Router | 0/TBD | Not started | - |
+| 32. tRPC Network Router | 0/1 | Not started | - |
 | 33. Admin UI Network View | 0/TBD | Not started | - |
 
 ---
 *Roadmap created: 2026-02-10*
-*Last updated: 2026-02-10 -- Phase 31 complete*
+*Last updated: 2026-02-10 -- Phase 32 planned*
