@@ -101,46 +101,46 @@ Requirements for v6.0 release. Each maps to roadmap phases.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| REG-01 | TBD | Pending |
-| REG-02 | TBD | Pending |
-| REG-03 | TBD | Pending |
-| REG-04 | TBD | Pending |
-| REG-05 | TBD | Pending |
-| REG-06 | TBD | Pending |
-| HB-01 | TBD | Pending |
-| HB-02 | TBD | Pending |
-| HB-03 | TBD | Pending |
-| HB-04 | TBD | Pending |
-| LOCK-01 | TBD | Pending |
-| LOCK-02 | TBD | Pending |
-| LOCK-03 | TBD | Pending |
-| LOCK-04 | TBD | Pending |
-| LOG-01 | TBD | Pending |
-| LOG-02 | TBD | Pending |
-| LOG-03 | TBD | Pending |
-| LOG-04 | TBD | Pending |
-| LOG-05 | TBD | Pending |
-| LOG-06 | TBD | Pending |
-| UI-01 | TBD | Pending |
-| UI-02 | TBD | Pending |
-| UI-03 | TBD | Pending |
-| UI-04 | TBD | Pending |
-| UI-05 | TBD | Pending |
-| RPC-01 | TBD | Pending |
-| RPC-02 | TBD | Pending |
-| RPC-03 | TBD | Pending |
-| FIX-01 | TBD | Pending |
-| FIX-02 | TBD | Pending |
-| FIX-03 | TBD | Pending |
-| DIFF-01 | TBD | Pending |
-| DIFF-02 | TBD | Pending |
-| DIFF-04 | TBD | Pending |
+| REG-01 | Phase 30 | Pending |
+| REG-02 | Phase 30 | Pending |
+| REG-03 | Phase 30 | Pending |
+| REG-04 | Phase 30 | Pending |
+| REG-05 | Phase 30 | Pending |
+| REG-06 | Phase 30 | Pending |
+| HB-01 | Phase 30 | Pending |
+| HB-02 | Phase 30 | Pending |
+| HB-03 | Phase 30 | Pending |
+| HB-04 | Phase 30 | Pending |
+| LOCK-01 | Phase 30 | Pending |
+| LOCK-02 | Phase 30 | Pending |
+| LOCK-03 | Phase 30 | Pending |
+| LOCK-04 | Phase 30 | Pending |
+| LOG-01 | Phase 31 | Pending |
+| LOG-02 | Phase 31 | Pending |
+| LOG-03 | Phase 31 | Pending |
+| LOG-04 | Phase 31 | Pending |
+| LOG-05 | Phase 31 | Pending |
+| LOG-06 | Phase 31 | Pending |
+| UI-01 | Phase 33 | Pending |
+| UI-02 | Phase 33 | Pending |
+| UI-03 | Phase 33 | Pending |
+| UI-04 | Phase 33 | Pending |
+| UI-05 | Phase 33 | Pending |
+| RPC-01 | Phase 32 | Pending |
+| RPC-02 | Phase 32 | Pending |
+| RPC-03 | Phase 32 | Pending |
+| FIX-01 | Phase 30 | Pending |
+| FIX-02 | Phase 30 | Pending |
+| FIX-03 | Phase 30 | Pending |
+| DIFF-01 | Phase 33 | Pending |
+| DIFF-02 | Phase 33 | Pending |
+| DIFF-04 | Phase 33 | Pending |
 
 **Coverage:**
 - v1 requirements: 34 total
-- Mapped to phases: 0
-- Unmapped: 34 ⚠️
+- Mapped to phases: 34
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-02-10*
-*Last updated: 2026-02-10 after initial definition*
+*Last updated: 2026-02-10 -- phase traceability mapped*

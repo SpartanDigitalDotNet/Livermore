@@ -5,20 +5,21 @@
 See: .planning/PROJECT.md (updated 2026-02-08)
 
 **Core value:** Data accuracy and timely alerts
-**Current focus:** Planning next milestone
+**Current focus:** v6.0 Perseus Network -- Instance Registration and Health
 
 ## Current Position
 
-**Milestone:** v5.0 Distributed Exchange Architecture — SHIPPED
-**Phase:** All complete
-**Status:** Ready for next milestone
+**Milestone:** v6.0 Perseus Network
+**Phase:** 30 of 33 (Instance Registry and State Machine)
+**Plan:** Not yet planned
+**Status:** Ready to plan
 
 ```
-Progress: [##########] 100%
-v1.0 [X]  v2.0 [X]  v3.0 [X]  v4.0 [X]  v5.0 [X]
+Progress: [..........] 0%
+Phase 30 [ ]  Phase 31 [ ]  Phase 32 [ ]  Phase 33 [ ]
 ```
 
-**Last activity:** 2026-02-08 - v5.0 milestone archived
+**Last activity:** 2026-02-10 -- Roadmap created for v6.0
 
 ## Milestones
 
@@ -29,8 +30,22 @@ v1.0 [X]  v2.0 [X]  v3.0 [X]  v4.0 [X]  v5.0 [X]
 | v3.0 | Admin UI + IAM Foundation | Archived | 2026-01-30 |
 | v4.0 | User Settings + Runtime Control | Archived | 2026-02-06 |
 | v5.0 | Distributed Exchange Architecture | Archived | 2026-02-08 |
+| v6.0 | Perseus Network | In Progress | - |
 
 See `.planning/MILESTONES.md` for full history.
+
+## Performance Metrics
+
+**Velocity:**
+- Total plans completed: 0
+- Average duration: -
+- Total execution time: -
+
+**By Phase:**
+
+| Phase | Plans | Total | Avg/Plan |
+|-------|-------|-------|----------|
+| - | - | - | - |
 
 ## Tech Debt (Carried Forward)
 
@@ -56,22 +71,37 @@ See `.planning/MILESTONES.md` for full history.
 | **Zero 429 errors** | Core reliability requirement |
 | **Atlas-only migrations** | Drizzle migrations BANNED - schema.sql is source of truth |
 | **SSL required** | Azure PostgreSQL requires SSL - hardcode, don't use env vars |
-| **No silent defaults** | If exchange unknown, surface error — never default to Coinbase |
+| **No silent defaults** | If exchange unknown, surface error -- never default to Coinbase |
+
+### Decisions
+
+Decisions are logged in PROJECT.md Key Decisions table.
+Recent decisions affecting current work:
+
+- None yet for v6.0
+
+### Pending Todos
+
+None yet.
+
+### Blockers/Concerns
+
+None yet.
 
 ## Session Continuity
 
 ### Last Session
 
-**Date:** 2026-02-08
-**Activity:** Completed v5.0 milestone archival
-**Stopped At:** Ready for `/gsd:new-milestone`
+**Date:** 2026-02-10
+**Activity:** Created v6.0 roadmap (4 phases, 34 requirements mapped)
+**Stopped At:** Ready for `/gsd:plan-phase 30`
 
 ### Resume Context
 
-**v5.0 SHIPPED AND ARCHIVED**
+**v6.0 ROADMAP CREATED**
 
-Next: Run `/gsd:new-milestone` to plan v5.1
+Next: Run `/gsd:plan-phase 30` to plan Instance Registry and State Machine
 
 ---
 *State initialized: 2026-01-18*
-*Last updated: 2026-02-08 - v5.0 milestone archived*
+*Last updated: 2026-02-10 -- v6.0 roadmap created*
