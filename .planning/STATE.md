@@ -10,16 +10,16 @@ See: .planning/PROJECT.md (updated 2026-02-08)
 ## Current Position
 
 **Milestone:** v6.0 Perseus Network
-**Phase:** 31 of 33 (Network Activity Logging) -- In Progress
-**Plan:** 1 of 2 complete
-**Status:** In progress
+**Phase:** 31 of 33 (Network Activity Logging) -- Complete
+**Plan:** 2 of 2 complete
+**Status:** Phase complete
 
 ```
-Progress: [#######...] 33%
-Phase 30 [===]  Phase 31 [= ]  Phase 32 [ ]  Phase 33 [ ]
+Progress: [########..] 42%
+Phase 30 [===]  Phase 31 [==]  Phase 32 [ ]  Phase 33 [ ]
 ```
 
-**Last activity:** 2026-02-10 -- Completed 31-01-PLAN.md (Activity Log Schemas and Logger Service)
+**Last activity:** 2026-02-10 -- Completed 31-02-PLAN.md (Wire Activity Logger into State Machine and Error Paths)
 
 ## Milestones
 
@@ -37,16 +37,16 @@ See `.planning/MILESTONES.md` for full history.
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 4
-- Average duration: 4m 17s
-- Total execution time: 17m 29s
+- Total plans completed: 5
+- Average duration: 4m 21s
+- Total execution time: 21m 43s
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 30 | 3 | 13m 54s | 4m 38s |
-| 31 | 1 | 3m 35s | 3m 35s |
+| 31 | 2 | 7m 49s | 3m 55s |
 
 ## Tech Debt (Carried Forward)
 
@@ -105,20 +105,28 @@ None yet.
 ### Last Session
 
 **Date:** 2026-02-10
-**Activity:** Executed 31-01-PLAN.md (Activity Log Schemas and Logger Service, 2 tasks)
-**Stopped At:** Completed 31-01-PLAN.md
+**Activity:** Executed 31-02-PLAN.md (Wire Activity Logger into State Machine and Error Paths, 2 tasks)
+**Stopped At:** Completed 31-02-PLAN.md
 
 ### Resume Context
 
-Phase 31 in progress. Plan 01 complete, Plan 02 next.
+Phase 31 complete. All network activity logging infrastructure is in place.
 
 Delivered in 31-01:
 - Activity log Zod schemas (StateTransitionEntry, ErrorEntry, NetworkActivityEntry discriminated union)
 - networkActivityStreamKey in cache/keys.ts
 - NetworkActivityLogger service with logTransition, logError, setIp, setAdminEmail
 
-Plan 31-02 will wire the logger into StateMachineService transitions and error paths.
+Delivered in 31-02:
+- activityLogger field on ServiceRegistry
+- StateMachineService accepts optional logger, calls logTransition after transitions
+- ControlChannelService creates logger in handleStart, calls logError in catch block
+- server.ts creates logger, passes to StateMachineService, adds to ServiceRegistry
+- Admin email set on logger when ControlChannelService initializes
+- IP set asynchronously via detectPublicIp in both startup paths
+
+Phase 32 is next.
 
 ---
 *State initialized: 2026-01-18*
-*Last updated: 2026-02-10 -- Completed 31-01-PLAN.md*
+*Last updated: 2026-02-10 -- Completed 31-02-PLAN.md*
