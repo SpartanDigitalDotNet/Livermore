@@ -13,6 +13,8 @@ import { createContext as baseCreateContext } from '@livermore/trpc-config';
 import { CoinbaseRestClient, StartupBackfillService, BoundaryRestService, DEFAULT_BOUNDARY_CONFIG } from '@livermore/exchange-core';
 import type { IRestClient } from '@livermore/schemas';
 import { ExchangeAdapterFactory } from './services/exchange/adapter-factory';
+import { InstanceRegistryService } from './services/instance-registry.service';
+import { StateMachineService } from './services/state-machine.service';
 import { SymbolSourceService } from './services/symbol-source.service';
 import { getAccountSymbols } from './services/account-symbols.service';
 import { IndicatorCalculationService } from './services/indicator-calculation.service';
@@ -112,6 +114,12 @@ export async function initControlChannelService(clerkUserId: string): Promise<vo
     logger.info({ clerkUserId }, 'Initializing Control Channel Service for user');
     controlChannelService = new ControlChannelService(clerkUserId, globalServiceRegistry!);
     await controlChannelService.start();
+
+    // Phase 30: Set admin info on instance registry
+    if (globalServiceRegistry?.instanceRegistry) {
+      globalServiceRegistry.instanceRegistry.setAdminInfo(clerkUserId, clerkUserId);
+    }
+
     logger.info({ clerkUserId, hasServices: true }, 'Control Channel Service started');
   })();
 
@@ -238,6 +246,29 @@ async function start() {
 
   logger.info('Pre-flight checks passed - all connections verified');
 
+  // Phase 30: Create instance registry and state machine
+  // Autostart uses Coinbase (exchangeId=1). Idle mode starts with placeholder (exchangeId=0).
+  // Idle mode's registry will be replaced in handleStart when the actual exchangeId is known.
+  let activeExchangeId: number | null = isAutostart ? 1 : null;
+  let activeExchangeName: string | null = isAutostart ? 'coinbase' : null;
+
+  const instanceRegistry = new InstanceRegistryService({
+    exchangeId: activeExchangeId ?? 0,
+    exchangeName: activeExchangeName ?? 'unknown',
+    redis,
+  });
+  const stateMachine = new StateMachineService(instanceRegistry);
+
+  // Register instance if autostart mode (atomic claim for this exchange)
+  if (isAutostart && activeExchangeId) {
+    const registered = await instanceRegistry.register();
+    if (!registered) {
+      logger.error({ exchangeId: activeExchangeId }, 'Failed to register instance -- another instance may be running');
+      process.exit(1);
+    }
+    await stateMachine.transition('starting');
+  }
+
   // Initialize Discord notification service
   const discordService = getDiscordService();
   if (discordService.isEnabled()) {
@@ -245,10 +276,6 @@ async function start() {
   } else {
     logger.warn('Discord notifications disabled (DISCORD_LIVERMORE_BOT not set)');
   }
-
-  // Autostart uses Coinbase (exchangeId=1). Idle mode resolves from DB on "start" command.
-  let activeExchangeId: number | null = isAutostart ? 1 : null;
-  let activeExchangeName: string | null = isAutostart ? 'coinbase' : null;
 
   // Symbol loading: only fetch from exchange on autostart, otherwise defer to start command
   let monitoredSymbols: string[] = [];
@@ -374,6 +401,9 @@ async function start() {
 
   // Phase 26: Only start data services if autostart is enabled
   if (isAutostart) {
+    // Phase 30: Transition to warming after backfill (starting was set before pre-flight)
+    await stateMachine.transition('warming');
+
     // Step 2: Start Indicator Calculation Service (must start before WebSocket)
     await indicatorService.start(indicatorConfigs);
     logger.info('Indicator Calculation Service started (subscribed to Redis candle:close events)');
@@ -398,6 +428,10 @@ async function start() {
 
     // Start Alert Evaluation Service
     await alertService.start(monitoredSymbols, SUPPORTED_TIMEFRAMES);
+
+    // Phase 30: Transition to active and update symbol count
+    await stateMachine.transition('active');
+    instanceRegistry.setSymbolCount(monitoredSymbols.length);
 
     // Initialize runtime state as connected
     initRuntimeState({
@@ -449,6 +483,9 @@ async function start() {
     restClient,
     // Phase 29: New services (populated during autostart, otherwise set by start command)
     adapterFactory,
+    // Phase 30: Instance registry and state machine
+    instanceRegistry,
+    stateMachine,
   };
 
   // Store service registry globally for lazy control channel initialization
@@ -485,6 +522,11 @@ async function start() {
   const shutdown = async () => {
     logger.info('Shutting down server...');
 
+    // Phase 30: Graceful shutdown -- signal stopping state, then deregister
+    try {
+      await stateMachine.transition('stopping');
+    } catch { /* may fail if already stopped or in incompatible state */ }
+
     // Stop Control Channel first (no new commands accepted)
     if (controlChannelService) {
       await controlChannelService.stop();
@@ -506,6 +548,9 @@ async function start() {
         'Server is shutting down'
       ).catch(() => {}); // Ignore errors during shutdown
     }
+
+    // Phase 30: Deregister instance (deletes Redis key, stops heartbeat)
+    await instanceRegistry.deregister();
 
     await redis.quit();
     await fastify.close();

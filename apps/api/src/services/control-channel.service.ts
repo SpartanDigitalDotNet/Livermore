@@ -10,10 +10,12 @@ import {
 import { StartupBackfillService } from '@livermore/exchange-core';
 import { createRestClient } from './exchange/rest-client-factory';
 import { SymbolSourceService } from './symbol-source.service';
+import { InstanceRegistryService } from './instance-registry.service';
+import { StateMachineService } from './state-machine.service';
 import { eq, and, sql } from 'drizzle-orm';
 import { users, userExchanges } from '@livermore/database';
 import type { ServiceRegistry } from './types/service-registry';
-import { updateRuntimeState, type ConnectionState, type StartupProgress } from './runtime-state';
+import { updateRuntimeState, type StartupProgress } from './runtime-state';
 
 const logger = createLogger({ name: 'control-channel', service: 'control' });
 
@@ -433,9 +435,6 @@ export class ControlChannelService {
 
     logger.info({ exchange: exchangeName }, 'Starting exchange connection...');
 
-    // Emit connecting state (CTL-04)
-    this.updateConnectionState('connecting');
-
     // Helper to update startup progress
     const setProgress = (progress: StartupProgress) => {
       updateRuntimeState({ startup: progress });
@@ -505,6 +504,22 @@ export class ControlChannelService {
         );
       }
 
+      // Phase 30: Create registry for this exchange and attempt atomic claim
+      const registry = new InstanceRegistryService({
+        exchangeId: this.services.exchangeId!,
+        exchangeName: exchangeName,
+        redis: this.services.redis,
+      });
+      this.services.instanceRegistry = registry;
+      this.services.stateMachine = new StateMachineService(registry);
+
+      const registered = await registry.register();
+      if (!registered) {
+        throw new Error('Failed to register instance');
+      }
+
+      await this.services.stateMachine.transition('starting');
+
       // Backfill cache with historical candles (MUST complete before indicators)
       setProgress({ phase: 'indicators', phaseLabel: 'Backfilling historical candles', percent: 10 });
       const backfillTimeframes: Timeframe[] = ['1m', '5m', '15m', '1h', '4h', '1d'];
@@ -520,6 +535,9 @@ export class ControlChannelService {
       });
       await backfillService.backfill(this.services.monitoredSymbols, backfillTimeframes);
       logger.info('Cache backfill complete');
+
+      // Phase 30: Transition to warming after backfill
+      await this.services.stateMachine.transition('warming');
 
       // Start in dependency order (upstream to downstream)
 
@@ -567,11 +585,12 @@ export class ControlChannelService {
       this.isIdle = false;
       this.isPaused = false;
 
+      // Phase 30: Transition to active and update symbol count
+      await this.services.stateMachine.transition('active');
+      this.services.instanceRegistry.setSymbolCount(this.services.monitoredSymbols.length);
+
       // Complete!
       setProgress({ phase: 'complete', phaseLabel: 'Connected', percent: 100 });
-
-      // Emit connected state (CTL-04)
-      this.updateConnectionState('connected');
 
       logger.info({ exchange: exchangeName, symbolCount: this.services.monitoredSymbols.length }, 'Exchange connection started');
 
@@ -585,9 +604,12 @@ export class ControlChannelService {
       // Clear startup progress on error
       setProgress({ phase: 'idle', phaseLabel: 'Error', percent: 0 });
 
-      // Emit error state (CTL-04)
+      // Phase 30: Record error on registry and reset state machine
       const errorMessage = error instanceof Error ? error.message : String(error);
-      this.updateConnectionState('error', errorMessage);
+      try {
+        await this.services.instanceRegistry.recordError(errorMessage);
+      } catch { /* registry may not be initialized yet */ }
+      this.services.stateMachine.resetToIdle();
 
       throw error;
     }
@@ -611,6 +633,9 @@ export class ControlChannelService {
 
     logger.info('Stopping exchange connection...');
 
+    // Phase 30: Transition to stopping before shutting down services
+    await this.services.stateMachine.transition('stopping');
+
     // Stop in dependency order (downstream to upstream)
     // 1. AlertService - consumes indicator events
     await this.services.alertService.stop();
@@ -628,11 +653,13 @@ export class ControlChannelService {
     await this.services.indicatorService.stop();
     logger.debug('IndicatorService stopped');
 
+    // Phase 30: Transition to stopped, deregister, then reset to idle
+    await this.services.stateMachine.transition('stopped');
+    await this.services.instanceRegistry.deregister();
+    this.services.stateMachine.resetToIdle();
+
     this.isIdle = true;
     this.isPaused = false;
-
-    // Emit idle state (CTL-04)
-    this.updateConnectionState('idle');
 
     logger.info('Exchange connection stopped, entered idle mode');
 
@@ -640,29 +667,6 @@ export class ControlChannelService {
       status: 'stopped',
       timestamp: Date.now(),
     };
-  }
-
-  /**
-   * Update connection state and runtime state (Phase 26 CTL-04)
-   */
-  private updateConnectionState(state: ConnectionState, errorMessage?: string): void {
-    updateRuntimeState({
-      connectionState: state,
-      connectionStateChangedAt: Date.now(),
-      connectionError: errorMessage,
-      exchangeConnected: state === 'connected', // backward compat
-      isPaused: this.isPaused,
-    });
-
-    logger.info({ connectionState: state, error: errorMessage }, 'Connection state changed');
-  }
-
-  /**
-   * Set idle state (called by server during startup)
-   */
-  setIdleState(idle: boolean): void {
-    this.isIdle = idle;
-    this.updateConnectionState(idle ? 'idle' : 'connected');
   }
 
   /**

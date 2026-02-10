@@ -46,11 +46,8 @@ export interface AdapterFactoryConfig {
  */
 export class ExchangeAdapterFactory {
   private db = getDbClient();
-  private redis: RedisClient;
 
-  constructor(private config: AdapterFactoryConfig) {
-    this.redis = config.redis;
-  }
+  constructor(private config: AdapterFactoryConfig) {}
 
   /**
    * Create an adapter for the specified exchange
