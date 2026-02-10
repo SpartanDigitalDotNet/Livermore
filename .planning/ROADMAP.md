@@ -29,11 +29,12 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. Connection state progresses through `idle -> starting -> warming -> active` during normal startup and `active -> stopping -> stopped` during shutdown, with invalid transitions rejected
   4. A second instance attempting to claim the same exchange is refused with an error message identifying who holds the lock (hostname, IP, connectedAt)
   5. The three existing bugs are resolved: heartbeat updates consistently (FIX-01), errors persist to the status key (FIX-02), and dead instances do not show as `idle` forever (FIX-03)
-**Plans**: TBD
+**Plans**: 3 plans
 
 Plans:
-- [ ] 30-01: TBD
-- [ ] 30-02: TBD
+- [ ] 30-01-PLAN.md -- Foundation: Zod schemas, key builders, IP detection utility
+- [ ] 30-02-PLAN.md -- Core services: StateMachineService and InstanceRegistryService
+- [ ] 30-03-PLAN.md -- Integration: Wire into server.ts, control-channel, cleanup adapter-factory
 
 ### Phase 31: Network Activity Logging
 **Goal**: Every state transition and error across all instances is durably recorded in Redis Streams with automatic retention management
@@ -85,7 +86,7 @@ Phases execute in numeric order: 30 -> 31 -> 32 -> 33
 
 | Phase | Plans Complete | Status | Completed |
 |-------|---------------|--------|-----------|
-| 30. Instance Registry and State Machine | 0/TBD | Not started | - |
+| 30. Instance Registry and State Machine | 0/3 | Planned | - |
 | 31. Network Activity Logging | 0/TBD | Not started | - |
 | 32. tRPC Network Router | 0/TBD | Not started | - |
 | 33. Admin UI Network View | 0/TBD | Not started | - |
