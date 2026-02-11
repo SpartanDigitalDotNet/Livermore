@@ -425,7 +425,7 @@ export class ControlChannelService {
       throw new Error('Services not initialized');
     }
 
-    const exchangeName = (payload?.exchange as string) || 'coinbase';
+    let exchangeName = (payload?.exchange as string) || 'coinbase';
 
     // Already started
     if (!this.isIdle) {
@@ -471,6 +471,9 @@ export class ControlChannelService {
         if (!userExchange?.exchangeId) {
           throw new Error('No exchange configured. Set up your exchange in Admin first.');
         }
+
+        // Use the actual exchange name from the database (not the hardcoded default)
+        exchangeName = userExchange.exchangeName;
 
         // Create exchange-specific REST client and store on registry
         const restClient = createRestClient(
