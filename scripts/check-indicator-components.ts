@@ -1,6 +1,6 @@
 import Redis from 'ioredis';
 
-const redis = new Redis(process.env.REDIS_URL || 'redis://127.0.0.1:6400');
+const redis = new Redis(process.env.LIVERMORE_REDIS_URL!);
 
 async function check() {
   const indicator = await redis.get('indicator:1:1:BTC-USD:1m:macd-v');

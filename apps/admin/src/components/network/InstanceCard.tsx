@@ -1,0 +1,175 @@
+import { Badge } from '@/components/ui/badge';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Server, Clock, User, Hash, Wifi, WifiOff } from 'lucide-react';
+
+interface InstanceCardProps {
+  instance: {
+    exchangeId: number;
+    exchangeName: string;
+    displayName: string;
+    online: boolean;
+    status: {
+      exchangeId: number;
+      exchangeName: string;
+      hostname: string;
+      ipAddress: string | null;
+      adminEmail: string | null;
+      adminDisplayName: string | null;
+      connectionState:
+        | 'idle'
+        | 'starting'
+        | 'warming'
+        | 'active'
+        | 'stopping'
+        | 'stopped';
+      symbolCount: number;
+      connectedAt: string | null;
+      lastHeartbeat: string;
+      lastStateChange: string;
+      registeredAt: string;
+      lastError: string | null;
+      lastErrorAt: string | null;
+    } | null;
+  };
+}
+
+/**
+ * Get Badge variant and label for a connection state.
+ */
+function getStateBadge(
+  online: boolean,
+  connectionState?: string
+): { variant: 'default' | 'secondary' | 'destructive' | 'outline' | 'success' | 'warning'; label: string; className?: string } {
+  if (!online) {
+    return { variant: 'destructive', label: 'Offline' };
+  }
+
+  switch (connectionState) {
+    case 'active':
+      return { variant: 'success', label: 'Active' };
+    case 'starting':
+      return { variant: 'outline', label: 'Starting', className: 'border-blue-300 text-blue-600' };
+    case 'warming':
+      return { variant: 'warning', label: 'Warming' };
+    case 'stopping':
+      return { variant: 'warning', label: 'Stopping' };
+    case 'stopped':
+      return { variant: 'secondary', label: 'Stopped' };
+    case 'idle':
+    default:
+      return { variant: 'secondary', label: 'Idle' };
+  }
+}
+
+/**
+ * Get heartbeat age info with color coding.
+ * Green: < 10s, Yellow: < 30s, Red: >= 30s
+ */
+function getHeartbeatInfo(lastHeartbeat: string): { ageSec: number; colorClass: string } {
+  const ageMs = Date.now() - new Date(lastHeartbeat).getTime();
+  const ageSec = Math.floor(ageMs / 1000);
+
+  let colorClass: string;
+  if (ageSec < 10) {
+    colorClass = 'text-green-500';
+  } else if (ageSec < 30) {
+    colorClass = 'text-yellow-500';
+  } else {
+    colorClass = 'text-red-500';
+  }
+
+  return { ageSec, colorClass };
+}
+
+/**
+ * Format uptime from connectedAt timestamp to human-readable duration.
+ */
+function formatUptime(connectedAt: string | null): string {
+  if (!connectedAt) return 'N/A';
+
+  const seconds = Math.floor((Date.now() - new Date(connectedAt).getTime()) / 1000);
+  if (seconds < 0) return 'N/A';
+
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+
+  if (hours > 0) return `${hours}h ${minutes}m`;
+  if (minutes > 0) return `${minutes}m`;
+  return '<1m';
+}
+
+/**
+ * InstanceCard Component
+ *
+ * Displays exchange instance status with connection state badge,
+ * heartbeat latency indicator, uptime, hostname, IP, admin, and symbol count.
+ */
+export function InstanceCard({ instance }: InstanceCardProps) {
+  const { online, displayName, status } = instance;
+  const badge = getStateBadge(online, status?.connectionState);
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center justify-between">
+          <span className="text-base">{displayName}</span>
+          <Badge variant={badge.variant} className={badge.className}>
+            {online ? (
+              <Wifi className="h-3 w-3 mr-1" />
+            ) : (
+              <WifiOff className="h-3 w-3 mr-1" />
+            )}
+            {badge.label}
+          </Badge>
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        {status ? (
+          <div className="grid grid-cols-2 gap-2 text-sm">
+            {/* Row 1: Hostname and IP */}
+            <div className="flex items-center gap-1.5">
+              <Server className="h-3.5 w-3.5 text-gray-400" />
+              <span className="text-gray-700 truncate">{status.hostname}</span>
+            </div>
+            <div className="text-gray-500 truncate">
+              {status.ipAddress ?? 'N/A'}
+            </div>
+
+            {/* Row 2: Admin and Symbol count */}
+            <div className="flex items-center gap-1.5">
+              <User className="h-3.5 w-3.5 text-gray-400" />
+              <span className="text-gray-700 truncate">
+                {status.adminDisplayName ?? status.adminEmail ?? 'N/A'}
+              </span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <Hash className="h-3.5 w-3.5 text-gray-400" />
+              <span className="text-gray-700">{status.symbolCount} symbols</span>
+            </div>
+
+            {/* Row 3: Heartbeat and Uptime */}
+            <div className="flex items-center gap-1.5">
+              {(() => {
+                const hb = getHeartbeatInfo(status.lastHeartbeat);
+                return (
+                  <>
+                    <Wifi className={`h-3.5 w-3.5 ${hb.colorClass}`} />
+                    <span className={hb.colorClass}>{hb.ageSec}s ago</span>
+                  </>
+                );
+              })()}
+            </div>
+            <div className="flex items-center gap-1.5">
+              <Clock className="h-3.5 w-3.5 text-gray-400" />
+              <span className="text-gray-700">
+                Running for {formatUptime(status.connectedAt)}
+              </span>
+            </div>
+          </div>
+        ) : (
+          <p className="text-gray-400 text-sm">No active connection</p>
+        )}
+      </CardContent>
+    </Card>
+  );
+}

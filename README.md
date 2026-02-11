@@ -89,7 +89,7 @@ export DB_CONNECTION_STRING="postgresql://livermore:livermore_dev_password@local
 export LIVERMORE_DATABASE_NAME="livermore"
 
 # Redis
-export REDIS_URL="redis://localhost:6379"
+export LIVERMORE_REDIS_URL="redis://localhost:6379"
 
 # Coinbase API (replace with your credentials)
 export Coinbase_ApiKeyId="your-coinbase-api-key-id"
@@ -163,7 +163,7 @@ All sensitive data must be in environment variables:
 - `DATABASE_PORT`, `DATABASE_HOST`: API server configuration
 - `DB_CONNECTION_STRING`: PostgreSQL connection string
 - `LIVERMORE_DATABASE_NAME`: Database name
-- `REDIS_URL`: Redis connection string
+- `LIVERMORE_REDIS_URL`: Redis connection string
 - `Coinbase_ApiKeyId`: Coinbase API key ID
 - `Coinbase_EcPrivateKeyPem`: Coinbase EC private key (PEM format)
 - `DISCORD_LIVERMORE_BOT`: Discord webhook URL

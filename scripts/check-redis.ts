@@ -1,8 +1,8 @@
 import Redis from 'ioredis';
 
-const redisUrl = process.env.REDIS_URL;
+const redisUrl = process.env.LIVERMORE_REDIS_URL;
 if (!redisUrl) {
-  console.error('REDIS_URL not set');
+  console.error('LIVERMORE_REDIS_URL not set');
   process.exit(1);
 }
 console.log('Connecting to:', redisUrl);

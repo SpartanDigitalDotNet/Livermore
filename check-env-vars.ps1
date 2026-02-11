@@ -25,7 +25,7 @@ $envVars = @(
     @{ Name = "DATABASE_LIVERMORE_USERNAME"; Desc = "PostgreSQL username"; Secret = $false; Required = $true },
     @{ Name = "DATABASE_LIVERMORE_PASSWORD"; Desc = "PostgreSQL password"; Secret = $true; Required = $true },
     @{ Name = "LIVERMORE_DATABASE_NAME"; Desc = "Database name (e.g., livermore)"; Secret = $false; Required = $true },
-    @{ Name = "REDIS_URL"; Desc = "Redis connection URL (rediss://:password@host:port)"; Secret = $true; Required = $true },
+    @{ Name = "LIVERMORE_REDIS_URL"; Desc = "Redis connection URL (rediss://:password@host:port)"; Secret = $true; Required = $true },
     @{ Name = "Coinbase_ApiKeyId"; Desc = "Coinbase API Key ID"; Secret = $true; Required = $true },
     @{ Name = "Coinbase_EcPrivateKeyPem"; Desc = "Coinbase EC Private Key (PEM format)"; Secret = $true; Required = $true },
     @{ Name = "DISCORD_LIVERMORE_BOT"; Desc = "Discord webhook URL for notifications"; Secret = $true; Required = $true },
@@ -133,7 +133,7 @@ else {
             "DATABASE_LIVERMORE_USERNAME" { "your_username" }
             "DATABASE_LIVERMORE_PASSWORD" { "your_password" }
             "LIVERMORE_DATABASE_NAME" { "livermore" }
-            "REDIS_URL" { "rediss://:your_password@your-redis.redis.cache.windows.net:6380" }
+            "LIVERMORE_REDIS_URL" { "rediss://:your_password@your-redis.redis.cache.windows.net:6380" }
             "Coinbase_ApiKeyId" { "your_api_key_id" }
             "Coinbase_EcPrivateKeyPem" { "-----BEGIN EC PRIVATE KEY-----\n...\n-----END EC PRIVATE KEY-----" }
             "DISCORD_LIVERMORE_BOT" { "https://discord.com/api/webhooks/..." }

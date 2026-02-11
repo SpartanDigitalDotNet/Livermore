@@ -57,7 +57,7 @@
 **Environment:**
 - Environment variables validated via Zod schema at startup
 - Config schema: `packages/schemas/src/env/config.schema.ts`
-- Required vars: DATABASE_*, REDIS_URL, Coinbase_*, DISCORD_LIVERMORE_BOT
+- Required vars: DATABASE_*, LIVERMORE_REDIS_URL, Coinbase_*, DISCORD_LIVERMORE_BOT
 
 **Build:**
 - `turbo.json` - Turborepo pipeline configuration

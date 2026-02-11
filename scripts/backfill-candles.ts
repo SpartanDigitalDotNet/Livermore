@@ -3,11 +3,11 @@
  * Run with: npx tsx scripts/backfill-candles.ts
  */
 import Redis from 'ioredis';
-import { CoinbaseRestClient } from '@livermore/coinbase-client';
+import { CoinbaseRestClient } from '@livermore/exchange-core';
 import { CandleCacheStrategy } from '@livermore/cache';
 import type { Timeframe } from '@livermore/schemas';
 
-const redis = new Redis(process.env.REDIS_URL || 'redis://127.0.0.1:6400');
+const redis = new Redis(process.env.LIVERMORE_REDIS_URL!);
 const candleCache = new CandleCacheStrategy(redis);
 
 // Get credentials from environment

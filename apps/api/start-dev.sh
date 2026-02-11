@@ -11,6 +11,7 @@ required_vars=(
   "Coinbase_ApiKeyId"
   "Coinbase_EcPrivateKeyPem"
   "DISCORD_LIVERMORE_BOT"
+  "LIVERMORE_REDIS_URL"
 )
 
 missing_vars=()
@@ -37,7 +38,7 @@ export API_HOST="${API_HOST:-0.0.0.0}"
 export API_PORT="${API_PORT:-3000}"
 export DATABASE_HOST="${DATABASE_HOST:-localhost}"
 export DATABASE_PORT="${DATABASE_PORT:-5432}"
-export REDIS_URL="${REDIS_URL:-redis://localhost:6400}"
+export LIVERMORE_REDIS_URL="${LIVERMORE_REDIS_URL}"
 
 # Start the server
 pnpm dev

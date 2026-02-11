@@ -8,19 +8,42 @@ import { clerkPlugin } from '@clerk/fastify';
 import { fastifyTRPCPlugin } from '@trpc/server/adapters/fastify';
 import { logger, validateEnv } from '@livermore/utils';
 import { getDbClient, testDatabaseConnection } from '@livermore/database';
-import { getRedisClient, testRedisConnection, deleteKeysClusterSafe } from '@livermore/cache';
-import { createContext } from '@livermore/trpc-config';
-import { CoinbaseRestClient, StartupBackfillService, BoundaryRestService, DEFAULT_BOUNDARY_CONFIG, CoinbaseAdapter } from '@livermore/coinbase-client';
+import { getRedisClient, testRedisConnection, deleteKeysClusterSafe, exchangeCandleKey, exchangeIndicatorKey } from '@livermore/cache';
+import { createContext as baseCreateContext } from '@livermore/trpc-config';
+import { CoinbaseRestClient, StartupBackfillService, BoundaryRestService, DEFAULT_BOUNDARY_CONFIG } from '@livermore/exchange-core';
+import type { IRestClient } from '@livermore/schemas';
+import { hostname } from 'node:os';
+import { ExchangeAdapterFactory } from './services/exchange/adapter-factory';
+import { InstanceRegistryService } from './services/instance-registry.service';
+import { StateMachineService } from './services/state-machine.service';
+import { NetworkActivityLogger } from './services/network-activity-logger';
+import { detectPublicIp } from './utils/detect-public-ip';
+import { SymbolSourceService } from './services/symbol-source.service';
+import { getAccountSymbols } from './services/account-symbols.service';
 import { IndicatorCalculationService } from './services/indicator-calculation.service';
 import { AlertEvaluationService } from './services/alert-evaluation.service';
 import { getDiscordService } from './services/discord-notification.service';
 import { ControlChannelService } from './services/control-channel.service';
-import { initRuntimeState } from './services/runtime-state';
+import { initRuntimeState, getRuntimeState } from './services/runtime-state';
 import { appRouter } from './routers';
 import { clerkWebhookHandler } from './routes/webhooks/clerk';
 import type { Timeframe } from '@livermore/schemas';
 import type { ServiceRegistry, RuntimeConfig } from './services/types/service-registry';
 import type { WebSocket } from 'ws';
+
+/**
+ * Wrapped createContext that lazily initializes the Control Channel Service
+ * on the first authenticated request after API restart.
+ */
+function createContext(opts: Parameters<typeof baseCreateContext>[0]) {
+  const ctx = baseCreateContext(opts);
+  if (ctx.auth.userId) {
+    initControlChannelService(ctx.auth.userId).catch((err) => {
+      logger.error({ err }, 'Failed to init control channel from request context');
+    });
+  }
+  return ctx;
+}
 
 // WebSocket clients for alert broadcasts
 const alertClients = new Set<WebSocket>();
@@ -42,6 +65,10 @@ export function broadcastAlert(alert: {
    */
   signalDelta: number | null;
   triggeredAt: string;
+  /** Phase 27 VIS-03: Source exchange ID for cross-exchange visibility */
+  sourceExchangeId?: number;
+  /** Phase 27 VIS-03: Source exchange name for display */
+  sourceExchangeName?: string;
 }): void {
   const message = JSON.stringify({ type: 'alert_trigger', data: alert });
   for (const client of alertClients) {
@@ -55,15 +82,6 @@ export function broadcastAlert(alert: {
 }
 
 // Blacklisted symbols (delisted, stablecoins, or no valid USD trading pair)
-const BLACKLISTED_SYMBOLS = [
-  // Delisted from Coinbase
-  'MOBILE', 'SYN',
-  // Stablecoins (no X-USD trading pair exists)
-  'USD', 'USDC', 'USDT', 'DAI', 'GUSD', 'BUSD', 'PYUSD', 'USDP', 'TUSD', 'FRAX', 'LUSD', 'SUSD', 'EURC',
-];
-
-// Minimum position value to include in monitoring (USD)
-const MIN_POSITION_VALUE_USD = 2;
 
 // Control channel service is initialized lazily on first authenticated request
 // The user ID comes from the Clerk authentication context, not an environment variable
@@ -99,6 +117,17 @@ export async function initControlChannelService(clerkUserId: string): Promise<vo
     logger.info({ clerkUserId }, 'Initializing Control Channel Service for user');
     controlChannelService = new ControlChannelService(clerkUserId, globalServiceRegistry!);
     await controlChannelService.start();
+
+    // Phase 30: Set admin info on instance registry
+    if (globalServiceRegistry?.instanceRegistry) {
+      globalServiceRegistry.instanceRegistry.setAdminInfo(clerkUserId, clerkUserId);
+    }
+
+    // Phase 31: Set admin email on activity logger
+    if (globalServiceRegistry?.activityLogger) {
+      globalServiceRegistry.activityLogger.setAdminEmail(clerkUserId);
+    }
+
     logger.info({ clerkUserId, hasServices: true }, 'Control Channel Service started');
   })();
 
@@ -108,75 +137,24 @@ export async function initControlChannelService(clerkUserId: string): Promise<vo
 // Supported timeframes for indicator calculation
 const SUPPORTED_TIMEFRAMES: Timeframe[] = ['1m', '5m', '15m', '1h', '4h', '1d'];
 
-interface AccountSymbolsResult {
-  /** Symbols meeting minimum value threshold */
-  monitored: string[];
-  /** Symbols excluded due to low value (for cleanup) */
-  excluded: string[];
-}
-
 /**
- * Fetch trading symbols from Coinbase account holdings
- * Returns symbols with position value >= MIN_POSITION_VALUE_USD, excluding blacklisted and fiat
+ * Parse CLI arguments for startup control (Phase 26 CTL-03)
+ * Supports: --autostart <exchange>
  */
-async function getAccountSymbols(apiKeyId: string, privateKeyPem: string): Promise<AccountSymbolsResult> {
-  const client = new CoinbaseRestClient(apiKeyId, privateKeyPem);
-  const accounts = await client.getAccounts();
+function parseCliArgs(): { autostart: string | null } {
+  const args = process.argv.slice(2);
+  let autostart: string | null = null;
 
-  // First pass: collect all non-zero crypto balances
-  const holdings: { currency: string; balance: number }[] = [];
-
-  for (const account of accounts) {
-    // Skip fiat accounts
-    if (account.type === 'ACCOUNT_TYPE_FIAT') continue;
-
-    // Skip zero balances
-    const balance = parseFloat(account.available_balance.value);
-    if (balance <= 0) continue;
-
-    // Skip blacklisted symbols
-    const currency = account.currency;
-    if (BLACKLISTED_SYMBOLS.includes(currency)) continue;
-
-    holdings.push({ currency, balance });
-  }
-
-  // Get spot prices for all currencies
-  const currencies = holdings.map((h) => h.currency);
-  const prices = await client.getSpotPrices(currencies);
-
-  // Filter by position value
-  const monitored: string[] = [];
-  const excluded: string[] = [];
-
-  for (const { currency, balance } of holdings) {
-    const price = prices.get(currency);
-    const symbol = `${currency}-USD`;
-
-    if (price === null || price === undefined) {
-      // No price available - exclude from monitoring
-      logger.debug({ currency }, 'No price available, excluding from monitoring');
-      excluded.push(symbol);
-      continue;
-    }
-
-    const positionValue = balance * price;
-
-    if (positionValue >= MIN_POSITION_VALUE_USD) {
-      monitored.push(symbol);
-      logger.debug({ symbol, balance, price, positionValue: positionValue.toFixed(2) }, 'Including in monitoring');
-    } else {
-      excluded.push(symbol);
-      logger.debug({ symbol, balance, price, positionValue: positionValue.toFixed(2) }, 'Excluding (below minimum)');
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] === '--autostart' && args[i + 1]) {
+      autostart = args[i + 1].toLowerCase();
+      break;
     }
   }
 
-  // Deduplicate (Coinbase may return multiple accounts for same currency, e.g., vault + regular)
-  const uniqueMonitored = [...new Set(monitored)];
-  const uniqueExcluded = [...new Set(excluded)];
-
-  return { monitored: uniqueMonitored, excluded: uniqueExcluded };
+  return { autostart };
 }
+
 
 /**
  * Clean up Redis cache for excluded symbols
@@ -185,23 +163,21 @@ async function getAccountSymbols(apiKeyId: string, privateKeyPem: string): Promi
 async function cleanupExcludedSymbols(
   redis: ReturnType<typeof getRedisClient>,
   excludedSymbols: string[],
-  timeframes: Timeframe[]
+  timeframes: Timeframe[],
+  exchangeId: number
 ): Promise<void> {
   if (excludedSymbols.length === 0) return;
-
-  const userId = 1; // Hardcoded for now
-  const exchangeId = 1;
 
   const keysToDelete: string[] = [];
 
   for (const symbol of excludedSymbols) {
-    // Ticker key
-    keysToDelete.push(`ticker:${userId}:${exchangeId}:${symbol}`);
+    // Ticker key (still exchange-scoped, format: ticker:{exchangeId}:{symbol})
+    keysToDelete.push(`ticker:${exchangeId}:${symbol}`);
 
-    // Candle and indicator keys for all timeframes
+    // Candle and indicator keys for all timeframes (exchange-scoped)
     for (const timeframe of timeframes) {
-      keysToDelete.push(`candles:${userId}:${exchangeId}:${symbol}:${timeframe}`);
-      keysToDelete.push(`indicator:${userId}:${exchangeId}:${symbol}:${timeframe}:macd-v`);
+      keysToDelete.push(exchangeCandleKey(exchangeId, symbol, timeframe));
+      keysToDelete.push(exchangeIndicatorKey(exchangeId, symbol, timeframe, 'macd-v'));
     }
   }
 
@@ -221,7 +197,14 @@ async function cleanupExcludedSymbols(
  * Handles Coinbase data ingestion, indicator calculation, and alerts
  */
 async function start() {
-  logger.info('Starting Livermore API server...');
+  // Parse CLI arguments (Phase 26 CTL-03)
+  const cliArgs = parseCliArgs();
+  const isAutostart = cliArgs.autostart !== null;
+
+  logger.info(
+    { autostart: isAutostart, exchange: cliArgs.autostart },
+    'Starting Livermore API server...'
+  );
 
   // Validate environment variables
   const config = validateEnv();
@@ -264,9 +247,51 @@ async function start() {
 
   // Create separate Redis subscriber connection (required for psubscribe - cannot share with main client)
   const subscriberRedis = redis.duplicate();
+  subscriberRedis.on('error', (err) => {
+    logger.error({ error: err.message }, 'Subscriber Redis connection error');
+  });
   await testRedisConnection(subscriberRedis);
 
   logger.info('Pre-flight checks passed - all connections verified');
+
+  // Phase 30: Create instance registry and state machine
+  // Autostart uses Coinbase (exchangeId=1). Idle mode starts with placeholder (exchangeId=0).
+  // Idle mode's registry will be replaced in handleStart when the actual exchangeId is known.
+  let activeExchangeId: number | null = isAutostart ? 1 : null;
+  let activeExchangeName: string | null = isAutostart ? 'coinbase' : null;
+
+  const instanceRegistry = new InstanceRegistryService({
+    exchangeId: activeExchangeId ?? 0,
+    exchangeName: activeExchangeName ?? 'unknown',
+    redis,
+  });
+
+  // Phase 31: Create activity logger for Redis Streams event recording
+  const activityLogger = new NetworkActivityLogger({
+    redis,
+    exchangeId: activeExchangeId ?? 0,
+    exchangeName: activeExchangeName ?? 'unknown',
+    hostname: hostname(),
+  });
+
+  const stateMachine = new StateMachineService(instanceRegistry, activityLogger);
+
+  // Phase 31: Update activity logger IP asynchronously
+  detectPublicIp().then((ip) => {
+    if (ip) {
+      activityLogger.setIp(ip);
+    }
+  });
+
+  // Register instance if autostart mode (atomic claim for this exchange)
+  if (isAutostart && activeExchangeId) {
+    const registered = await instanceRegistry.register();
+    if (!registered) {
+      logger.error({ exchangeId: activeExchangeId }, 'Failed to register instance -- another instance may be running');
+      process.exit(1);
+    }
+    await stateMachine.transition('starting');
+  }
 
   // Initialize Discord notification service
   const discordService = getDiscordService();
@@ -276,31 +301,43 @@ async function start() {
     logger.warn('Discord notifications disabled (DISCORD_LIVERMORE_BOT not set)');
   }
 
-  // Fetch symbols from Coinbase account holdings (filtered by position value)
-  logger.info('Fetching symbols from Coinbase account...');
-  const { monitored: monitoredSymbols, excluded: excludedSymbols } = await getAccountSymbols(
-    config.Coinbase_ApiKeyId,
-    config.Coinbase_EcPrivateKeyPem
-  );
-  logger.info(
-    { monitored: monitoredSymbols, excluded: excludedSymbols, monitoredCount: monitoredSymbols.length, excludedCount: excludedSymbols.length },
-    'Loaded symbols from account'
-  );
+  // Symbol loading: only fetch from exchange on autostart, otherwise defer to start command
+  let monitoredSymbols: string[] = [];
+  let restClient: IRestClient | null = null;
 
-  // Clean up Redis cache for excluded symbols (positions < $2)
-  await cleanupExcludedSymbols(redis, excludedSymbols, SUPPORTED_TIMEFRAMES);
+  if (isAutostart) {
+    // Autostart: fetch symbols now (we have API keys, need data before connecting)
+    const symbolSourceService = new SymbolSourceService(activeExchangeId!);
+    logger.info('Fetching symbols from Coinbase account...');
+    const { monitored: userPositionSymbols, excluded: excludedSymbols } = await getAccountSymbols(
+      config.Coinbase_ApiKeyId,
+      config.Coinbase_EcPrivateKeyPem
+    );
 
-  // Step 1: Backfill cache with historical candles (MUST complete before indicators)
-  // This ensures indicator service has 60+ candles per symbol/timeframe
-  logger.info('Starting cache backfill...');
-  const backfillTimeframes: Timeframe[] = ['1m', '5m', '15m', '1h', '4h', '1d'];
-  const backfillService = new StartupBackfillService(
-    config.Coinbase_ApiKeyId,
-    config.Coinbase_EcPrivateKeyPem,
-    redis
-  );
-  await backfillService.backfill(monitoredSymbols, backfillTimeframes);
-  logger.info('Cache backfill complete');
+    const classifiedSymbols = await symbolSourceService.classifyUserPositions(userPositionSymbols);
+    monitoredSymbols = classifiedSymbols.map(s => s.symbol);
+
+    logger.info(
+      { total: monitoredSymbols.length, excluded: excludedSymbols.length, symbols: monitoredSymbols },
+      'Loaded and classified symbols from account'
+    );
+
+    await cleanupExcludedSymbols(redis, excludedSymbols, SUPPORTED_TIMEFRAMES, activeExchangeId!);
+
+    // Backfill cache with historical candles
+    logger.info('Starting cache backfill...');
+    const backfillTimeframes: Timeframe[] = ['1m', '5m', '15m', '1h', '4h', '1d'];
+    restClient = new CoinbaseRestClient(config.Coinbase_ApiKeyId, config.Coinbase_EcPrivateKeyPem);
+    const backfillService = new StartupBackfillService(restClient, redis, {
+      userId: 1, // legacy
+      exchangeId: activeExchangeId!,
+    });
+    await backfillService.backfill(monitoredSymbols, backfillTimeframes);
+    logger.info('Cache backfill complete');
+  } else {
+    // Idle mode: no exchange calls. Symbols loaded when user sends "start" command.
+    logger.info('Idle mode - deferring symbol loading until "start" command');
+  }
 
   // Register tRPC router
   await fastify.register(fastifyTRPCPlugin, {
@@ -317,6 +354,7 @@ async function start() {
 
   // Health check endpoint
   fastify.get('/health', async () => {
+    const runtimeState = getRuntimeState();
     return {
       status: 'ok',
       timestamp: new Date().toISOString(),
@@ -325,6 +363,11 @@ async function start() {
         redis: 'connected',
         discord: discordService.isEnabled() ? 'enabled' : 'disabled',
         controlChannel: 'active',
+      },
+      // Phase 26: Connection state info
+      exchange: {
+        connectionState: runtimeState.connectionState,
+        connected: runtimeState.exchangeConnected,
       },
     };
   });
@@ -345,70 +388,96 @@ async function start() {
     });
   });
 
-  // Step 2: Start Indicator Calculation Service (must start before WebSocket)
-  // Indicators subscribe to Redis candle:close events - need to be listening before events arrive
-  const indicatorService = new IndicatorCalculationService(
-    config.Coinbase_ApiKeyId,
-    config.Coinbase_EcPrivateKeyPem
-  );
+  // Create service instances (but don't start them yet in idle mode)
+  // exchangeId defaults to 1 (Coinbase) for autostart; updated by handleStart for other exchanges
+  const indicatorService = new IndicatorCalculationService(activeExchangeId ?? 1);
 
   // Build indicator configs for all symbol/timeframe combinations
   const indicatorConfigs = monitoredSymbols.flatMap((symbol) =>
     SUPPORTED_TIMEFRAMES.map((timeframe) => ({ symbol, timeframe }))
   );
 
-  await indicatorService.start(indicatorConfigs);
-  logger.info('Indicator Calculation Service started (subscribed to Redis candle:close events)');
-
-  // Step 2.5: Warmup - force initial indicator calculations from cached candles
-  // Without this, indicators show N/A until the first real-time candle:close event
-  logger.info('Warming up indicators from cached candles...');
-  let warmupCount = 0;
-  for (const config of indicatorConfigs) {
-    await indicatorService.forceRecalculate(config.symbol, config.timeframe);
-    warmupCount++;
-  }
-  logger.info({ warmupCount }, 'Indicator warmup complete');
-
-  // Step 3: Start BoundaryRestService (event-driven higher timeframe fetching)
-  // Subscribes to 5m candle:close events and fetches higher timeframes at boundaries
+  const boundaryRestClient = restClient ?? new CoinbaseRestClient(
+    config.Coinbase_ApiKeyId, config.Coinbase_EcPrivateKeyPem
+  );
   const boundaryRestService = new BoundaryRestService(
-    config.Coinbase_ApiKeyId,
-    config.Coinbase_EcPrivateKeyPem,
+    boundaryRestClient,
+    activeExchangeName ?? 'unknown',
     redis,
     subscriberRedis,
     {
       userId: DEFAULT_BOUNDARY_CONFIG.userId,
-      exchangeId: DEFAULT_BOUNDARY_CONFIG.exchangeId,
+      exchangeId: activeExchangeId ?? DEFAULT_BOUNDARY_CONFIG.exchangeId,
       higherTimeframes: ['15m', '1h', '4h', '1d'],
     }
   );
-  await boundaryRestService.start(monitoredSymbols);
-  logger.info('BoundaryRestService started (subscribed to 5m candle:close events)');
 
-  // Step 4: Start Coinbase Adapter (native 5m candles channel, starts emitting candle:close events)
-  const coinbaseAdapter = new CoinbaseAdapter({
+  // Phase 29: Use ExchangeAdapterFactory instead of direct instantiation
+  const adapterFactory = new ExchangeAdapterFactory({
     apiKeyId: config.Coinbase_ApiKeyId,
     privateKeyPem: config.Coinbase_EcPrivateKeyPem,
     redis,
-    userId: 1,  // Matches DEFAULT_BOUNDARY_CONFIG.userId
-    exchangeId: 1,  // Matches DEFAULT_BOUNDARY_CONFIG.exchangeId
+    userId: 1,  // TODO: Get from authenticated user context
   });
-  await coinbaseAdapter.connect();
-  coinbaseAdapter.subscribe(monitoredSymbols, '5m');
-  logger.info('Coinbase Adapter started (5m candles)');
+  const coinbaseAdapter = await adapterFactory.create(activeExchangeId ?? 1);
 
-  // Start Alert Evaluation Service
-  const alertService = new AlertEvaluationService();
-  await alertService.start(monitoredSymbols, SUPPORTED_TIMEFRAMES);
+  const alertService = new AlertEvaluationService(activeExchangeId ?? 1, activeExchangeName ?? 'unknown');
 
-  // Initialize runtime state for status endpoint
-  initRuntimeState({
-    isPaused: false,
-    mode: 'position-monitor',
-    exchangeConnected: true,
-    queueDepth: 0,
-  });
+  // Phase 26: Only start data services if autostart is enabled
+  if (isAutostart) {
+    // Phase 30: Transition to warming after backfill (starting was set before pre-flight)
+    await stateMachine.transition('warming');
+
+    // Step 2: Start Indicator Calculation Service (must start before WebSocket)
+    await indicatorService.start(indicatorConfigs);
+    logger.info('Indicator Calculation Service started (subscribed to Redis candle:close events)');
+
+    // Step 2.5: Warmup - force initial indicator calculations from cached candles
+    logger.info('Warming up indicators from cached candles...');
+    let warmupCount = 0;
+    for (const cfg of indicatorConfigs) {
+      await indicatorService.forceRecalculate(cfg.symbol, cfg.timeframe);
+      warmupCount++;
+    }
+    logger.info({ warmupCount }, 'Indicator warmup complete');
+
+    // Step 3: Start BoundaryRestService
+    await boundaryRestService.start(monitoredSymbols);
+    logger.info('BoundaryRestService started (subscribed to 5m candle:close events)');
+
+    // Step 4: Start Coinbase Adapter
+    await coinbaseAdapter.connect();
+    coinbaseAdapter.subscribe(monitoredSymbols, '5m');
+    logger.info('Coinbase Adapter started (5m candles)');
+
+    // Start Alert Evaluation Service
+    await alertService.start(monitoredSymbols, SUPPORTED_TIMEFRAMES);
+
+    // Phase 30: Transition to active and update symbol count
+    await stateMachine.transition('active');
+    instanceRegistry.setSymbolCount(monitoredSymbols.length);
+
+    // Initialize runtime state as connected
+    initRuntimeState({
+      isPaused: false,
+      mode: 'position-monitor',
+      exchangeConnected: true,
+      connectionState: 'connected',
+      connectionStateChangedAt: Date.now(),
+      queueDepth: 0,
+    });
+  } else {
+    // Phase 26 CTL-01: Idle startup mode
+    logger.info('Server starting in IDLE mode - awaiting "start" command');
+    initRuntimeState({
+      isPaused: false,
+      mode: 'position-monitor',
+      exchangeConnected: false,
+      connectionState: 'idle',
+      connectionStateChangedAt: Date.now(),
+      queueDepth: 0,
+    });
+  }
 
   // ============================================
   // BUILD SERVICE REGISTRY AND START CONTROL CHANNEL
@@ -434,6 +503,15 @@ async function start() {
     monitoredSymbols,
     indicatorConfigs,
     timeframes: SUPPORTED_TIMEFRAMES,
+    exchangeId: activeExchangeId,
+    restClient,
+    // Phase 29: New services (populated during autostart, otherwise set by start command)
+    adapterFactory,
+    // Phase 30: Instance registry and state machine
+    instanceRegistry,
+    stateMachine,
+    // Phase 31: Network activity logger for Redis Streams
+    activityLogger,
   };
 
   // Store service registry globally for lazy control channel initialization
@@ -445,9 +523,12 @@ async function start() {
 
   // Send startup notification to Discord
   if (discordService.isEnabled()) {
+    const startupMessage = isAutostart
+      ? `Server is now online and monitoring ${monitoredSymbols.length} symbols: ${monitoredSymbols.join(', ')}`
+      : `Server started in IDLE mode (use 'start' command to connect)`;
     await discordService.sendSystemNotification(
       'Livermore Server Started',
-      `Server is now online and monitoring ${monitoredSymbols.length} symbols: ${monitoredSymbols.join(', ')}`
+      startupMessage
     );
   }
 
@@ -467,6 +548,11 @@ async function start() {
   const shutdown = async () => {
     logger.info('Shutting down server...');
 
+    // Phase 30: Graceful shutdown -- signal stopping state, then deregister
+    try {
+      await stateMachine.transition('stopping');
+    } catch { /* may fail if already stopped or in incompatible state */ }
+
     // Stop Control Channel first (no new commands accepted)
     if (controlChannelService) {
       await controlChannelService.stop();
@@ -481,6 +567,11 @@ async function start() {
     // Close subscriber Redis connection
     await subscriberRedis.quit();
 
+    // Signal stopped state
+    try {
+      await stateMachine.transition('stopped');
+    } catch { /* may fail if already stopped or in incompatible state */ }
+
     // Send shutdown notification
     if (discordService.isEnabled()) {
       await discordService.sendSystemNotification(
@@ -488,6 +579,9 @@ async function start() {
         'Server is shutting down'
       ).catch(() => {}); // Ignore errors during shutdown
     }
+
+    // Phase 30: Deregister instance (deletes Redis key, stops heartbeat)
+    await instanceRegistry.deregister();
 
     await redis.quit();
     await fastify.close();

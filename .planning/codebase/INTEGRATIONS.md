@@ -49,7 +49,7 @@
   - `alert_history` - Triggered alert log
 
 **Redis 7:**
-- Connection: `REDIS_URL` env var (e.g., `redis://127.0.0.1:6379`)
+- Connection: `LIVERMORE_REDIS_URL` env var (e.g., `redis://127.0.0.1:6379`)
 - Client: ioredis (`packages/cache/src/client.ts`)
 - Caching Strategies:
   - `CandleCacheStrategy` - OHLCV candle data
@@ -109,7 +109,7 @@
 - `DATABASE_HOST` - PostgreSQL host
 - `DATABASE_PORT` - PostgreSQL port
 - `LIVERMORE_DATABASE_NAME` - Database name
-- `REDIS_URL` - Redis connection URL
+- `LIVERMORE_REDIS_URL` - Redis connection URL
 - `Coinbase_ApiKeyId` - Coinbase Advanced Trade API key ID
 - `Coinbase_EcPrivateKeyPem` - Coinbase EC private key (PEM format)
 - `DISCORD_LIVERMORE_BOT` - Discord webhook URL

@@ -4,7 +4,7 @@
  * Run with: powershell -ExecutionPolicy Bypass -File scripts/run-test-granularity.ps1
  * Requires: Coinbase_ApiKeyId and Coinbase_EcPrivateKeyPem env vars
  */
-import { CoinbaseRestClient } from '@livermore/coinbase-client';
+import { CoinbaseRestClient } from '@livermore/exchange-core';
 
 const apiKeyId = process.env.Coinbase_ApiKeyId;
 const privateKey = process.env.Coinbase_EcPrivateKeyPem?.replace(/\\n/g, '\n');

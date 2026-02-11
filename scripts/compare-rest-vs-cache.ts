@@ -1,7 +1,7 @@
 import Redis from 'ioredis';
-import { CoinbaseRestClient } from '@livermore/coinbase-client';
+import { CoinbaseRestClient } from '@livermore/exchange-core';
 
-const redis = new Redis(process.env.REDIS_URL || 'redis://127.0.0.1:6400');
+const redis = new Redis(process.env.LIVERMORE_REDIS_URL!);
 
 const apiKeyId = process.env.Coinbase_ApiKeyId!;
 const privateKeyPem = process.env.Coinbase_EcPrivateKeyPem!;

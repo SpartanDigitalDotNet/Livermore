@@ -4,7 +4,7 @@
  * Pure functions for aggregating and analyzing Coinbase order fee data.
  * Used by analyze-fees.ts to generate fee reports.
  */
-import type { CoinbaseOrder } from '@livermore/coinbase-client';
+import type { CoinbaseOrder } from '@livermore/exchange-core';
 
 /**
  * Fee report aggregated by trading pair (symbol)

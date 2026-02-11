@@ -1,4 +1,4 @@
-import { CoinbaseRestClient } from '@livermore/coinbase-client';
+import { CoinbaseRestClient } from '@livermore/exchange-core';
 
 const apiKeyId = process.env.Coinbase_ApiKeyId!;
 const privateKeyPem = process.env.Coinbase_EcPrivateKeyPem!;

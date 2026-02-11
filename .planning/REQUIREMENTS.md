@@ -1,161 +1,146 @@
-# Requirements: Livermore Trading Platform
+# Requirements: Livermore v6.0 Perseus Network
 
-**Defined:** 2026-01-31
+**Defined:** 2026-02-10
 **Core Value:** Data accuracy and timely alerts
 
-## v4.0 Requirements
+## v1 Requirements
 
-Requirements for User Settings + Runtime Control milestone.
+Requirements for v6.0 release. Each maps to roadmap phases.
 
-### Settings Infrastructure
+### Instance Registration
 
-- [x] **SET-01**: `settings` JSONB column added to users table with version field
-- [x] **SET-02**: Zod schema for UserSettings type matching existing file structure
-- [x] **SET-03**: tRPC `settings.get` endpoint returns user settings
-- [x] **SET-04**: tRPC `settings.update` endpoint replaces entire settings
-- [x] **SET-05**: tRPC `settings.patch` endpoint updates specific sections via jsonb_set
-- [x] **SET-06**: Settings export endpoint (download as JSON)
-- [x] **SET-07**: Settings import endpoint (upload JSON, validate, save)
+- [x] **REG-01**: Exchange-scoped status key `exchange:{exchange_id}:status` replaces prototype `exchange:status`
+- [x] **REG-02**: Full identity payload: exchangeId, exchangeName, connectionState, connectedAt, lastHeartbeat, symbolCount, adminEmail, adminDisplayName, ipAddress, hostname, lastError
+- [x] **REG-03**: Connection state machine with 6 states: `idle → starting → warming → active → stopping → stopped`
+- [x] **REG-04**: State transitions maintained at each lifecycle phase (server start, start command, warmup, websocket connected, stop command, shutdown)
+- [x] **REG-05**: Public IP detection via external service (ipify.org) at startup with timeout and fallback
+- [x] **REG-06**: Hostname detection via `os.hostname()` stored in status payload
 
-### Runtime Control
+### Heartbeat and Health
 
-- [x] **RUN-01**: Redis pub/sub command channel `livermore:commands:{identity_sub}`
-- [x] **RUN-02**: Redis pub/sub response channel `livermore:responses:{identity_sub}`
-- [x] **RUN-03**: Command handler in API processes incoming commands
-- [x] **RUN-04**: `pause` command stops WebSocket connections and indicator processing
-- [x] **RUN-05**: `resume` command restarts WebSocket and indicator processing
-- [x] **RUN-06**: `reload-settings` command reloads settings from database
-- [x] **RUN-07**: `switch-mode` command changes runtime mode (position-monitor, scalper-macdv, scalper-orderbook stub)
-- [x] **RUN-08**: `force-backfill` command triggers candle backfill for specified symbol
-- [x] **RUN-09**: `clear-cache` command clears Redis cache with scope (all, symbol, timeframe)
-- [x] **RUN-10**: Command ACK returned immediately on receipt
-- [x] **RUN-11**: Command result returned after execution
-- [x] **RUN-12**: Command timeout — commands expire if not processed within 30s
-- [x] **RUN-13**: Command priority — pause/resume processed before other commands
+- [x] **HB-01**: Heartbeat refreshes status key TTL periodically using `SET ... EX`
+- [x] **HB-02**: Configurable heartbeat interval (default 15s) with TTL at 3x interval (default 45s)
+- [x] **HB-03**: Each heartbeat updates `lastHeartbeat` ISO timestamp in status payload
+- [x] **HB-04**: Graceful shutdown transitions to `stopping` state, logs shutdown event, lets key expire or deletes immediately
 
-### Symbol Management
+### One-Instance-Per-Exchange
 
-- [x] **SYM-01**: `add-symbol` command adds symbol to watchlist dynamically
-- [x] **SYM-02**: `remove-symbol` command removes symbol from watchlist
-- [x] **SYM-03**: Admin verifies symbols against exchange API before saving (delta-based validation)
-- [x] **SYM-04**: Symbol search endpoint fetches available symbols from user's exchange
-- [x] **SYM-05**: Bulk symbol import from JSON array
-- [x] **SYM-06**: Symbol metrics preview (24h volume, price) before adding
+- [x] **LOCK-01**: Before registering, check if `exchange:{exchange_id}:status` key exists with valid TTL
+- [x] **LOCK-02**: Atomic registration via `SET NX EX` (set-if-not-exists with TTL) to prevent race conditions
+- [x] **LOCK-03**: Stale lock detection — expired key (TTL gone) means exchange is available
+- [x] **LOCK-04**: Conflict error message includes hostname, IP, and connectedAt of the instance holding the lock
 
-### Admin UI - Settings
+### Network Activity Log
 
-- [x] **UI-SET-01**: Settings page with form-based editor for common settings
-- [x] **UI-SET-02**: JSON raw editor for power users (Monaco or json-edit-react)
-- [x] **UI-SET-03**: Side-by-side view (form + JSON simultaneously)
-- [x] **UI-SET-04**: Settings diff view shows changes before saving
-- [x] **UI-SET-05**: Save/discard buttons with validation error display
-- [x] **UI-SET-06**: Loading states and success/error toasts
+- [x] **LOG-01**: Redis Stream per exchange (`logs:network:{exchange_name}`) for event storage
+- [x] **LOG-02**: State transition events logged: timestamp, event, fromState, toState, exchangeId, exchangeName, hostname, ip, adminEmail
+- [x] **LOG-03**: Error events logged: timestamp, event, error message, exchangeId, exchangeName, hostname, ip, state
+- [x] **LOG-04**: 90-day retention via inline trimming on every XADD (MAXLEN or MINID)
+- [x] **LOG-05**: Structured log entry schema with consistent field names across all event types
+- [x] **LOG-06**: Heartbeat refreshes are NOT logged to the stream — only state transitions and errors
 
-### Admin UI - Control Panel
+### Admin UI Network View
 
-- [x] **UI-CTL-01**: Runtime status display (running/paused, current mode, uptime)
-- [x] **UI-CTL-02**: Pause/resume buttons
-- [x] **UI-CTL-03**: Mode switcher dropdown
-- [x] **UI-CTL-04**: Active symbols count and list
-- [x] **UI-CTL-05**: Exchange connection status indicators
-- [x] **UI-CTL-06**: Command history panel (recent commands + results)
-- [x] **UI-CTL-07**: Confirmation dialog for destructive commands (clear-cache)
+- [x] **UI-01**: "Network" page accessible from Admin header navigation
+- [x] **UI-02**: Instance card per exchange showing: exchange name, connection state (color-coded badge), hostname, IP, admin name, symbol count, last heartbeat, connected since
+- [x] **UI-03**: Dead instance detection — when key is expired/missing, show card as "Offline" with last-known info from most recent stream entry
+- [x] **UI-04**: Scrollable activity feed showing state transitions and errors from Redis Streams (reverse chronological)
+- [x] **UI-05**: Polling-based refresh at 5s interval (matches existing control panel pattern)
 
-### Admin UI - Symbols
+### tRPC Endpoints
 
-- [x] **UI-SYM-01**: Symbol watchlist display with enable/disable toggles
-- [x] **UI-SYM-02**: Add symbol with search + validation against exchange
-- [x] **UI-SYM-03**: Remove symbol with confirmation
-- [x] **UI-SYM-04**: Bulk import modal (paste JSON, validate, preview)
-- [x] **UI-SYM-05**: Scanner status display (enabled, last run, exchange)
-- [x] **UI-SYM-06**: Symbol metrics display (volume, price) on hover/expand
+- [x] **RPC-01**: `network.getInstances` returns all exchange instance statuses (read from known exchange IDs in DB, not SCAN/KEYS)
+- [x] **RPC-02**: `network.getActivityLog` returns recent events from stream via XREVRANGE with COUNT for pagination
+- [x] **RPC-03**: `network.getExchangeStatus` returns status for a single exchange by ID
 
-## v4.1 Requirements
+### Bug Fixes
 
-Deferred to next milestone.
+- [x] **FIX-01**: Fix heartbeat not updating — periodic timer refreshes lastHeartbeat timestamp and key TTL
+- [x] **FIX-02**: Fix error not populating — handle null status in error path, persist lastError to status key
+- [x] **FIX-03**: Fix connectionState stuck on idle — TTL on status key ensures dead instances don't show as idle forever
 
-### Orderbook Imbalance
+### Differentiators
 
-- **OB-01**: WebSocket Level2 channel subscription
-- **OB-02**: Orderbook imbalance detection algorithm
-- **OB-03**: Imbalance alerts with configurable thresholds
+- [x] **DIFF-01**: Instance uptime display ("Running for 4h 23m") calculated from connectedAt
+- [x] **DIFF-02**: Heartbeat latency indicator with color degradation (green < 10s, yellow < 30s, red > 30s)
+- [x] **DIFF-04**: Discord notifications for instance state changes (leverages existing Discord service)
 
-### Multi-Exchange Adapters
+## v2 Requirements (Deferred to v6.1+)
 
-- **EXCH-01**: Binance.com adapter implementation
-- **EXCH-02**: Binance.us adapter implementation
+### Standby and Failover
 
-### Security Hardening
+- **STBY-01**: Passive/standby instance registration (subscribe as backup for an exchange)
+- **STBY-02**: Graceful handoff protocol (notify → takeover → confirm → shutdown)
+- **STBY-03**: Automatic standby promotion when primary heartbeat expires
 
-- **SEC-01**: Convert indicator.router.ts to protectedProcedure
-- **SEC-02**: Convert alert.router.ts to protectedProcedure
-- **SEC-03**: Convert position.router.ts to protectedProcedure
+### Remote Administration
+
+- **RMOT-01**: Remote Admin control — send commands to another instance's API via Redis
+- **RMOT-02**: Ngrok tunnel for remote Admin UI access, URL published to Redis
+- **RMOT-03**: Authorization schema for remote operations (request/grant/revoke permissions)
+
+### Enhanced Monitoring
+
+- **MON-01**: WebSocket-based real-time network view (replace polling)
+- **MON-02**: Historical uptime percentage (24h/7d/30d)
+- **MON-03**: Connection state timeline visualization
 
 ## Out of Scope
 
 | Feature | Reason |
 |---------|--------|
-| Orderbook imbalance implementation | Stub only in v4.0 — full implementation v4.1 |
-| Azure Service Bus | Redis pub/sub sufficient for single-instance |
-| Multi-instance API | Single API instance per user |
-| Settings history/audit log | Single JSONB with updated_at sufficient |
-| Per-symbol settings | Global settings apply to all symbols |
-| Router auth hardening | Tech debt accepted, defer to v4.1 |
+| Keyspace notifications for death detection | Unreliable in Redis Cluster — events are node-specific, not broadcast |
+| Separate health-check service | TTL-based heartbeat is self-contained; instance is its own health reporter |
+| Instance-to-instance communication | All coordination through shared Redis; instances are unaware of each other |
+| Automatic restart on crash | OS-level responsibility (pm2, systemd), not application-level |
+| Multi-stream consumer groups | XREADGROUP overkill for read-only audit log; simple XREVRANGE sufficient |
+| Prometheus/metrics integration | Overkill for 2-3 instances; defer until instance count grows |
+| CCXT or external service discovery | Redis-native coordination is simpler and already in the stack |
 
 ## Traceability
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| SET-01 | 17 | Complete |
-| SET-02 | 17 | Complete |
-| SET-03 | 17 | Complete |
-| SET-04 | 17 | Complete |
-| SET-05 | 17 | Complete |
-| SET-06 | 17 | Complete |
-| SET-07 | 17 | Complete |
-| RUN-01 | 18 | Complete |
-| RUN-02 | 18 | Complete |
-| RUN-03 | 18 | Complete |
-| RUN-04 | 19 | Complete |
-| RUN-05 | 19 | Complete |
-| RUN-06 | 19 | Complete |
-| RUN-07 | 19 | Complete |
-| RUN-08 | 19 | Complete |
-| RUN-09 | 19 | Complete |
-| RUN-10 | 18 | Complete |
-| RUN-11 | 18 | Complete |
-| RUN-12 | 18 | Complete |
-| RUN-13 | 18 | Complete |
-| SYM-01 | 20 | Complete |
-| SYM-02 | 20 | Complete |
-| SYM-03 | 20 | Complete |
-| SYM-04 | 20 | Complete |
-| SYM-05 | 20 | Complete |
-| SYM-06 | 20 | Complete |
-| UI-SET-01 | 21 | Complete |
-| UI-SET-02 | 21 | Complete |
-| UI-SET-03 | 21 | Complete |
-| UI-SET-04 | 21 | Complete |
-| UI-SET-05 | 21 | Complete |
-| UI-SET-06 | 21 | Complete |
-| UI-CTL-01 | 22 | Complete |
-| UI-CTL-02 | 22 | Complete |
-| UI-CTL-03 | 22 | Complete |
-| UI-CTL-04 | 22 | Complete |
-| UI-CTL-05 | 22 | Complete |
-| UI-CTL-06 | 22 | Complete |
-| UI-CTL-07 | 22 | Complete |
-| UI-SYM-01 | 22 | Complete |
-| UI-SYM-02 | 22 | Complete |
-| UI-SYM-03 | 22 | Complete |
-| UI-SYM-04 | 22 | Complete |
-| UI-SYM-05 | 22 | Complete |
-| UI-SYM-06 | 22 | Complete |
+| REG-01 | Phase 30 | Done |
+| REG-02 | Phase 30 | Done |
+| REG-03 | Phase 30 | Done |
+| REG-04 | Phase 30 | Done |
+| REG-05 | Phase 30 | Done |
+| REG-06 | Phase 30 | Done |
+| HB-01 | Phase 30 | Done |
+| HB-02 | Phase 30 | Done |
+| HB-03 | Phase 30 | Done |
+| HB-04 | Phase 30 | Done |
+| LOCK-01 | Phase 30 | Done |
+| LOCK-02 | Phase 30 | Done |
+| LOCK-03 | Phase 30 | Done |
+| LOCK-04 | Phase 30 | Done |
+| LOG-01 | Phase 31 | Done |
+| LOG-02 | Phase 31 | Done |
+| LOG-03 | Phase 31 | Done |
+| LOG-04 | Phase 31 | Done |
+| LOG-05 | Phase 31 | Done |
+| LOG-06 | Phase 31 | Done |
+| UI-01 | Phase 33 | Done |
+| UI-02 | Phase 33 | Done |
+| UI-03 | Phase 33 | Done |
+| UI-04 | Phase 33 | Done |
+| UI-05 | Phase 33 | Done |
+| RPC-01 | Phase 32 | Done |
+| RPC-02 | Phase 32 | Done |
+| RPC-03 | Phase 32 | Done |
+| FIX-01 | Phase 30 | Done |
+| FIX-02 | Phase 30 | Done |
+| FIX-03 | Phase 30 | Done |
+| DIFF-01 | Phase 33 | Done |
+| DIFF-02 | Phase 33 | Done |
+| DIFF-04 | Phase 33 | Done |
 
 **Coverage:**
-- v4.0 requirements: 45 total
-- Mapped to phases: 45
+- v1 requirements: 34 total
+- Mapped to phases: 34
 - Unmapped: 0
 
 ---
-*Requirements defined: 2026-01-31*
+*Requirements defined: 2026-02-10*
+*Last updated: 2026-02-10 -- ALL REQUIREMENTS COMPLETE (34/34 done)*

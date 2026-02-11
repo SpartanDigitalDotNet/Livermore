@@ -4,14 +4,14 @@
  * Run with: powershell -ExecutionPolicy Bypass -File scripts/run-test-open-orders.ps1
  * Requires:
  *   - Coinbase_ApiKeyId and Coinbase_EcPrivateKeyPem env vars
- *   - Redis running on REDIS_URL (default: redis://127.0.0.1:6400)
+ *   - Redis running on LIVERMORE_REDIS_URL
  *
  * Redis key: orders:open:{userId}:{exchangeId}
  * Use Redis CLI to inspect:
  *   redis-cli -p 6400
  *   HGETALL orders:open:1:1
  */
-import { CoinbaseRestClient, type CoinbaseOrder } from '@livermore/coinbase-client';
+import { CoinbaseRestClient, type CoinbaseOrder } from '@livermore/exchange-core';
 import Redis from 'ioredis';
 
 // Hardcoded for test - in production these come from database
@@ -80,7 +80,7 @@ function calculateFee(size: string | undefined, price: string | undefined, feeRa
 async function main() {
   console.log('Fetching open orders and fees from Coinbase...\n');
 
-  const redisUrl = process.env.REDIS_URL || 'redis://127.0.0.1:6400';
+  const redisUrl = process.env.LIVERMORE_REDIS_URL!;
   let redis: Redis | null = null;
   let redisAvailable = false;
   const redisKey = `orders:open:${TEST_USER_ID}:${TEST_EXCHANGE_ID}`;

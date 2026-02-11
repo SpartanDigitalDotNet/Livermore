@@ -12,32 +12,6 @@ function isAzureRedis(host: string): boolean {
 }
 
 /**
- * Parse Redis URL into components
- * Handles formats:
- *   redis://host:port
- *   redis://:password@host:port
- *   rediss://:password@host:port
- */
-function parseRedisUrl(url: string): { host: string; port: number; password?: string; useTls: boolean } {
-  try {
-    // Use URL parser for reliable parsing
-    const parsed = new URL(url);
-
-    const host = parsed.hostname;
-    const port = parseInt(parsed.port, 10) || 6379;
-    // Password is in the "password" field of URL - decode it (URL API returns encoded)
-    const password = parsed.password ? decodeURIComponent(parsed.password) : undefined;
-
-    // Force TLS for Azure Redis regardless of URL scheme
-    const useTls = parsed.protocol === 'rediss:' || isAzureRedis(host);
-
-    return { host, port, password, useTls };
-  } catch {
-    throw new Error(`Invalid Redis URL format: ${url}`);
-  }
-}
-
-/**
  * Create a Redis client instance
  *
  * For Azure Redis with OSS Cluster enabled, we use ioredis Cluster mode.
@@ -49,7 +23,13 @@ function parseRedisUrl(url: string): { host: string; port: number; password?: st
 export function createRedisClient(config: EnvConfig): Redis | Cluster {
   logger.info('Connecting to Redis...');
 
-  const { host, port, password, useTls } = parseRedisUrl(config.REDIS_URL);
+  // Construct connection from 3 separate env vars (never stored as a full URL)
+  const host = config.LIVERMORE_REDIS_URL;
+  const port = config.LIVERMORE_REDIS_PORT;
+  const password = config.LIVERMORE_REDIS_SECRET;
+  const useTls = isAzureRedis(host);
+
+  logger.info(`Redis target: redis://:<redacted>@${host}:${port}`);
 
   // Use Cluster mode for Azure Redis (which has OSS Cluster enabled)
   if (isAzureRedis(host)) {

@@ -1,4 +1,4 @@
-import { getRedisClient, tickerChannel, indicatorChannel, IndicatorCacheStrategy, CandleCacheStrategy, type CachedIndicatorValue, type RedisClient } from '@livermore/cache';
+import { getRedisClient, tickerChannel, indicatorChannel, exchangeAlertChannel, IndicatorCacheStrategy, CandleCacheStrategy, type CachedIndicatorValue, type RedisClient } from '@livermore/cache';
 import { getDbClient, alertHistory } from '@livermore/database';
 import { logger } from '@livermore/utils';
 import type { Ticker, Timeframe } from '@livermore/schemas';
@@ -41,9 +41,9 @@ export class AlertEvaluationService {
   // Current prices from ticker updates
   private currentPrices: Map<string, number> = new Map();
 
-  // Temporary: hardcode test user/exchange ID
-  private readonly TEST_USER_ID = 1;
-  private readonly TEST_EXCHANGE_ID = 1;
+  // Exchange identity for scoping Redis channels, cache keys, and alert metadata
+  private exchangeId: number;
+  private exchangeName: string;
 
   // Cooldown period in milliseconds (5 minutes)
   private readonly COOLDOWN_MS = 300000;
@@ -65,9 +65,19 @@ export class AlertEvaluationService {
   private readonly CHART_WARMUP_BARS = 35; // 26 for ATR + 9 for signal
   private readonly CHART_TIMEOUT_MS = 3000;
 
-  constructor() {
+  constructor(exchangeId: number, exchangeName: string = 'unknown') {
+    this.exchangeId = exchangeId;
+    this.exchangeName = exchangeName;
     this.indicatorCache = new IndicatorCacheStrategy(this.redis);
     this.candleCache = new CandleCacheStrategy(this.redis);
+  }
+
+  /**
+   * Update exchange identity at runtime (e.g., when handleStart resolves the user's exchange)
+   */
+  setExchange(exchangeId: number, exchangeName: string): void {
+    this.exchangeId = exchangeId;
+    this.exchangeName = exchangeName;
   }
 
   /**
@@ -127,7 +137,7 @@ export class AlertEvaluationService {
 
     // Subscribe to ticker channels for all symbols (for price tracking)
     for (const symbol of this.symbols) {
-      channels.push(tickerChannel(1, this.TEST_EXCHANGE_ID, symbol));
+      channels.push(tickerChannel(1, this.exchangeId, symbol));
     }
 
     // Subscribe to indicator channels for all symbol/timeframe combos
@@ -136,7 +146,7 @@ export class AlertEvaluationService {
         channels.push(
           indicatorChannel(
             1, // user_id (hardcoded for now)
-            this.TEST_EXCHANGE_ID,
+            this.exchangeId,
             symbol,
             timeframe,
             'macd-v'
@@ -351,8 +361,8 @@ export class AlertEvaluationService {
       // Fetch candles (extra for MACD-V warmup period)
       const totalBars = this.CHART_DISPLAY_BARS + this.CHART_WARMUP_BARS;
       const candles = await this.candleCache.getRecentCandles(
-        this.TEST_USER_ID,
-        this.TEST_EXCHANGE_ID,
+        1 /* legacy userId param */,
+        this.exchangeId,
         symbol,
         timeframe,
         totalBars
@@ -453,7 +463,7 @@ export class AlertEvaluationService {
     const now = new Date();
     try {
       const [inserted] = await this.db.insert(alertHistory).values({
-        exchangeId: this.TEST_EXCHANGE_ID,
+        exchangeId: this.exchangeId,
         symbol,
         timeframe,
         alertType: 'macdv',
@@ -477,7 +487,7 @@ export class AlertEvaluationService {
       }).returning({ id: alertHistory.id });
 
       // Broadcast to WebSocket clients
-      broadcastAlert({
+      const alertPayload = {
         id: inserted.id,
         symbol,
         alertType: 'macdv',
@@ -486,7 +496,14 @@ export class AlertEvaluationService {
         triggerValue: currentMacdV,
         signalDelta: histogram,
         triggeredAt: now.toISOString(),
-      });
+        sourceExchangeId: this.exchangeId,
+        sourceExchangeName: this.exchangeName,
+      };
+      broadcastAlert(alertPayload);
+
+      // Publish to Redis for cross-exchange visibility (Phase 27 VIS-01)
+      const channel = exchangeAlertChannel(this.exchangeId);
+      await this.redis.publish(channel, JSON.stringify(alertPayload));
     } catch (dbError) {
       logger.error({ error: dbError, symbol, timeframe }, 'Failed to record alert to database');
     }
@@ -552,7 +569,7 @@ export class AlertEvaluationService {
     const now = new Date();
     try {
       const [inserted] = await this.db.insert(alertHistory).values({
-        exchangeId: this.TEST_EXCHANGE_ID,
+        exchangeId: this.exchangeId,
         symbol,
         timeframe,
         alertType: 'macdv',
@@ -577,7 +594,7 @@ export class AlertEvaluationService {
       }).returning({ id: alertHistory.id });
 
       // Broadcast to WebSocket clients
-      broadcastAlert({
+      const alertPayload = {
         id: inserted.id,
         symbol,
         alertType: 'macdv',
@@ -586,7 +603,14 @@ export class AlertEvaluationService {
         triggerValue: currentMacdV,
         signalDelta: histogram,
         triggeredAt: now.toISOString(),
-      });
+        sourceExchangeId: this.exchangeId,
+        sourceExchangeName: this.exchangeName,
+      };
+      broadcastAlert(alertPayload);
+
+      // Publish to Redis for cross-exchange visibility (Phase 27 VIS-01)
+      const channel = exchangeAlertChannel(this.exchangeId);
+      await this.redis.publish(channel, JSON.stringify(alertPayload));
     } catch (dbError) {
       logger.error({ error: dbError, symbol, timeframe }, 'Failed to record alert to database');
     }
@@ -606,8 +630,8 @@ export class AlertEvaluationService {
 
     // Fetch all timeframes in one Redis call
     const indicatorMap = await this.indicatorCache.getIndicatorsBulk(
-      this.TEST_USER_ID,
-      this.TEST_EXCHANGE_ID,
+      1 /* legacy userId param */,
+      this.exchangeId,
       requests
     );
 

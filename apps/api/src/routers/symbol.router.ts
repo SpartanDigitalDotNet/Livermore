@@ -1,7 +1,7 @@
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 import { router, protectedProcedure } from '@livermore/trpc-config';
-import { CoinbaseRestClient } from '@livermore/coinbase-client';
+import { CoinbaseRestClient } from '@livermore/exchange-core';
 import { getDbClient, users } from '@livermore/database';
 import { eq, and } from 'drizzle-orm';
 

@@ -4,9 +4,12 @@ import { Dashboard } from './pages/Dashboard';
 import { Signals } from './pages/Signals';
 import { Logs } from './pages/Logs';
 import { ControlPanel } from './pages/ControlPanel';
+import { Network } from './pages/Network';
 import { Symbols } from './pages/Symbols';
+import { ExchangeSymbols } from './pages/ExchangeSymbols';
 import { Settings } from './pages/Settings';
 import { UserSync } from './components/UserSync';
+import { ExchangeGuard } from './components/exchange/ExchangeGuard';
 import { Toaster } from '@/components/ui/sonner';
 import { AlertProvider } from '@/contexts/AlertContext';
 import { AlertToastHandler } from '@/components/AlertToastHandler';
@@ -29,6 +32,7 @@ function App() {
       </SignedOut>
       <SignedIn>
         <UserSync>
+          <ExchangeGuard>
           <AlertProvider currentHash={hash}>
             <AlertToastHandler />
             <div className="min-h-screen bg-gray-100">
@@ -61,10 +65,22 @@ function App() {
                     Control
                   </a>
                   <a
+                    href="#/network"
+                    className={`${hash === '#/network' ? 'text-gray-900 font-medium' : 'text-gray-600'} hover:text-gray-900`}
+                  >
+                    Network
+                  </a>
+                  <a
                     href="#/symbols"
                     className={`${hash === '#/symbols' ? 'text-gray-900 font-medium' : 'text-gray-600'} hover:text-gray-900`}
                   >
                     Symbols
+                  </a>
+                  <a
+                    href="#/exchange-symbols"
+                    className={`${hash === '#/exchange-symbols' ? 'text-gray-900 font-medium' : 'text-gray-600'} hover:text-gray-900`}
+                  >
+                    Exchange Symbols
                   </a>
                   <a
                     href="#/settings"
@@ -88,6 +104,7 @@ function App() {
               </main>
             </div>
           </AlertProvider>
+          </ExchangeGuard>
         </UserSync>
         <Toaster />
       </SignedIn>
@@ -103,8 +120,12 @@ function HashRouter({ hash }: { hash: string }) {
       return <Logs />;
     case '#/control':
       return <ControlPanel />;
+    case '#/network':
+      return <Network />;
     case '#/symbols':
       return <Symbols />;
+    case '#/exchange-symbols':
+      return <ExchangeSymbols />;
     case '#/settings':
       return <Settings />;
     default:

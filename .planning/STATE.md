@@ -2,86 +2,68 @@
 
 ## Project Reference
 
-See: .planning/PROJECT.md
+See: .planning/PROJECT.md (updated 2026-02-08)
 
 **Core value:** Data accuracy and timely alerts
-**Current focus:** v4.0 User Settings + Runtime Control
+**Current focus:** v6.0 Perseus Network -- COMPLETE
 
 ## Current Position
 
-**Milestone:** v4.0 User Settings + Runtime Control
-**Phase:** 22 (Admin UI - Control + Symbols) - Complete
-**Plan:** 06 of 6 complete
-**Status:** Phase Complete
+**Milestone:** v6.0 Perseus Network
+**Phase:** 33 of 33 (Admin UI Network View) -- Complete
+**Plan:** All plans complete across all phases
+**Status:** Milestone complete -- 34/34 requirements delivered
 
 ```
-Progress: [==========] 100%
-Phases:   17 [X] 18 [X] 19 [X] 20 [X] 21 [X] 22 [X]
+Progress: [##########] 100%
+Phase 30 [===]  Phase 31 [==]  Phase 32 [=]  Phase 33 [==]
 ```
 
-**Last activity:** 2026-02-01 - Completed 22-06-PLAN.md (Bulk Import Modal)
+**Last activity:** 2026-02-10 -- All phases complete, milestone delivered
 
 ## Milestones
 
 | Version | Name | Status | Shipped |
 |---------|------|--------|---------|
 | v1.0 | Fee Analysis Spike | Archived | 2026-01-19 |
-| v2.0 | Data Pipeline Redesign | Shipped | 2026-01-24 |
-| v3.0 | Admin UI + IAM Foundation | Shipped | 2026-01-30 |
-| v4.0 | User Settings + Runtime Control | In Progress | -- |
+| v2.0 | Data Pipeline Redesign | Archived | 2026-01-24 |
+| v3.0 | Admin UI + IAM Foundation | Archived | 2026-01-30 |
+| v4.0 | User Settings + Runtime Control | Archived | 2026-02-06 |
+| v5.0 | Distributed Exchange Architecture | Archived | 2026-02-08 |
+| v6.0 | Perseus Network | Complete | 2026-02-10 |
 
 See `.planning/MILESTONES.md` for full history.
 
-## v4.0 Phase Summary
+## Performance Metrics
 
-| Phase | Goal | Requirements | Status |
-|-------|------|--------------|--------|
-| 17 | Settings Infrastructure | SET-01 to SET-07 | Complete (SET-01 to SET-07) |
-| 18 | Control Channel Foundation | RUN-01,02,03,10,11,12,13 | Complete (RUN-01,02,03,10,11,12,13) |
-| 19 | Runtime Commands | RUN-04 to RUN-09 | Complete (RUN-04 to RUN-09) |
-| 20 | Symbol Management | SYM-01 to SYM-06 | Complete (SYM-01,02,03,04,05,06) |
-| 21 | Admin UI - Settings | UI-SET-01 to UI-SET-06 | Complete (21-01, 21-02, 21-03, 21-04, 21-05) |
-| 22 | Admin UI - Control + Symbols | UI-CTL-*, UI-SYM-* | Complete (22-01, 22-02, 22-03, 22-04, 22-05, 22-06) |
+**Velocity:**
+- Total plans completed: 8
+- Average duration: 3m 40s
+- Total execution time: ~30m
 
-## Tech Debt from v3.0
+**By Phase:**
 
-Carried forward from milestone audit:
+| Phase | Plans | Total | Avg/Plan |
+|-------|-------|-------|----------|
+| 30 | 3 | 13m 54s | 4m 38s |
+| 31 | 2 | 7m 49s | 3m 55s |
+| 32 | 1 | ~3m | 3m |
+| 33 | 2 | 5m 20s | 2m 40s |
 
-| Issue | Priority | Impact |
-|-------|----------|--------|
-| indicator.router.ts uses publicProcedure | High | Unprotected API access |
-| alert.router.ts uses publicProcedure | High | Unprotected API access |
-| position.router.ts uses publicProcedure | High | Unprotected API access |
-| UserRole/isValidRole/assertRole unused | Low | RBAC not enforced |
+## Tech Debt (Carried Forward)
 
-**Note:** Router auth hardening deferred to v4.1 per requirements.
+| Issue | Priority | Impact | From |
+|-------|----------|--------|------|
+| indicator.router.ts uses publicProcedure | High | Unprotected API access | v3.0 |
+| alert.router.ts uses publicProcedure | High | Unprotected API access | v3.0 |
+| position.router.ts uses publicProcedure | High | Unprotected API access | v3.0 |
+| switch-mode is a stub | Medium | Mode doesn't actually switch | v4.0 |
+| Autostart has no user context | High | Can't load user settings/symbols | v5.0 |
+| Autostart hardcodes exchangeId=1 (Coinbase) | Medium | Autostart only supports Coinbase | v5.0 |
+| Routers hardcode TEST_USER_ID/TEST_EXCHANGE_ID | Medium | Tied to publicProcedure debt | v3.0 |
+| Legacy userId param in cache calls | Low | Cache API signature requires unused param | v5.0 |
 
 ## Accumulated Context
-
-### Technical Discoveries (from v1.0)
-
-- Coinbase List Orders endpoint uses cursor-based pagination with `has_next` flag
-- Fee tier info available via getTransactionSummary() (already implemented)
-- Order `total_fees` field contains aggregated fees per order
-
-### v2.0 Architecture (Shipped 2026-01-24)
-
-```
-WebSocket Layer (CoinbaseAdapter)
-    |
-    | Native 5m candles + ticker from Coinbase channels
-    v
-+-------------------+
-|   Redis Cache     |<-- Backfill Service (startup)
-+-------------------+<-- BoundaryRestService (15m/1h/4h/1d at boundaries)
-    |
-    | candle:close events + ticker pub/sub
-    v
-Indicator Service (cache-only reads)
-    |
-    v
-Alert Evaluation (receives ticker prices)
-```
 
 ### Hard Constraints (User-Specified)
 
@@ -92,62 +74,59 @@ Alert Evaluation (receives ticker prices)
 | **Zero 429 errors** | Core reliability requirement |
 | **Atlas-only migrations** | Drizzle migrations BANNED - schema.sql is source of truth |
 | **SSL required** | Azure PostgreSQL requires SSL - hardcode, don't use env vars |
+| **No silent defaults** | If exchange unknown, surface error -- never default to Coinbase |
 
-### v3.0 Key Decisions
+### Decisions
 
-| Decision | Rationale |
-|----------|-----------|
-| Webhook before clerkPlugin | Server-to-server route has no JWT |
-| Check-then-update for upsert | Partial unique index doesn't work with onConflictDoUpdate |
-| protectedProcedure only for new routers | Existing routers left as publicProcedure (tech debt) |
-| Pre-flight connection validation | Fail fast if database/Redis unavailable |
+Decisions are logged in PROJECT.md Key Decisions table.
+Recent decisions affecting current work:
 
-### v4.0 Key Decisions (from research)
+- 30-01-D1: adminEmail/adminDisplayName nullable in InstanceStatus (user identity unavailable at registration)
+- 30-01-D2: Key pattern `exchange:{id}:status` (consistent with existing exchange-scoped keys)
+- 30-01-D3: Separate HEARTBEAT_TTL_SECONDS constant (Redis EX takes seconds, not ms)
+- 30-02-D1: Self-restart detection uses hostname match, not full instanceId (PID/timestamp change on restart)
+- 30-02-D2: setAdminInfo/setSymbolCount defer Redis write to next heartbeat (reduces round-trips)
+- 30-02-D3: Register retries on NX fail + GET null race (key can expire between operations)
+- 30-03-D1: Placeholder registry with exchangeId=0 for idle mode (replaced in handleStart)
+- 30-03-D2: Fresh InstanceRegistryService in handleStart (immutable exchangeId)
+- 30-03-D3: Migrated exchange-symbol.router to new key format (exchange:{id}:status)
+- 31-01-D1: networkActivityStreamKey uses exchange name (not ID) with lowercase normalization
+- 31-01-D2: BaseLogEntrySchema is internal-only (not exported)
+- 31-01-D3: Empty string defaults for ip and adminEmail in logger constructor
 
-| Decision | Rationale |
-|----------|-----------|
-| Settings as JSONB | Single column with version field for schema evolution |
-| Redis pub/sub for control | Existing ioredis, no new dependencies needed |
-| Control plane vs data plane | Control channel always on, data plane pausable |
-| Admin calls exchange API | Delta-based symbol validation from Admin, not API |
-| Credentials in env vars | Settings store env var names, not actual secrets |
-| Cast zodResolver for UserSettings | Zod schemas with defaults create type mismatch between input/output |
-| lastEditSource ref for bidirectional sync | Prevents infinite loops between form and JSON editor |
-| splitViewKey ref for discard | Forces clean remount of SettingsSplitView without complex state reset |
-| Manual shadcn component creation | Project doesn't use shadcn CLI; components created manually with CVA |
-| controlRouter uses protectedProcedure | Auth required for control commands |
-| Mock getStatus endpoint | Full implementation requires ControlChannelService in tRPC context |
-| Upgraded Select to Radix-based | Better UX/accessibility; required updating Logs.tsx |
+### Pending Todos
 
-### Open Items
+None.
 
-- Low-volume symbol policy: Include or exclude symbols with < 100 candles?
+### Blockers/Concerns
+
+None.
 
 ## Session Continuity
 
 ### Last Session
 
-**Date:** 2026-02-01
-**Activity:** Completed plan 22-06 (Bulk Import Modal)
-**Stopped At:** Phase 22 complete, v4.0 milestone complete
+**Date:** 2026-02-10
+**Activity:** Completed all 4 phases of v6.0 Perseus Network milestone
+**Stopped At:** Milestone complete
 
 ### Resume Context
 
-**PHASE 22 COMPLETE - v4.0 MILESTONE COMPLETE**
+**v6.0 PERSEUS NETWORK -- MILESTONE COMPLETE**
 
-Plan 22-06 completed (Bulk Import Modal):
-- Created BulkImportModal with JSON input and validation preview
-- Integrated into Symbols page with Bulk Import card
-- Commits: f97a32e, 1fcbaf1
+All 4 phases delivered, all 34 requirements verified:
+- Phase 30: Instance Registry and State Machine (3 plans, 17 requirements)
+- Phase 31: Network Activity Logging (2 plans, 6 requirements)
+- Phase 32: tRPC Network Router (1 plan, 3 requirements)
+- Phase 33: Admin UI Network View (2 plans, 8 requirements)
 
-v4.0 Milestone Summary:
-- Phase 17: Settings Infrastructure - Complete
-- Phase 18: Control Channel Foundation - Complete
-- Phase 19: Runtime Commands - Complete
-- Phase 20: Symbol Management - Complete
-- Phase 21: Admin UI - Settings - Complete
-- Phase 22: Admin UI - Control + Symbols - Complete (6 plans)
+Key artifacts:
+- `StateMachineService` — 6-state validated transitions
+- `InstanceRegistryService` — Redis-backed status with TTL heartbeat
+- `NetworkActivityLogger` — Redis Streams event logging with 90-day retention
+- `networkRouter` — tRPC endpoints for instance status and activity logs
+- Network page — Admin UI dashboard with cards, badges, activity feed, 5s polling
 
 ---
 *State initialized: 2026-01-18*
-*Last updated: 2026-02-01 - Completed 22-06-PLAN.md (Bulk Import Modal)*
+*Last updated: 2026-02-10 -- v6.0 Perseus Network milestone complete*

@@ -6,7 +6,7 @@
     "analyze": "npx tsx analyze-fees.ts"
   },
   "dependencies": {
-    "@livermore/coinbase-client": "workspace:*",
+    "@livermore/exchange-core": "workspace:*",
     "tsx": "^4.19.0"
   },
   "devDependencies": {

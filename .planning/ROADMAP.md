@@ -1,225 +1,97 @@
-# Milestone v4.0: User Settings + Runtime Control
-
-**Status:** In Progress
-**Phases:** 17-22
-**Total Plans:** TBD
+# Roadmap: Livermore v6.0 Perseus Network
 
 ## Overview
 
-Enables user-specific configuration stored in PostgreSQL with JSONB, establishes Redis pub/sub control channels for Admin-to-API command communication, implements runtime mode management and symbol management, and builds Admin UI for settings editing, runtime control, and symbol curation.
+v6.0 transforms Livermore from isolated API instances with no mutual awareness into a coordinated Perseus Network with identity, health monitoring, and audit logging. The roadmap progresses from foundational instance registration and heartbeat (replacing the broken prototype) through Redis Streams logging, tRPC API surface, and finally an Admin UI Network page that makes the entire system observable. Each phase delivers a complete, testable capability that the next phase builds upon.
 
 ## Phases
 
-### Phase 17: Settings Infrastructure
+**Phase Numbering:**
+- Integer phases (30, 31, 32, 33): Planned v6.0 milestone work
+- Decimal phases (30.1, 30.2): Urgent insertions if needed (marked with INSERTED)
 
-**Goal**: User settings can be stored, retrieved, and managed via database with type-safe schema
-**Depends on**: None (foundation phase)
+Decimal phases appear between their surrounding integers in numeric order.
+
+- [x] **Phase 30: Instance Registry and State Machine** - Exchange-scoped registration with typed state machine, TTL heartbeat, and one-instance-per-exchange enforcement
+- [x] **Phase 31: Network Activity Logging** - Redis Streams event log for state transitions and errors with 90-day retention
+- [x] **Phase 32: tRPC Network Router** - API endpoints for reading instance status and activity logs
+- [x] **Phase 33: Admin UI Network View** - Visual network dashboard with instance cards, status badges, activity feed, and differentiators
+
+## Phase Details
+
+### Phase 30: Instance Registry and State Machine
+**Goal**: Each Livermore API instance is a uniquely identifiable, self-reporting node in Redis with validated state transitions and automatic dead-instance detection
+**Depends on**: Nothing (first phase -- replaces broken prototype)
+**Requirements**: REG-01, REG-02, REG-03, REG-04, REG-05, REG-06, HB-01, HB-02, HB-03, HB-04, LOCK-01, LOCK-02, LOCK-03, LOCK-04, FIX-01, FIX-02, FIX-03
+**Success Criteria** (what must be TRUE):
+  1. When a Livermore API instance starts and receives a `start` command, an exchange-scoped Redis key appears with full identity payload (exchangeId, exchangeName, connectionState, hostname, IP, admin info, symbolCount, connectedAt, lastHeartbeat, lastError)
+  2. The instance key TTL refreshes every heartbeat interval (default 15s) and the key auto-expires after 3x the interval (default 45s) if heartbeating stops -- meaning a killed process leaves no permanent ghost key
+  3. Connection state progresses through `idle -> starting -> warming -> active` during normal startup and `active -> stopping -> stopped` during shutdown, with invalid transitions rejected
+  4. A second instance attempting to claim the same exchange is refused with an error message identifying who holds the lock (hostname, IP, connectedAt)
+  5. The three existing bugs are resolved: heartbeat updates consistently (FIX-01), errors persist to the status key (FIX-02), and dead instances do not show as `idle` forever (FIX-03)
 **Plans**: 3 plans
 
 Plans:
-- [x] 17-01-PLAN.md — Database column + Zod schema foundation
-- [x] 17-02-PLAN.md — Core CRUD endpoints (get/update/patch)
-- [x] 17-03-PLAN.md — Export/Import endpoints
+- [x] 30-01-PLAN.md -- Foundation: Zod schemas, key builders, IP detection utility
+- [x] 30-02-PLAN.md -- Core services: StateMachineService and InstanceRegistryService
+- [x] 30-03-PLAN.md -- Integration: Wire into server.ts, control-channel, cleanup adapter-factory
 
-**Requirements:**
-- SET-01: `settings` JSONB column added to users table with version field
-- SET-02: Zod schema for UserSettings type matching existing file structure
-- SET-03: tRPC `settings.get` endpoint returns user settings
-- SET-04: tRPC `settings.update` endpoint replaces entire settings
-- SET-05: tRPC `settings.patch` endpoint updates specific sections via jsonb_set
-- SET-06: Settings export endpoint (download as JSON)
-- SET-07: Settings import endpoint (upload JSON, validate, save)
-
-**Success Criteria:**
-1. User can retrieve their settings via tRPC call and receive typed JSON response
-2. User can replace entire settings document and changes persist across API restarts
-3. User can patch individual sections without affecting other settings
-4. User can export settings to JSON file and import settings from JSON file
-5. Invalid settings (schema mismatch) are rejected with clear validation errors
-
----
-
-### Phase 18: Control Channel Foundation
-
-**Goal**: Admin UI can send commands to API and receive acknowledgments and results
-**Depends on**: Phase 17 (settings schema informs command payloads)
-**Plans**: 3 plans
+### Phase 31: Network Activity Logging
+**Goal**: Every state transition and error across all instances is durably recorded in Redis Streams with automatic retention management
+**Depends on**: Phase 30 (state transitions and errors to log)
+**Requirements**: LOG-01, LOG-02, LOG-03, LOG-04, LOG-05, LOG-06
+**Success Criteria** (what must be TRUE):
+  1. When an instance transitions state (e.g., idle to starting, active to stopping), an entry appears in the exchange's Redis Stream (`logs:network:{exchange_name}`) containing timestamp, event type, fromState, toState, exchangeId, exchangeName, hostname, ip, and adminEmail
+  2. When an error occurs, an error event is logged to the same stream with timestamp, event type, error message, exchangeId, exchangeName, hostname, ip, and current state
+  3. Heartbeat refreshes do NOT produce stream entries -- only state transitions and errors appear in the log
+  4. Stream entries older than 90 days are automatically trimmed via inline MAXLEN or MINID on every XADD, preventing unbounded memory growth
+**Plans**: 2 plans
 
 Plans:
-- [x] 18-01-PLAN.md — Schemas + channel key helpers
-- [x] 18-02-PLAN.md — ControlChannelService with pub/sub + priority queue
-- [x] 18-03-PLAN.md — Server integration (startup/shutdown)
+- [x] 31-01-PLAN.md -- Foundation: Zod schemas for log entries, key builder, NetworkActivityLogger service
+- [x] 31-02-PLAN.md -- Integration: Wire logger into StateMachineService, error paths, server.ts lifecycle
 
-**Requirements:**
-- RUN-01: Redis pub/sub command channel `livermore:commands:{identity_sub}`
-- RUN-02: Redis pub/sub response channel `livermore:responses:{identity_sub}`
-- RUN-03: Command handler in API processes incoming commands
-- RUN-10: Command ACK returned immediately on receipt
-- RUN-11: Command result returned after execution
-- RUN-12: Command timeout - commands expire if not processed within 30s
-- RUN-13: Command priority - pause/resume processed before other commands
-
-**Success Criteria:**
-1. Admin UI can publish a command and receive immediate ACK within 100ms
-2. Admin UI receives execution result after command completes (success or failure)
-3. Commands that exceed 30s timeout are marked as expired and not processed
-4. Pause command is processed before queued non-priority commands
-5. Multiple commands can be queued and processed in priority order
-
----
-
-### Phase 19: Runtime Commands
-
-**Goal**: API runtime can be controlled via pub/sub commands without restart
-**Depends on**: Phase 18 (command channel and handler exist)
-**Plans**: 3 plans
+### Phase 32: tRPC Network Router
+**Goal**: The Admin UI has a reliable API surface to read instance status and activity logs without SCAN/KEYS commands
+**Depends on**: Phase 30 (instance keys to read), Phase 31 (stream entries to query)
+**Requirements**: RPC-01, RPC-02, RPC-03
+**Success Criteria** (what must be TRUE):
+  1. Calling `network.getInstances` returns status for all known exchanges (sourced from the `exchanges` database table, not Redis SCAN/KEYS), including instances that are offline (key missing)
+  2. Calling `network.getActivityLog` returns recent state transitions and errors from Redis Streams in reverse chronological order with pagination support (COUNT parameter)
+  3. Calling `network.getExchangeStatus` returns the full status payload for a single exchange by ID, or a clear "offline" indicator if the key has expired
+**Plans**: 1 plan
 
 Plans:
-- [x] 19-01-PLAN.md — ServiceRegistry interface + constructor injection
-- [x] 19-02-PLAN.md — Server integration + pause/resume handlers (RUN-04, RUN-05)
-- [x] 19-03-PLAN.md — Remaining handlers: reload-settings, switch-mode, force-backfill, clear-cache (RUN-06 to RUN-09)
+- [x] 32-01-PLAN.md -- Network router: getInstances, getActivityLog, getExchangeStatus procedures + registration
 
-**Requirements:**
-- RUN-04: `pause` command stops WebSocket connections and indicator processing
-- RUN-05: `resume` command restarts WebSocket and indicator processing
-- RUN-06: `reload-settings` command reloads settings from database
-- RUN-07: `switch-mode` command changes runtime mode (position-monitor, scalper-macdv, scalper-orderbook stub)
-- RUN-08: `force-backfill` command triggers candle backfill for specified symbol
-- RUN-09: `clear-cache` command clears Redis cache with scope (all, symbol, timeframe)
-
-**Success Criteria:**
-1. User can pause API and WebSocket connections stop (no new data processing)
-2. User can resume API and WebSocket connections restart from current state
-3. User can reload settings and API uses new values without restart
-4. User can switch between position-monitor and scalper-macdv modes at runtime
-5. User can force backfill for a symbol and candle data is refreshed from exchange
-
----
-
-### Phase 20: Symbol Management
-
-**Goal**: Users can dynamically add/remove symbols with exchange validation
-**Depends on**: Phase 18 (command channel for add/remove), Phase 17 (settings store symbol list)
-**Plans**: 3 plans
+### Phase 33: Admin UI Network View
+**Goal**: Admins can see every instance in the Perseus Network at a glance -- who is running what, where, whether it is healthy, and what happened recently
+**Depends on**: Phase 32 (tRPC endpoints to consume)
+**Requirements**: UI-01, UI-02, UI-03, UI-04, UI-05, DIFF-01, DIFF-02, DIFF-04
+**Success Criteria** (what must be TRUE):
+  1. A "Network" link appears in the Admin header navigation, and clicking it shows instance cards for every known exchange -- each card displays exchange name, connection state as a color-coded badge, hostname, IP, admin name, symbol count, last heartbeat timestamp, and connected-since time
+  2. When an instance key has expired (instance is dead), its card displays as "Offline" with last-known information pulled from the most recent stream entry
+  3. A scrollable activity feed below the cards shows state transitions and errors in reverse chronological order, auto-refreshing alongside the instance cards
+  4. The entire page polls at a 5-second interval consistent with the existing control panel pattern, showing live heartbeat latency with color degradation (green < 10s, yellow < 30s, red > 30s) and uptime duration ("Running for 4h 23m")
+  5. Discord notifications fire when an instance changes state (e.g., goes offline, comes online), leveraging the existing Discord notification service
+**Plans**: 2 plans
 
 Plans:
-- [x] 20-01-PLAN.md — Symbol router for Admin UI (search, validate, metrics)
-- [x] 20-02-PLAN.md — Command handlers (add-symbol, remove-symbol)
-- [x] 20-03-PLAN.md — Bulk import validation and command
-
-**Requirements:**
-- SYM-01: `add-symbol` command adds symbol to watchlist dynamically
-- SYM-02: `remove-symbol` command removes symbol from watchlist
-- SYM-03: Admin verifies symbols against exchange API before saving (delta-based validation)
-- SYM-04: Symbol search endpoint fetches available symbols from user's exchange
-- SYM-05: Bulk symbol import from JSON array
-- SYM-06: Symbol metrics preview (24h volume, price) before adding
-
-**Success Criteria:**
-1. User can add a valid symbol and API starts processing it within 30s
-2. User can remove a symbol and API stops processing it (cache cleanup)
-3. Invalid symbols (not on exchange) are rejected with clear error message
-4. User can search available symbols from their configured exchange
-5. User can bulk import multiple symbols and see validation results for each
-
----
-
-### Phase 21: Admin UI - Settings
-
-**Goal**: Users can view and edit their settings through intuitive form and JSON interfaces
-**Depends on**: Phase 17 (settings endpoints exist)
-**Plans**: 5 plans
-
-Plans:
-- [x] 21-01-PLAN.md — Foundation: libraries, Settings page shell, loading/error states, Sonner toasts
-- [x] 21-02-PLAN.md — JSON editor: Monaco editor component and diff view component
-- [x] 21-03-PLAN.md — Form editor: shadcn components, ProfileSection, RuntimeSection, SettingsForm
-- [x] 21-04-PLAN.md — Split view: side-by-side layout with bidirectional form/JSON sync
-- [x] 21-05-PLAN.md — Save/discard: diff modal, save mutation, discard, toast notifications
-
-**Requirements:**
-- UI-SET-01: Settings page with form-based editor for common settings
-- UI-SET-02: JSON raw editor for power users (Monaco or json-edit-react)
-- UI-SET-03: Side-by-side view (form + JSON simultaneously)
-- UI-SET-04: Settings diff view shows changes before saving
-- UI-SET-05: Save/discard buttons with validation error display
-- UI-SET-06: Loading states and success/error toasts
-
-**Success Criteria:**
-1. User can edit common settings via form fields without knowing JSON structure
-2. Power user can edit raw JSON with syntax highlighting and validation
-3. User can see form changes reflected in JSON view in real-time
-4. User can review diff of changes before committing save
-5. User receives clear feedback on save success or validation errors
-
----
-
-### Phase 22: Admin UI - Control Panel + Symbols
-
-**Goal**: Users can monitor and control API runtime and manage their symbol watchlist
-**Depends on**: Phase 19 (runtime commands), Phase 20 (symbol management)
-**Plans**: 6 plans
-
-Plans:
-- [x] 22-01-PLAN.md — Foundation: shadcn components, controlRouter, page shells, navigation
-- [x] 22-02-PLAN.md — Control Panel: RuntimeStatus, ControlButtons, ConfirmationDialog
-- [x] 22-03-PLAN.md — Command history and active symbols display
-- [x] 22-04-PLAN.md — Symbol watchlist with metrics display
-- [x] 22-05-PLAN.md — Add/remove symbol functionality
-- [x] 22-06-PLAN.md — Bulk import modal
-
-**Requirements:**
-- UI-CTL-01: Runtime status display (running/paused, current mode, uptime)
-- UI-CTL-02: Pause/resume buttons
-- UI-CTL-03: Mode switcher dropdown
-- UI-CTL-04: Active symbols count and list
-- UI-CTL-05: Exchange connection status indicators
-- UI-CTL-06: Command history panel (recent commands + results)
-- UI-CTL-07: Confirmation dialog for destructive commands (clear-cache)
-- UI-SYM-01: Symbol watchlist display with enable/disable toggles
-- UI-SYM-02: Add symbol with search + validation against exchange
-- UI-SYM-03: Remove symbol with confirmation
-- UI-SYM-04: Bulk import modal (paste JSON, validate, preview)
-- UI-SYM-05: Scanner status display (enabled, last run, exchange)
-- UI-SYM-06: Symbol metrics display (volume, price) on hover/expand
-
-**Success Criteria:**
-1. User can see current API status (running/paused, mode, uptime) at a glance
-2. User can pause and resume API with single button click
-3. User can switch runtime mode from dropdown and see confirmation
-4. User can view, add, and remove symbols from watchlist
-5. User can see command history with timestamps and results
-6. Destructive actions require confirmation dialog before execution
-
----
+- [x] 33-01-PLAN.md -- Admin UI: Network page, InstanceCard, ActivityFeed components, header nav link
+- [x] 33-02-PLAN.md -- Discord notifications: Wire state change notifications into StateMachineService
 
 ## Progress
 
-| Phase | Name | Status | Plans |
-|-------|------|--------|-------|
-| 17 | Settings Infrastructure | Complete | 3/3 |
-| 18 | Control Channel Foundation | Complete | 3/3 |
-| 19 | Runtime Commands | Complete | 3/3 |
-| 20 | Symbol Management | Complete | 3/3 |
-| 21 | Admin UI - Settings | Complete | 5/5 |
-| 22 | Admin UI - Control Panel + Symbols | Complete | 6/6 |
+**Execution Order:**
+Phases execute in numeric order: 30 -> 31 -> 32 -> 33
+
+| Phase | Plans Complete | Status | Completed |
+|-------|---------------|--------|-----------|
+| 30. Instance Registry and State Machine | 3/3 | Complete | 2026-02-10 |
+| 31. Network Activity Logging | 2/2 | Complete | 2026-02-10 |
+| 32. tRPC Network Router | 1/1 | Complete | 2026-02-10 |
+| 33. Admin UI Network View | 2/2 | Complete | 2026-02-10 |
 
 ---
-
-## Requirement Coverage
-
-| Category | Requirements | Phase | Count |
-|----------|--------------|-------|-------|
-| Settings Infrastructure | SET-01 to SET-07 | 17 | 7 |
-| Control Channel | RUN-01, RUN-02, RUN-03, RUN-10 to RUN-13 | 18 | 7 |
-| Runtime Commands | RUN-04 to RUN-09 | 19 | 6 |
-| Symbol Management | SYM-01 to SYM-06 | 20 | 6 |
-| Admin UI Settings | UI-SET-01 to UI-SET-06 | 21 | 6 |
-| Admin UI Control | UI-CTL-01 to UI-CTL-07 | 22 | 7 |
-| Admin UI Symbols | UI-SYM-01 to UI-SYM-06 | 22 | 6 |
-
-**Total:** 45 requirements mapped to 6 phases
-
----
-
-_For current project status, see .planning/PROJECT.md_
+*Roadmap created: 2026-02-10*
+*Last updated: 2026-02-10 -- ALL PHASES COMPLETE -- v6.0 milestone delivered*

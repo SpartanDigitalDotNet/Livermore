@@ -1,0 +1,36 @@
+{
+  "name": "@livermore/exchange-core",
+  "version": "1.0.0",
+  "description": "Exchange core services (REST clients, backfill, boundary detection)",
+  "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "require": "./dist/index.js",
+      "import": "./dist/index.mjs",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsup src/index.ts --format esm,cjs --dts --clean",
+    "dev": "tsup src/index.ts --format esm,cjs --dts --watch",
+    "lint": "eslint src",
+    "type-check": "tsc --noEmit",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@livermore/cache": "workspace:*",
+    "@livermore/schemas": "workspace:*",
+    "@livermore/utils": "workspace:*",
+    "ioredis": "5.9.1",
+    "jsonwebtoken": "^9.0.3",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/jsonwebtoken": "^9.0.10",
+    "@types/ws": "^8.5.13",
+    "tsup": "^8.3.5",
+    "typescript": "^5.6.3"
+  }
+}

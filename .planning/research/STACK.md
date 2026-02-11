@@ -1,656 +1,591 @@
-# Stack Research: v4.0 User Settings & Admin Controls
+# Stack Research: v6.0 Perseus Network - Distributed Instance Coordination
 
-**Project:** Livermore Trading Platform
-**Researched:** 2026-01-31
-**Scope:** JSONB settings management, Redis pub/sub commands, exchange symbol scanning, form-based settings editor
-**Overall Confidence:** HIGH
-
----
+**Project:** Livermore Trading Platform - Instance Registration, Heartbeat, Activity Logging
+**Researched:** 2026-02-10
+**Confidence:** HIGH (verified against installed ioredis 5.4.2 type definitions and Redis official docs)
 
 ## Executive Summary
 
-This research covers the stack requirements for adding:
-1. User settings stored as JSONB in PostgreSQL
-2. Redis pub/sub for Admin-to-API command communication
-3. Symbol scanner for fetching top exchange symbols
-4. Form-based settings editor in React
+v6.0 Perseus Network requires distributed instance registration, heartbeat health monitoring, and network activity logging. The good news: the existing stack (ioredis 5.4.2 on Azure Managed Redis with OSS Cluster mode) already has full support for every Redis primitive needed. No new Redis client library is required. Redis Streams (XADD, XRANGE, XTRIM with MINID) are natively supported by ioredis 5.4.2 with complete TypeScript type definitions. The key additions are: (1) a lightweight state machine for instance lifecycle, (2) public IP detection for instance identity, and (3) a disciplined approach to Redis key design for cluster compatibility.
 
-The existing Livermore stack is well-suited for these features. No new major dependencies are required - the work primarily extends existing patterns with Drizzle ORM (JSONB), ioredis (pub/sub), and adds react-hook-form for the admin UI.
+**Key Decision:** Build the state machine in-house rather than importing a library. The instance lifecycle has exactly 5 states and 7 transitions -- XState is extreme overkill, and the micro-libraries (typescript-fsm, typestate) add dependencies for what amounts to ~80 lines of typed code.
 
 ---
 
-## Existing Stack (Keep)
+## Recommended Stack
 
-These components are validated and should remain unchanged for v4.0.
+### Core Infrastructure (Already Installed -- No Changes)
 
-| Technology | Version | Purpose | Keep Rationale |
-|------------|---------|---------|----------------|
-| TypeScript | 5.6.3 | All application code | Established, type safety critical |
-| drizzle-orm | 0.36.4 | Database ORM | Already has JSONB with `$type<T>()` |
-| ioredis | 5.4.2 | Redis client | Already supports pub/sub |
-| postgres | 3.4.5 | PostgreSQL driver | Already configured |
-| zod | 3.24.1 | Runtime validation | Used throughout codebase |
-| @livermore/coinbase-client | workspace | Coinbase API | Already has `getProducts()` |
+| Technology | Version | Purpose | Status |
+|------------|---------|---------|--------|
+| ioredis | 5.4.2 (pinned) | Redis client with Cluster + Streams support | INSTALLED |
+| Redis (Azure Managed) | 6.x+ (OSS Cluster) | Coordination bus, streams, TTL-based heartbeat | PRODUCTION |
+| TypeScript | 5.9.3 | Type safety for state machine, stream entries | INSTALLED |
+| Zod | 3.25.x | Schema validation for stream entries, registration payloads | INSTALLED |
+| Pino | 9.x/10.x | Structured logging | INSTALLED |
 
----
-
-## Additions Needed
-
-### 1. Admin UI Forms: React Hook Form + Zod
+### New Dependencies
 
 | Technology | Version | Purpose | Rationale |
 |------------|---------|---------|-----------|
-| react-hook-form | ^7.54.0 | Form state management | Best DX, minimal re-renders, TypeScript-first |
-| @hookform/resolvers | ^3.9.0 | Zod integration | Type-safe validation with existing Zod schemas |
+| **None required** | -- | -- | Everything builds on existing stack |
 
-**Installation:**
-```bash
-pnpm --filter @livermore/admin add react-hook-form @hookform/resolvers
-```
+**This is a zero-new-dependency milestone.** All capabilities come from ioredis primitives already available.
 
-**Why React Hook Form:**
-- Uncontrolled inputs = minimal re-renders
-- `resolver` prop integrates Zod schemas directly
-- `formState.errors` provides field-level validation messages
-- `formState.isSubmitting` handles loading states
-- Already integrates with Zod via `@hookform/resolvers`
+### Public IP Detection (No Library)
 
-**Basic Pattern:**
-```tsx
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
+**Recommendation: Use Node.js built-in `https` module to query a single service.**
 
-const settingsSchema = z.object({
-  watchlist: z.array(z.string()).min(1, "At least one symbol required"),
-  alertThreshold: z.number().min(0).max(100),
-  refreshInterval: z.number().min(5).max(300),
-});
+Do NOT install `public-ip` (sindresorhus). Reasons:
+- v7+ and v8.0.0 are **ESM-only** (pure ESM package). The Livermore monorepo builds with tsup to both ESM and CJS (`--format esm,cjs`). Importing a pure-ESM package from CJS output causes runtime failures.
+- The package's DNS-based detection (OpenDNS, Google DNS) is overkill for a server that needs its IP once at startup.
+- Zero-dependency alternatives like `node-public-ip` have 1 weekly download and are effectively abandoned.
 
-type SettingsForm = z.infer<typeof settingsSchema>;
+**Instead, use a 10-line utility function:**
 
-function SettingsEditor() {
-  const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm<SettingsForm>({
-    resolver: zodResolver(settingsSchema),
-    defaultValues: {
-      watchlist: [],
-      alertThreshold: 5,
-      refreshInterval: 30,
-    },
+```typescript
+import https from 'node:https';
+
+/**
+ * Detect public IPv4 address by querying a lightweight HTTP service.
+ * Falls back gracefully if detection fails (non-critical for operation).
+ */
+export async function detectPublicIp(timeoutMs = 5000): Promise<string | null> {
+  return new Promise((resolve) => {
+    const req = https.get('https://api.ipify.org', { timeout: timeoutMs }, (res) => {
+      let data = '';
+      res.on('data', (chunk) => { data += chunk; });
+      res.on('end', () => resolve(data.trim() || null));
+    });
+    req.on('error', () => resolve(null));
+    req.on('timeout', () => { req.destroy(); resolve(null); });
   });
-
-  const onSubmit = async (data: SettingsForm) => {
-    await trpc.settings.update.mutate(data);
-  };
-
-  return (
-    <form onSubmit={handleSubmit(onSubmit)}>
-      {/* Form fields with register() */}
-    </form>
-  );
 }
 ```
 
-**Alternatives Considered:**
+**Why ipify.org:**
+- Free, no API key required
+- Returns plain-text IPv4 address (no JSON parsing needed)
+- High availability, used by millions of services
+- Single HTTPS call, no DNS tricks
 
-| Library | Verdict | Why Not |
-|---------|---------|---------|
-| Formik | NO | More boilerplate, larger bundle, less TypeScript support |
-| Final Form | NO | Less active development, weaker TypeScript |
-| Native useState | NO | Manual validation, more code, easy to get wrong |
-| Tanstack Form | MAYBE | Newer library, less ecosystem support currently |
+**Fallback chain (if ipify fails):**
+- `https://icanhazip.com` (Cloudflare-owned)
+- `https://ifconfig.me/ip`
+- Return `null` (public IP is informational, not critical)
 
-**Confidence:** HIGH - Industry standard, official Zod integration, excellent TypeScript support
-
-**Sources:**
-- [React Hook Form useForm Docs](https://react-hook-form.com/docs/useform)
-- [@hookform/resolvers GitHub](https://github.com/react-hook-form/resolvers)
-- [Zod + React Hook Form Tutorial](https://www.freecodecamp.org/news/react-form-validation-zod-react-hook-form/)
+**Confidence:** HIGH -- ipify.org is a well-established service. The implementation uses only Node.js built-in `https`.
 
 ---
 
-### 2. Database: JSONB Settings with Drizzle ORM
+## Redis Streams: ioredis API Reference
 
-**No new dependencies** - Drizzle ORM already supports JSONB with `$type<T>()` for compile-time type safety.
+**Verified:** All method signatures confirmed present in `ioredis@5.4.2` type definitions at `node_modules/.pnpm/ioredis@5.4.2/.../RedisCommander.d.ts`.
 
-**Current State:**
-The existing `user_settings` table uses a global key (no userId):
-```typescript
-// packages/database/drizzle/schema.ts
-export const userSettings = pgTable("user_settings", {
-  id: serial().primaryKey().notNull(),
-  key: varchar({ length: 100 }).notNull(),
-  value: jsonb().notNull(),
-  updatedAt: timestamp("updated_at").defaultNow().notNull(),
-});
-```
-
-**Recommended Schema Extension:**
-Add `userId` for user-specific settings, or create a new `user_preferences` table:
+### XADD -- Add Entry to Stream
 
 ```typescript
-import { jsonb, pgTable, serial, varchar, timestamp, foreignKey } from "drizzle-orm/pg-core";
-
-// Type-safe JSONB with compile-time inference
-export const userPreferences = pgTable("user_preferences", {
-  id: serial().primaryKey().notNull(),
-  userId: serial("user_id").notNull(),
-  key: varchar({ length: 100 }).notNull(),
-  value: jsonb().$type<UserPreferenceValue>().notNull(),
-  updatedAt: timestamp("updated_at").defaultNow().notNull(),
-}, (table) => ({
-  userIdFk: foreignKey({
-    columns: [table.userId],
-    foreignColumns: [users.id],
-    name: "user_preferences_user_id_fk"
-  }).onDelete("cascade"),
-  uniqueUserKey: unique().on(table.userId, table.key),
-}));
-```
-
-**Discriminated Union Pattern for Type Safety:**
-```typescript
-// packages/schemas/src/settings/user-settings.schema.ts
-import { z } from "zod";
-
-export const WatchlistSettingsSchema = z.object({
-  type: z.literal("watchlist"),
-  symbols: z.array(z.string().regex(/^[A-Z]+-[A-Z]+$/)),
-  sortBy: z.enum(["alpha", "volume", "change"]).default("alpha"),
-});
-
-export const AlertSettingsSchema = z.object({
-  type: z.literal("alerts"),
-  enabled: z.boolean().default(true),
-  priceChangeThreshold: z.number().min(0).max(50).default(5),
-  volumeSpike: z.boolean().default(false),
-});
-
-export const ScannerSettingsSchema = z.object({
-  type: z.literal("scanner"),
-  topN: z.number().min(10).max(100).default(50),
-  quoteAsset: z.enum(["USD", "USDC"]).default("USD"),
-  minVolume24h: z.number().min(0).default(100000),
-});
-
-// Discriminated union for type-safe storage
-export const UserPreferenceValueSchema = z.discriminatedUnion("type", [
-  WatchlistSettingsSchema,
-  AlertSettingsSchema,
-  ScannerSettingsSchema,
-]);
-
-export type UserPreferenceValue = z.infer<typeof UserPreferenceValueSchema>;
-```
-
-**JSONB Query Pattern:**
-Drizzle requires raw SQL for JSONB field access (native operators not yet supported):
-```typescript
-import { sql } from "drizzle-orm";
-
-// Query JSONB field
-const results = await db.select()
-  .from(userPreferences)
-  .where(sql`${userPreferences.value}->>'type' = 'watchlist'`);
-```
-
-**Confidence:** HIGH - Official Drizzle docs verify `$type<T>()` pattern, existing codebase already uses JSONB
-
-**Sources:**
-- [Drizzle ORM PostgreSQL Column Types](https://orm.drizzle.team/docs/column-types/pg)
-- [Drizzle JSONB Type Safety Discussion](https://github.com/drizzle-team/drizzle-orm/discussions/386)
-- [Drizzle PostgreSQL Best Practices 2025](https://gist.github.com/productdevbook/7c9ce3bbeb96b3fabc3c7c2aa2abc717)
-
----
-
-### 3. Redis Pub/Sub: Admin Commands
-
-**No new dependencies** - ioredis already supports pub/sub. The existing `createRedisPubSubClient()` in `@livermore/cache` provides the pattern.
-
-**Critical Rule:** Separate clients for pub/sub vs regular operations.
-
-Once a Redis client calls `subscribe()`, it enters "subscriber mode" and can ONLY execute:
-- `subscribe`, `psubscribe`
-- `unsubscribe`, `punsubscribe`
-- `ping`, `quit`
-
-Regular commands (`set`, `get`, `zadd`, etc.) will fail.
-
-**Implementation Pattern:**
-
-```typescript
-// packages/cache/src/pubsub/admin-commands.ts
-import Redis from "ioredis";
-import { createLogger } from "@livermore/utils";
-
-const logger = createLogger("admin-pubsub");
-
-// Channel constants
-export const ADMIN_COMMANDS_CHANNEL = "admin:commands";
-export const ADMIN_STATUS_CHANNEL = "admin:status";
-
-// Command types (defined in @livermore/schemas)
-export interface AdminCommand {
-  type: "SCANNER_START" | "SCANNER_STOP" | "REFRESH_SYMBOLS" | "SYNC_SETTINGS";
-  payload: Record<string, unknown>;
-  timestamp: number;
-}
-
-// Publisher (used by API server to publish commands from Admin UI)
-export class AdminCommandPublisher {
-  constructor(private redis: Redis) {}
-
-  async publish(command: AdminCommand): Promise<void> {
-    const message = JSON.stringify({
-      ...command,
-      timestamp: Date.now(),
-    });
-    await this.redis.publish(ADMIN_COMMANDS_CHANNEL, message);
-    logger.info({ type: command.type }, "Published admin command");
-  }
-
-  async publishStatus(status: { type: string; data: unknown }): Promise<void> {
-    await this.redis.publish(ADMIN_STATUS_CHANNEL, JSON.stringify(status));
-  }
-}
-
-// Subscriber (used by API server to handle incoming commands)
-export class AdminCommandSubscriber {
-  private subscriber: Redis;
-
-  constructor(private redis: Redis) {
-    // MUST create separate client for subscribing
-    this.subscriber = redis.duplicate();
-  }
-
-  async start(handler: (command: AdminCommand) => Promise<void>): Promise<void> {
-    await this.subscriber.subscribe(ADMIN_COMMANDS_CHANNEL);
-
-    this.subscriber.on("message", async (channel, message) => {
-      if (channel === ADMIN_COMMANDS_CHANNEL) {
-        try {
-          const command = JSON.parse(message) as AdminCommand;
-          await handler(command);
-        } catch (err) {
-          logger.error({ err, message }, "Failed to handle admin command");
-        }
-      }
-    });
-
-    // Re-subscribe on reconnection
-    this.subscriber.on("ready", () => {
-      this.subscriber.subscribe(ADMIN_COMMANDS_CHANNEL);
-    });
-
-    logger.info("Admin command subscriber started");
-  }
-
-  async stop(): Promise<void> {
-    await this.subscriber.unsubscribe(ADMIN_COMMANDS_CHANNEL);
-    await this.subscriber.quit();
-  }
-}
-```
-
-**Channel Naming Convention:**
-```
-admin:commands           # Admin UI -> API server commands
-admin:status             # API server -> Admin UI status updates
-scanner:results:{userId} # Scanner results per user
-settings:changed:{userId} # Settings change notifications
-```
-
-**Existing Pattern Reference:**
-The codebase already uses Redis pub/sub for candle close events in `CoinbaseAdapter`:
-```typescript
-// packages/coinbase-client/src/adapter/coinbase-adapter.ts line 514-524
-const channel = candleCloseChannel(
-  this.userId,
-  this.exchangeIdNum,
-  candle.symbol,
-  candle.timeframe
+// Auto-generated ID (timestamp-based)
+const entryId = await redis.xadd(
+  'perseus:activity',         // stream key
+  '*',                        // auto-generate ID
+  'instanceId', instanceId,   // field-value pairs
+  'event', 'REGISTERED',
+  'exchange', 'coinbase',
+  'timestamp', Date.now().toString()
 );
-await this.redis.publish(channel, JSON.stringify(candle));
+// Returns: "1707580800000-0" (timestamp-sequence)
+
+// With MAXLEN trimming on write (approximate)
+const entryId = await redis.xadd(
+  'perseus:activity',
+  'MAXLEN', '~', '100000',    // keep ~100K entries max
+  '*',
+  'instanceId', instanceId,
+  'event', 'HEARTBEAT'
+);
 ```
 
-**Confidence:** HIGH - ioredis pub/sub is well-documented, existing codebase already uses pattern
-
-**Sources:**
-- [ioredis GitHub - Pub/Sub](https://github.com/redis/ioredis)
-- [Redis Pub/Sub Official Docs](https://redis.io/docs/latest/develop/pubsub/)
-- [ioredis Pub/Sub Guide](https://thisdavej.com/guides/redis-node/node/pubsub.html)
-
----
-
-### 4. Symbol Scanner: Coinbase Products API
-
-**No new dependencies** - The existing `CoinbaseRestClient.getProducts()` already fetches all products.
-
-**Current Implementation:**
+**Type signature (from RedisCommander.d.ts):**
 ```typescript
-// packages/coinbase-client/src/rest/client.ts
-async getProducts(): Promise<any[]> {
-  const path = '/api/v3/brokerage/products';
-  const response = await this.request('GET', path);
-  return response.products || [];
-}
+xadd(...args: [key: RedisKey, ...args: RedisValue[]]): Result<string | null, Context>;
 ```
 
-**Recommended Extension:**
-Add a method to get top symbols by volume:
+### XRANGE -- Read Range of Entries
 
 ```typescript
-// Add to CoinbaseRestClient class
-interface CoinbaseProduct {
-  product_id: string;        // "BTC-USD"
-  base_currency_id: string;  // "BTC"
-  quote_currency_id: string; // "USD"
-  status: "online" | "offline" | "delisted";
-  volume_24h: string;        // 24h trading volume
-  price: string;             // Current price
-  price_percentage_change_24h: string;
-}
+// Read all entries
+const entries = await redis.xrange('perseus:activity', '-', '+');
+// Returns: [["1707580800000-0", ["instanceId", "abc", "event", "REGISTERED"]], ...]
 
-async getTopSymbolsByVolume(
-  limit: number = 50,
-  quoteAsset: string = "USD"
-): Promise<CoinbaseProduct[]> {
-  const products = await this.getProducts();
+// Read entries in a time window (last 24 hours)
+const since = (Date.now() - 86400000).toString();
+const entries = await redis.xrange('perseus:activity', since, '+');
 
-  return products
-    .filter((p: CoinbaseProduct) =>
-      p.status === "online" &&
-      p.quote_currency_id === quoteAsset &&
-      parseFloat(p.volume_24h) > 0
-    )
-    .sort((a: CoinbaseProduct, b: CoinbaseProduct) =>
-      parseFloat(b.volume_24h) - parseFloat(a.volume_24h)
-    )
-    .slice(0, limit);
-}
+// Read with COUNT limit
+const entries = await redis.xrange('perseus:activity', '-', '+', 'COUNT', '100');
 ```
 
-**Scanner Service Pattern:**
+**Type signature:**
 ```typescript
-// packages/services/src/scanner/symbol-scanner.ts
-export class SymbolScanner {
-  constructor(
-    private restClient: CoinbaseRestClient,
-    private redis: Redis
-  ) {}
+xrange(
+  key: RedisKey,
+  start: string | Buffer | number,
+  end: string | Buffer | number,
+  callback?: Callback<[id: string, fields: string[]][]>
+): Result<[id: string, fields: string[]][], Context>;
 
-  async scan(options: ScannerOptions): Promise<ScanResult[]> {
-    const products = await this.restClient.getTopSymbolsByVolume(
-      options.topN,
-      options.quoteAsset
-    );
-
-    const results: ScanResult[] = products
-      .filter(p => parseFloat(p.volume_24h) >= options.minVolume24h)
-      .map(p => ({
-        symbol: p.product_id,
-        volume24h: parseFloat(p.volume_24h),
-        price: parseFloat(p.price),
-        change24h: parseFloat(p.price_percentage_change_24h),
-      }));
-
-    // Cache results
-    await this.redis.setex(
-      `scanner:results:${options.userId}`,
-      300, // 5 minute TTL
-      JSON.stringify(results)
-    );
-
-    return results;
-  }
-}
+xrange(
+  key: RedisKey,
+  start: string | Buffer | number,
+  end: string | Buffer | number,
+  countToken: "COUNT",
+  count: number | string,
+  callback?: Callback<[id: string, fields: string[]][]>
+): Result<[id: string, fields: string[]][], Context>;
 ```
 
-**Why NOT CCXT:**
-- Livermore is Coinbase-only (for now)
-- CCXT adds 2MB+ bundle size
-- Extra abstraction layer = more complexity
-- Already have working Coinbase client with JWT auth
-- Would need to learn CCXT API on top of Coinbase API
+**Return format:** Array of `[id, [field1, value1, field2, value2, ...]]` tuples. The fields array is flat (not key-value pairs), so parsing requires stepping by 2.
 
-**If Multi-Exchange Later:**
-Revisit CCXT or build on existing `BaseExchangeAdapter` pattern.
+### XREAD -- Blocking Read (Consumer Pattern)
 
-**Confidence:** HIGH - Existing working implementation, just needs extension
+```typescript
+// Non-blocking read from a position
+const result = await redis.xread('COUNT', '10', 'STREAMS', 'perseus:activity', lastId);
 
-**Sources:**
-- [Coinbase Advanced Trade API](https://docs.cdp.coinbase.com/advanced-trade/docs/api-overview/)
-- [CCXT npm](https://www.npmjs.com/package/ccxt) - evaluated but not recommended
+// Blocking read (for real-time consumers)
+const result = await redis.xread('BLOCK', 5000, 'STREAMS', 'perseus:activity', '$');
+// Blocks up to 5 seconds waiting for new entries
+```
 
----
+**Important for Cluster Mode:** XREAD with multiple streams requires all stream keys to hash to the same slot. Use hash tags if reading multiple streams atomically.
 
-## Full Installation Commands
+### XTRIM -- Retention Management with MINID
 
-```bash
-# Admin UI forms (new dependencies)
-pnpm --filter @livermore/admin add react-hook-form @hookform/resolvers
+```typescript
+// Remove all entries older than 90 days (MINID strategy)
+const ninetyDaysAgo = Date.now() - (90 * 24 * 60 * 60 * 1000);
+const trimmed = await redis.xtrim('perseus:activity', 'MINID', ninetyDaysAgo.toString());
+// Returns: number of entries removed
 
-# No new backend dependencies required - all existing:
-# - drizzle-orm (JSONB) - already ^0.36.4
-# - ioredis (pub/sub) - already ^5.4.2
-# - @livermore/coinbase-client (products API) - workspace package
-# - zod (schemas) - already ^3.24.1
+// Approximate trimming (more efficient, recommended for periodic cleanup)
+const trimmed = await redis.xtrim('perseus:activity', 'MINID', '~', ninetyDaysAgo.toString());
+
+// With LIMIT (process in batches to avoid blocking)
+const trimmed = await redis.xtrim(
+  'perseus:activity',
+  'MINID', '~', ninetyDaysAgo.toString(),
+  'LIMIT', '1000'
+);
+```
+
+**Type signatures (verified in RedisCommander.d.ts):**
+```typescript
+xtrim(key: RedisKey, minid: "MINID", threshold: string | Buffer | number,
+      callback?: Callback<number>): Result<number, Context>;
+xtrim(key: RedisKey, minid: "MINID", approximately: "~", threshold: string | Buffer | number,
+      callback?: Callback<number>): Result<number, Context>;
+xtrim(key: RedisKey, minid: "MINID", approximately: "~", threshold: string | Buffer | number,
+      countToken: "LIMIT", count: number | string,
+      callback?: Callback<number>): Result<number, Context>;
+```
+
+**MINID works because Redis Stream IDs are timestamp-based.** When using auto-generated IDs (`*`), the ID is `<millisecond-timestamp>-<sequence>`. XTRIM MINID treats the threshold as a stream ID, removing all entries with IDs numerically less than the threshold. Passing a millisecond timestamp as the threshold effectively means "remove everything older than this time."
+
+**Confidence:** HIGH -- verified against installed ioredis 5.4.2 type definitions and Redis official documentation.
+
+### XLEN -- Stream Length
+
+```typescript
+const length = await redis.xlen('perseus:activity');
+// Returns: number
+```
+
+### XINFO -- Stream Metadata
+
+```typescript
+const info = await redis.xinfo('STREAM', 'perseus:activity');
+// Returns stream metadata (first/last entry ID, length, etc.)
 ```
 
 ---
 
-## Patterns to Follow
+## Heartbeat with TTL-Based Dead Instance Detection
 
-### 1. Settings Schema Organization
+### Pattern: SET with EX + Periodic Renewal
 
-Create Zod schemas in `@livermore/schemas` for settings types:
+The standard Redis heartbeat pattern uses `SET key value EX ttl` and periodic renewal. If an instance dies, the key expires automatically, and the absence of the key indicates a dead instance.
 
 ```typescript
-// packages/schemas/src/settings/index.ts
-export * from "./watchlist.schema";
-export * from "./alerts.schema";
-export * from "./scanner.schema";
-export * from "./user-preference.schema";
+// Instance heartbeat (every 15 seconds, with 45-second TTL)
+// TTL should be 3x the heartbeat interval for tolerance
+const HEARTBEAT_INTERVAL_MS = 15_000;
+const HEARTBEAT_TTL_SECONDS = 45;
+
+// Write heartbeat
+await redis.set(
+  `perseus:heartbeat:${instanceId}`,
+  JSON.stringify({ lastBeat: Date.now(), state: 'running', exchange: 'coinbase' }),
+  'EX', HEARTBEAT_TTL_SECONDS
+);
+
+// Check if instance is alive
+const heartbeat = await redis.get(`perseus:heartbeat:${instanceId}`);
+if (!heartbeat) {
+  // Instance is dead (key expired)
+}
+
+// Check TTL remaining
+const ttl = await redis.ttl(`perseus:heartbeat:${instanceId}`);
+// Returns: seconds remaining, -2 if key doesn't exist, -1 if no expiry
 ```
 
-### 2. tRPC Router for Settings
+### Dead Instance Detection Strategy
+
+Two complementary approaches:
+
+**1. Passive Detection (TTL Expiry):** When key expires, the instance is dead. Any consumer checking `GET` returns null.
+
+**2. Active Scanning (Periodic Sweep):** A coordinator periodically scans all `perseus:heartbeat:*` keys to build network state. Use `SCAN` (not `KEYS`) in production:
 
 ```typescript
-// apps/api/src/routers/settings.router.ts
-import { z } from "zod";
-import { router, protectedProcedure } from "../trpc";
-import { UserPreferenceValueSchema } from "@livermore/schemas";
+// Cluster-safe scanning of heartbeat keys
+async function* scanHeartbeatKeys(redis: RedisClient): AsyncGenerator<string> {
+  let cursor = '0';
+  do {
+    const [nextCursor, keys] = await redis.scan(cursor, 'MATCH', 'perseus:heartbeat:*', 'COUNT', '100');
+    cursor = nextCursor;
+    for (const key of keys) yield key;
+  } while (cursor !== '0');
+}
+```
 
-export const settingsRouter = router({
-  get: protectedProcedure
-    .input(z.object({ key: z.string() }))
-    .query(async ({ ctx, input }) => {
-      return ctx.db.query.userPreferences.findFirst({
-        where: and(
-          eq(userPreferences.userId, ctx.user.id),
-          eq(userPreferences.key, input.key)
-        )
-      });
-    }),
+**Why not Redis Keyspace Notifications?**
+Keyspace notifications (`__keyevent@0__:expired`) are unreliable in cluster mode and add pub/sub overhead. Periodic scanning is simpler and more predictable for a small number of instances (2-10).
 
-  update: protectedProcedure
-    .input(z.object({
-      key: z.string(),
-      value: UserPreferenceValueSchema,
-    }))
-    .mutation(async ({ ctx, input }) => {
-      // Upsert to database
-      await ctx.db.insert(userPreferences)
-        .values({
-          userId: ctx.user.id,
-          key: input.key,
-          value: input.value,
-          updatedAt: new Date(),
-        })
-        .onConflictDoUpdate({
-          target: [userPreferences.userId, userPreferences.key],
-          set: {
-            value: input.value,
-            updatedAt: new Date(),
-          }
-        });
+### Why 15s Interval / 45s TTL
 
-      // Publish change notification via Redis pub/sub
-      await ctx.publisher.publish({
-        type: "SYNC_SETTINGS",
-        payload: { userId: ctx.user.id, key: input.key }
-      });
-    }),
+| Parameter | Value | Rationale |
+|-----------|-------|-----------|
+| Heartbeat interval | 15 seconds | Frequent enough for timely detection, infrequent enough to avoid Redis load |
+| TTL | 45 seconds (3x interval) | Tolerates 2 missed heartbeats before declaring dead |
+| Detection latency | 30-45 seconds | Acceptable for network visibility (not trading-critical) |
+| Redis operations | ~4/min per instance | Negligible load on Azure Managed Redis |
+
+**Confidence:** HIGH -- this is a well-established distributed systems pattern.
+
+---
+
+## State Machine: Build In-House
+
+### Why Not Use a Library
+
+| Library | Size | Why Not |
+|---------|------|---------|
+| XState v5 | ~47 KB min | Massive overkill for 5 states. Designed for complex UI interactions, not server lifecycle. |
+| typescript-fsm | 1 KB | Decent but adds npm dependency for ~80 lines of code. Async support via promises is adequate but we can do better with our own types. |
+| typestate | ~3 KB | Last meaningful update 2021. No async transition support. |
+| robot | 1.2 KB | Functional API is elegant but React-focused. |
+| fiume | new | Zero stars, no adoption evidence. |
+
+**Recommendation:** Write a typed state machine in ~80-100 lines. The instance lifecycle is simple and stable:
+
+```
+States: IDLE -> REGISTERING -> RUNNING -> DRAINING -> DEAD
+```
+
+Benefits of in-house:
+- Perfect TypeScript integration with Livermore's patterns (Zod schemas, pino logging)
+- Zero new dependencies
+- Full control over async transitions (heartbeat setup, stream logging)
+- Testable without library-specific test utilities
+- The state machine will never grow complex enough to justify XState
+
+### Recommended Implementation Pattern
+
+```typescript
+/** Instance lifecycle states */
+type InstanceState = 'idle' | 'registering' | 'running' | 'draining' | 'dead';
+
+/** Events that trigger state transitions */
+type InstanceEvent = 'REGISTER' | 'REGISTERED' | 'DRAIN' | 'DRAINED' | 'ERROR' | 'HEARTBEAT_LOST';
+
+/** Transition definition */
+interface Transition {
+  from: InstanceState;
+  event: InstanceEvent;
+  to: InstanceState;
+  action?: () => Promise<void>;
+}
+
+const TRANSITIONS: Transition[] = [
+  { from: 'idle',        event: 'REGISTER',       to: 'registering' },
+  { from: 'registering', event: 'REGISTERED',     to: 'running' },
+  { from: 'registering', event: 'ERROR',          to: 'dead' },
+  { from: 'running',     event: 'DRAIN',          to: 'draining' },
+  { from: 'running',     event: 'ERROR',          to: 'dead' },
+  { from: 'running',     event: 'HEARTBEAT_LOST', to: 'dead' },
+  { from: 'draining',    event: 'DRAINED',        to: 'dead' },
+];
+```
+
+This is explicit, type-safe, and requires no library. Illegal transitions are caught at runtime by checking the transition table.
+
+**Confidence:** HIGH -- straightforward engineering decision.
+
+---
+
+## Redis Key Patterns for Instance Registration
+
+### Namespace Design
+
+All Perseus Network keys use the `perseus:` prefix to avoid collision with existing Livermore keys (`candles:`, `indicator:`, `ticker:`, `channel:`, `livermore:`).
+
+### Key Schema
+
+| Key Pattern | Type | TTL | Purpose |
+|-------------|------|-----|---------|
+| `perseus:instance:{instanceId}` | Hash | None (managed by lifecycle) | Instance registration record |
+| `perseus:heartbeat:{instanceId}` | String | 45s (auto-renewing) | Heartbeat liveness signal |
+| `perseus:activity` | Stream | XTRIM MINID ~90 days | Network activity log |
+| `perseus:network:state` | String (JSON) | None | Aggregated network state snapshot |
+
+### Instance ID Generation
+
+Use `{hostname}:{exchangeId}:{pid}:{startupTimestamp}` format:
+
+```typescript
+const instanceId = `${os.hostname()}:${exchangeId}:${process.pid}:${Date.now()}`;
+// Example: "DESKTOP-ABC:1:12345:1707580800000"
+```
+
+This is:
+- Unique across instances (PID + timestamp)
+- Human-readable for debugging
+- Contains exchange ID for filtering
+- Deterministic (same instance always generates same ID pattern)
+
+### Instance Registration Hash
+
+```typescript
+// Registration uses HSET for structured data
+await redis.hset(`perseus:instance:${instanceId}`, {
+  instanceId,
+  hostname: os.hostname(),
+  exchangeId: exchangeId.toString(),
+  exchangeName: 'coinbase',
+  publicIp: publicIp || 'unknown',
+  privateIp: getPrivateIp(),
+  pid: process.pid.toString(),
+  version: packageVersion,
+  state: 'running',
+  registeredAt: new Date().toISOString(),
+  lastStateChange: new Date().toISOString(),
 });
 ```
 
-### 3. Admin Command Types
+**Why HSET instead of SET with JSON:**
+- Individual field reads without deserializing (`HGET perseus:instance:abc state`)
+- Atomic field updates (`HSET perseus:instance:abc state draining`)
+- Smaller operations for heartbeat-like field updates
+- Native Redis data structure, no JSON parse overhead
 
-```typescript
-// packages/schemas/src/admin/commands.schema.ts
-import { z } from "zod";
+### Azure Cluster Considerations
 
-export const AdminCommandSchema = z.discriminatedUnion("type", [
-  z.object({
-    type: z.literal("SCANNER_START"),
-    payload: z.object({
-      userId: z.number(),
-      filters: z.object({
-        topN: z.number(),
-        quoteAsset: z.string(),
-        minVolume24h: z.number().optional(),
-      }),
-    }),
-  }),
-  z.object({
-    type: z.literal("SCANNER_STOP"),
-    payload: z.object({ userId: z.number() }),
-  }),
-  z.object({
-    type: z.literal("REFRESH_SYMBOLS"),
-    payload: z.object({}),
-  }),
-  z.object({
-    type: z.literal("SYNC_SETTINGS"),
-    payload: z.object({ userId: z.number(), key: z.string().optional() }),
-  }),
-]);
+**Hash Slot Routing:** In Azure Redis with OSS Cluster mode, keys are distributed across slots via CRC16 hashing. This matters for:
 
-export type AdminCommand = z.infer<typeof AdminCommandSchema>;
-```
+1. **No multi-key operations across different instances:** `perseus:instance:abc` and `perseus:instance:def` will likely hash to different slots. Use `deleteKeysClusterSafe()` (already in codebase) for bulk cleanup.
+
+2. **Stream is a single key:** `perseus:activity` is one key on one slot. All XADD/XRANGE/XTRIM operations go to the same node. For a small network (2-10 instances), this is fine and actually desirable (no cross-slot coordination).
+
+3. **Hash tags are NOT recommended here:** Using `{perseus}:instance:abc` would force ALL Perseus keys to the same slot. This defeats cluster distribution and creates a hot spot. The keys are small and operations are infrequent, so natural distribution is fine.
+
+4. **SCAN for discovery:** Use `SCAN` with `MATCH perseus:instance:*` for listing instances. In cluster mode, ioredis Cluster automatically scans all nodes when using the `scanStream()` method.
+
+**Confidence:** HIGH -- consistent with existing codebase patterns (`deleteKeysClusterSafe`, single-key operations).
 
 ---
 
-## Anti-Patterns to Avoid
+## Activity Stream Entry Schema
 
-### 1. Single Redis Client for Everything
+### Entry Structure
 
-**BAD:**
+Each stream entry uses flat field-value pairs (Redis Streams requirement):
+
 ```typescript
-const redis = createRedisClient(config);
-redis.subscribe("channel"); // Now redis can ONLY do subscribe commands!
-redis.set("key", "value");  // ERROR: client is in subscriber mode
+interface ActivityEntry {
+  instanceId: string;      // Which instance
+  event: string;           // Event type: REGISTERED, STATE_CHANGE, HEARTBEAT_LOST, DEREGISTERED, ERROR
+  exchange: string;        // Exchange name
+  exchangeId: string;      // Exchange ID
+  fromState?: string;      // Previous state (for STATE_CHANGE)
+  toState?: string;        // New state (for STATE_CHANGE)
+  reason?: string;         // Why (for ERROR, DEREGISTERED)
+  publicIp?: string;       // Instance public IP
+  hostname?: string;       // Instance hostname
+  ts: string;              // ISO timestamp
+}
 ```
 
-**GOOD:**
+### Retention Strategy: XTRIM MINID for 90-Day Window
+
 ```typescript
-const publisher = createRedisClient(config);
-const subscriber = createRedisClient(config); // or publisher.duplicate()
-subscriber.subscribe("channel");
-publisher.set("key", "value"); // Works fine
+/**
+ * Trim activity stream to retain only the last 90 days.
+ * Called periodically (e.g., daily via cron or setInterval).
+ *
+ * Uses approximate trimming (~) for efficiency -- Redis may keep
+ * a few extra entries beyond the cutoff, which is acceptable.
+ */
+async function trimActivityStream(redis: RedisClient): Promise<number> {
+  const RETENTION_DAYS = 90;
+  const cutoffMs = Date.now() - (RETENTION_DAYS * 24 * 60 * 60 * 1000);
+
+  // MINID with approximate trimming
+  const trimmed = await redis.xtrim(
+    'perseus:activity',
+    'MINID', '~', cutoffMs.toString()
+  );
+
+  return trimmed;
+}
 ```
 
-### 2. Storing Complex Objects Without Schema
+**Why MINID over MAXLEN:**
+- MAXLEN caps by count (e.g., keep last 100K entries). Entry rate varies, so count-based retention doesn't map cleanly to time.
+- MINID caps by time directly. "Remove entries older than 90 days" is exactly what MINID does.
+- Stream IDs are timestamp-based, so MINID naturally aligns with time-based retention.
 
-**BAD:**
-```typescript
-// Untyped JSONB - runtime errors waiting to happen
-value: jsonb().default({})
-```
+**Why approximate (`~`) over exact (`=`):**
+- Redis internally stores streams in radix tree nodes. Exact trimming may need to split nodes, which is expensive.
+- Approximate trimming removes whole nodes, which is O(1) per node.
+- The difference is a few extra entries, which is irrelevant for a 90-day window.
 
-**GOOD:**
-```typescript
-// Type-safe with validation
-value: jsonb().$type<z.infer<typeof SettingsSchema>>()
-// PLUS validate on insert/update with Zod
-```
-
-### 3. Polling Instead of Pub/Sub
-
-**BAD:**
-```typescript
-// Admin UI polling for status every 5 seconds
-setInterval(() => fetchStatus(), 5000);
-```
-
-**GOOD:**
-```typescript
-// Real-time via WebSocket subscription backed by Redis pub/sub
-const statusSubscription = trpc.admin.status.subscribe({
-  onData: (status) => setStatus(status)
-});
-```
-
-### 4. JSONB for High-Query Fields
-
-**BAD:**
-```typescript
-// Frequently queried field buried in JSONB
-where(sql`${settings.value}->>'status' = 'active'`)
-```
-
-**GOOD:**
-```typescript
-// Frequently queried = top-level column with index
-isActive: boolean("is_active").default(true).notNull()
-```
+**Trimming frequency:** Once per hour is sufficient. Even with 10 instances generating 4 heartbeat entries/minute each, that's ~5,760 entries/day -- tiny.
 
 ---
 
-## Version Compatibility Matrix
+## Alternatives Considered and Rejected
 
-| Package | Current | Recommended | Notes |
-|---------|---------|-------------|-------|
-| drizzle-orm | 0.36.4 | 0.36.4 | Keep current, JSONB $type works |
-| ioredis | 5.4.2 | 5.4.2 | Keep current, pub/sub works |
-| zod | 3.24.1 | 3.24.1 | Keep current |
-| react-hook-form | NEW | ^7.54.0 | Add to admin package |
-| @hookform/resolvers | NEW | ^3.9.0 | Add to admin package |
+### Redis Pub/Sub for Activity Logging -- REJECTED
+
+| Aspect | Redis Streams | Redis Pub/Sub |
+|--------|---------------|---------------|
+| Persistence | Yes (stored on disk) | No (fire-and-forget) |
+| Historical query | Yes (XRANGE) | No |
+| Retention control | Yes (XTRIM MINID) | N/A |
+| Consumer groups | Yes | No |
+| Existing use in codebase | No (new) | Yes (control channels) |
+
+Pub/Sub is already used for ephemeral command/response patterns. Streams are the correct choice for durable activity logs that need historical query and retention.
+
+### PostgreSQL for Activity Logging -- REJECTED
+
+PostgreSQL could store activity logs, but:
+- Adds write load to the database for high-frequency events
+- Redis Streams are purpose-built for append-only event logs
+- Activity data is operational, not analytical -- Redis is the right tier
+- Keeps the coordination plane entirely in Redis (single technology for all Perseus features)
+
+### Redis Sorted Sets for Heartbeat -- CONSIDERED BUT NOT PRIMARY
+
+Sorted sets (`ZADD perseus:heartbeats instanceId timestamp`) enable range queries by time. However:
+- Requires manual cleanup (no auto-expiry like TTL keys)
+- More complex than the simple SET + EX pattern
+- The SET + EX pattern is self-cleaning -- dead instances' keys vanish automatically
+- Could be added later if network-wide "who was alive at time T?" queries are needed
+
+### External Service Discovery (Consul, etcd) -- REJECTED
+
+Overkill for 2-10 instances. Redis is already the coordination bus. Adding another distributed system increases operational complexity without proportional benefit.
 
 ---
 
-## Confidence Assessment
+## What NOT to Use
 
-| Area | Confidence | Rationale |
-|------|------------|-----------|
-| React Hook Form | HIGH | Official docs, standard industry choice, Zod integration |
-| Drizzle JSONB | HIGH | Official docs, existing pattern in codebase |
-| ioredis Pub/Sub | HIGH | Official docs, existing usage in codebase |
-| Coinbase Products API | HIGH | Existing working implementation |
-| Admin Command Pattern | MEDIUM | Designed pattern, needs implementation validation |
-| Settings Schema Design | HIGH | Follows existing codebase patterns |
+| Technology | Why Not |
+|------------|---------|
+| `public-ip` (npm) | ESM-only, breaks CJS builds. Overkill for one-time IP lookup. |
+| `node-public-ip` (npm) | 1 weekly download, abandoned, no types. |
+| XState | 47 KB for 5 states. Designed for complex UI, not server lifecycle. |
+| typescript-fsm | Adequate but unnecessary dependency for ~80 lines of code. |
+| Consul / etcd / ZooKeeper | External service discovery is overkill for 2-10 Redis-connected instances. |
+| Redis Keyspace Notifications | Unreliable in cluster mode for key expiry events. Use periodic scanning. |
+| `bull` / `bullmq` | Job queue libraries. Not needed for simple heartbeat + stream patterns. |
+| `@art-of-coding/stream-utils` | Wrapper around ioredis streams. Adds abstraction over a simple API. |
+
+---
+
+## Implementation Checklist
+
+### No `npm install` Required
+
+Everything builds on:
+- `ioredis` 5.4.2 (already installed, pinned in root package.json)
+- `zod` 3.25.x (already installed for schema validation)
+- `node:https` (Node.js built-in for public IP detection)
+- `node:os` (Node.js built-in for hostname, network interfaces)
+- `node:crypto` (Node.js built-in, if needed for instance ID hashing)
+
+### New Module Location
+
+```
+packages/
+  cache/
+    src/
+      keys.ts               # ADD: perseus:* key builders
+      streams/
+        activity-stream.ts   # NEW: XADD/XRANGE/XTRIM wrappers
+      index.ts               # UPDATE: export new modules
+```
+
+Or, if Perseus Network is a standalone package:
+
+```
+packages/
+  perseus/
+    src/
+      instance-id.ts         # Instance ID generation
+      state-machine.ts       # Instance lifecycle FSM
+      heartbeat.ts           # SET EX heartbeat loop
+      activity-stream.ts     # Redis Streams wrapper
+      public-ip.ts           # Public IP detection
+      network-manager.ts     # Orchestrates registration, heartbeat, cleanup
+      index.ts
+    package.json             # deps: @livermore/cache, @livermore/schemas, @livermore/utils
+```
+
+**Recommendation:** Create `packages/perseus` as a dedicated package. It has a clear bounded context (network coordination) and shouldn't pollute the cache package with non-caching concerns.
 
 ---
 
 ## Sources
 
-### Official Documentation (HIGH confidence)
-- [Drizzle ORM PostgreSQL Column Types](https://orm.drizzle.team/docs/column-types/pg)
+### Verified Against Installed Code
+- ioredis 5.4.2 type definitions: `node_modules/.pnpm/ioredis@5.4.2/.../RedisCommander.d.ts` (lines 4542-5807)
+- Existing key patterns: `packages/cache/src/keys.ts`
+- Existing Redis client: `packages/cache/src/client.ts`
+- Existing heartbeat pattern: `apps/api/src/services/exchange/adapter-factory.ts`
+
+### Redis Official Documentation
+- [Redis Streams](https://redis.io/docs/latest/develop/data-types/streams/)
+- [XADD Command](https://redis.io/docs/latest/commands/xadd/)
+- [XTRIM Command](https://redis.io/docs/latest/commands/xtrim/)
+- [XRANGE Command](https://redis.io/docs/latest/commands/xrange/)
+- [XREAD Command](https://redis.io/docs/latest/commands/xread/)
+- [SET Command (EX option)](https://redis.io/docs/latest/commands/set/)
+- [Redis Cluster Specification (Hash Tags)](https://redis.io/docs/latest/operate/oss_and_stack/reference/cluster-spec/)
+
+### Libraries Evaluated
 - [ioredis GitHub](https://github.com/redis/ioredis)
-- [Redis Pub/Sub Docs](https://redis.io/docs/latest/develop/pubsub/)
-- [React Hook Form useForm](https://react-hook-form.com/docs/useform)
-- [@hookform/resolvers](https://github.com/react-hook-form/resolvers)
-- [Coinbase Advanced Trade API](https://docs.cdp.coinbase.com/advanced-trade/docs/api-overview/)
+- [public-ip npm](https://www.npmjs.com/package/public-ip) -- ESM-only, rejected
+- [node-public-ip npm](https://www.npmjs.com/package/node-public-ip) -- abandoned, rejected
+- [typescript-fsm GitHub](https://github.com/WebLegions/typescript-fsm) -- adequate but unnecessary
+- [XState](https://stately.ai/docs/xstate) -- overkill
+- [ipify.org](https://www.ipify.org/) -- recommended for public IP detection
 
-### Community Resources (MEDIUM confidence)
-- [Drizzle JSONB Best Practices 2025](https://gist.github.com/productdevbook/7c9ce3bbeb96b3fabc3c7c2aa2abc717)
-- [ioredis Pub/Sub Guide](https://thisdavej.com/guides/redis-node/node/pubsub.html)
-- [React Hook Form + Zod Tutorial](https://www.freecodecamp.org/news/react-form-validation-zod-react-hook-form/)
-- [Drizzle JSONB Type Safety Discussion](https://github.com/drizzle-team/drizzle-orm/discussions/386)
-
-### Evaluated but Not Recommended
-- [CCXT npm](https://www.npmjs.com/package/ccxt) - Overkill for single-exchange use
-
----
-
-*Stack research complete. Ready for roadmap phase structure.*
+### Patterns and Best Practices
+- [Redis Heartbeat-Based Session Tracking](https://medium.com/tilt-engineering/redis-powered-user-session-tracking-with-heartbeat-based-expiration-c7308420489f)
+- [Redis Clustering Best Practices with Keys](https://redis.io/blog/redis-clustering-best-practices-with-keys/)
+- [ioredis Streams Example (Gist)](https://gist.github.com/forkfork/c27d741650dd65631578771ab264dd2c)
+- [Azure Container Apps + Redis Streams](https://techcommunity.microsoft.com/blog/appsonazureblog/custom-scaling-on-azure-container-apps-based-on-redis-streams/3723374)

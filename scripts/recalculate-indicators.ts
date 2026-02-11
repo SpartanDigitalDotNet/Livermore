@@ -16,7 +16,7 @@ import {
 import { fillCandleGaps, calculateZeroRangeRatio } from '@livermore/utils';
 import { classifyLiquidity, type Timeframe, type LiquidityTier } from '@livermore/schemas';
 
-const redis = new Redis(process.env.REDIS_URL || 'redis://127.0.0.1:6400');
+const redis = new Redis(process.env.LIVERMORE_REDIS_URL!);
 const candleCache = new CandleCacheStrategy(redis);
 const indicatorCache = new IndicatorCacheStrategy(redis);
 

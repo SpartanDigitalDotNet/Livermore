@@ -2,15 +2,15 @@
  * Test Redis Pub/Sub on Azure Redis
  *
  * Tests end-to-end publish/subscribe functionality.
- * Requires REDIS_URL environment variable to be set.
+ * Requires LIVERMORE_REDIS_URL environment variable to be set.
  */
 
 import Redis from 'ioredis';
 
-const REDIS_URL = process.env.REDIS_URL;
+const REDIS_URL = process.env.LIVERMORE_REDIS_URL;
 
 if (!REDIS_URL) {
-  console.error('❌ REDIS_URL environment variable not set');
+  console.error('❌ LIVERMORE_REDIS_URL environment variable not set');
   process.exit(1);
 }
 

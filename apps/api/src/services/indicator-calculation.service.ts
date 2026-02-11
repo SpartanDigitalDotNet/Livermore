@@ -54,10 +54,8 @@ export class IndicatorCalculationService {
   // Track last processed boundary for each symbol/timeframe to detect higher timeframe closes
   private lastProcessedBoundary: Map<string, number> = new Map(); // key: "symbol:timeframe"
 
-  // Temporary: hardcode test user and exchange IDs
-  // TODO: Replace with actual user/exchange from database
-  private readonly TEST_USER_ID = 1;
-  private readonly TEST_EXCHANGE_ID = 1;
+  // Exchange ID for scoping Redis keys and pub/sub channels
+  private exchangeId: number;
 
   // IND-03: Project requirement for TradingView alignment (60 candles minimum)
   private readonly REQUIRED_CANDLES = 60;
@@ -65,11 +63,17 @@ export class IndicatorCalculationService {
   // Higher timeframes to check when 5m candle closes
   private readonly HIGHER_TIMEFRAMES: Timeframe[] = ['15m', '1h', '4h', '1d'];
 
-  // NOTE: Constructor parameters kept for backward compatibility with existing server.ts
-  // REST client functionality moved to Phase 07 (Startup Backfill)
-  constructor(_apiKeyId: string, _privateKeyPem: string) {
+  constructor(exchangeId: number) {
+    this.exchangeId = exchangeId;
     this.candleCache = new CandleCacheStrategy(this.redis);
     this.indicatorCache = new IndicatorCacheStrategy(this.redis);
+  }
+
+  /**
+   * Update exchangeId at runtime (e.g., when handleStart resolves the user's exchange)
+   */
+  setExchangeId(exchangeId: number): void {
+    this.exchangeId = exchangeId;
   }
 
   /**
@@ -110,8 +114,8 @@ export class IndicatorCalculationService {
    * Parses the channel to extract symbol and timeframe, then recalculates from cache
    */
   private async handleCandleCloseEvent(channel: string, message: string): Promise<void> {
-    // Parse channel: "channel:candle:close:1:1:BTC-USD:5m"
-    // Indices:        0       1      2     3 4 5        6
+    // Parse channel: "channel:exchange:1:candle:close:BTC-USD:5m" (Phase 24 format)
+    // Indices:        0       1        2 3      4     5       6
     const parts = channel.split(':');
     const symbol = parts[5];
     const timeframe = parts[6] as Timeframe;
@@ -141,8 +145,8 @@ export class IndicatorCalculationService {
   private async recalculateFromCache(symbol: string, timeframe: Timeframe): Promise<void> {
     // Read from cache ONLY - no REST API calls
     const candles = await this.candleCache.getRecentCandles(
-      this.TEST_USER_ID,
-      this.TEST_EXCHANGE_ID,
+      1, // legacy userId param (exchange-scoped keys don't use it)
+      this.exchangeId,
       symbol,
       timeframe,
       200
@@ -210,8 +214,9 @@ export class IndicatorCalculationService {
     this.subscriber = this.redis.duplicate();
 
     // Subscribe to candle:close events for ALL timeframes (wildcard pattern)
-    // Each timeframe's cache is populated independently by Phase 07 backfill
-    const pattern = `channel:candle:close:${this.TEST_USER_ID}:${this.TEST_EXCHANGE_ID}:*:*`;
+    // Phase 24: Exchange-scoped channel (shared across users)
+    // Pattern: channel:exchange:{exchange_id}:candle:close:{symbol}:{timeframe}
+    const pattern = `channel:exchange:${this.exchangeId}:candle:close:*:*`;
     await this.subscriber.psubscribe(pattern);
 
     // Handle pattern messages (pmessage for psubscribe, not message)
@@ -364,8 +369,8 @@ export class IndicatorCalculationService {
 
     // Cache the indicator
     await this.indicatorCache.setIndicator(
-      this.TEST_USER_ID,
-      this.TEST_EXCHANGE_ID,
+      1, // legacy userId param
+      this.exchangeId,
       indicatorValue
     );
 
@@ -386,8 +391,8 @@ export class IndicatorCalculationService {
 
     // Publish update
     await this.indicatorCache.publishUpdate(
-      this.TEST_USER_ID,
-      this.TEST_EXCHANGE_ID,
+      1, // legacy userId param
+      this.exchangeId,
       indicatorValue
     );
   }
@@ -401,8 +406,8 @@ export class IndicatorCalculationService {
     type: string = 'macd-v'
   ): Promise<CachedIndicatorValue | null> {
     return this.indicatorCache.getIndicator(
-      this.TEST_USER_ID,
-      this.TEST_EXCHANGE_ID,
+      1, // legacy userId param
+      this.exchangeId,
       symbol,
       timeframe,
       type

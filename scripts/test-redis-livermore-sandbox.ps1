@@ -4,17 +4,17 @@
     Test connection to Azure Redis instance
 
 .DESCRIPTION
-    Tests connection to Azure Redis using the REDIS_URL from environment variables.
+    Tests connection to Azure Redis using the LIVERMORE_REDIS_URL from environment variables.
 
 .EXAMPLE
     .\scripts\test-redis-livermore-sandbox.ps1
 #>
 
 # Get Redis URL from environment variable
-$RedisUrl = [Environment]::GetEnvironmentVariable('REDIS_URL', 'User')
+$RedisUrl = [Environment]::GetEnvironmentVariable('LIVERMORE_REDIS_URL', 'User')
 
 if ([string]::IsNullOrWhiteSpace($RedisUrl)) {
-    Write-Host "REDIS_URL environment variable not set" -ForegroundColor Red
+    Write-Host "LIVERMORE_REDIS_URL environment variable not set" -ForegroundColor Red
     Write-Host "   Set it in User environment variables and try again." -ForegroundColor Yellow
     exit 1
 }
@@ -48,13 +48,13 @@ $projectRoot = Split-Path -Parent $scriptDir
 Set-Location $projectRoot
 
 # Set environment for the subprocess
-$env:REDIS_URL = $RedisUrl
+$env:LIVERMORE_REDIS_URL = $RedisUrl
 
 # Create a simple test script
 $testScript = @'
 import Redis from 'ioredis';
 
-const url = process.env.REDIS_URL!;
+const url = process.env.LIVERMORE_REDIS_URL!;
 const hostMatch = url.match(/@([^:]+):/);
 const host = hostMatch?.[1];
 

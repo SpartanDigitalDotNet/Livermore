@@ -2,7 +2,7 @@
 
 ## What This Is
 
-A real-time cryptocurrency trading analysis platform that monitors exchange data (starting with Coinbase), calculates technical indicators (MACD-V), and fires alerts when signal conditions are met. Designed for multi-exchange support with Binance.us and Binance.com planned for future milestones.
+A real-time cryptocurrency trading analysis platform with multi-exchange support (Coinbase and Binance). Monitors exchange data via WebSocket, calculates technical indicators (MACD-V), and fires alerts when signal conditions are met. Features exchange-scoped distributed data architecture enabling cross-exchange visibility, idle startup with runtime control via Redis pub/sub, and Admin UI for settings, symbols, and exchange management.
 
 ## Core Value
 
@@ -10,22 +10,21 @@ Data accuracy and timely alerts — indicators must calculate on complete, accur
 
 ## Current State
 
-**Status:** v4.0 planning
-**Current focus:** User settings infrastructure, Admin→API runtime control
+**Status:** v6.0 in progress
+**Current focus:** Perseus Network — instance registration and health
 
-## Current Milestone: v4.0 User Settings + Runtime Control
+**Architecture (v6.0):**
+```
+Mike's API (Coinbase) ──registers──► exchange:1:status  ◄──reads── Admin UI (Network View)
+                      ──heartbeat──► (TTL-based)
+                      ──logs──────► logs:network:coinbase (Redis Stream, 90d TTL)
+                                         │
+Kaia's API (Binance)  ──registers──► exchange:2:status  ◄──reads── Admin UI (Network View)
+                      ──heartbeat──► (TTL-based)
+                      ──logs──────► logs:network:binance (Redis Stream, 90d TTL)
+```
 
-**Goal:** Enable user-specific configuration stored in PostgreSQL, with Admin UI for editing settings and Redis pub/sub for Admin→API command communication.
-
-**Target features:**
-- User settings as JSONB column on users table (mirrors current file structure)
-- Settings tRPC endpoints (CRUD)
-- Admin Settings UI (form-based editor + JSON editor for power users)
-- Redis pub/sub channel for Admin→API commands
-- API command handling: pause, resume, reload-settings, switch-mode, add/remove-symbol, force-backfill, clear-cache
-- Runtime modes: position-monitor, scalper-macdv, scalper-orderbook (stub)
-- Hybrid symbol management: scanner fetches from exchange, user curates in Admin
-- Per-user exchange credential env var names (credentials stay in env vars, not DB)
+Each Livermore API instance registers itself in Redis with full identity (hostname, IP, admin, exchange, symbol count). Heartbeat TTL ensures stale instances are detected automatically. Network activity logged to Redis Streams for 90-day audit trail.
 
 ## Requirements
 
@@ -51,14 +50,44 @@ Data accuracy and timely alerts — indicators must calculate on complete, accur
 - ✓ User sync via webhooks and frontend component — v3.0
 - ✓ Admin UI with portfolio, signals, and logs viewers — v3.0
 - ✓ Pre-flight connection validation (database + Redis) — v3.0
+- ✓ User settings as JSONB column with typed Zod schema — v4.0
+- ✓ Settings tRPC endpoints (get, update, patch, export, import) — v4.0
+- ✓ Redis pub/sub control channel with commands, ACKs, results — v4.0
+- ✓ Runtime commands (pause, resume, reload-settings, switch-mode stub, force-backfill, clear-cache) — v4.0
+- ✓ Symbol management (add, remove, validate, bulk import, metrics) — v4.0
+- ✓ Admin Settings UI (form + JSON editor, bidirectional sync, diff view) — v4.0
+- ✓ Admin Control Panel (status, pause/resume, mode switcher, command history) — v4.0
+- ✓ Admin Symbols UI (watchlist, add/remove, bulk import) — v4.0
+- ✓ Real-time WebSocket alerts with MACD-V colored UI elements — v4.0
+- ✓ `exchanges` metadata table with API limits, fees, geo restrictions — v5.0
+- ✓ `user_exchanges` FK refactor to reference `exchanges` table — v5.0
+- ✓ Exchange adapter factory (Coinbase/Binance) — v5.0
+- ✓ Exchange connection status tracking — v5.0
+- ✓ Exchange-scoped Redis keys (candles, indicators, pub/sub channels) — v5.0
+- ✓ User overflow keys with TTL for Tier 2 symbols — v5.0
+- ✓ Dual-read pattern (exchange-scoped first, user-scoped fallback) — v5.0
+- ✓ Two-tier symbol management (Tier 1 shared, Tier 2 user positions) — v5.0
+- ✓ Idle startup mode with start/stop commands — v5.0
+- ✓ `--autostart` CLI flag for automation — v5.0
+- ✓ Connection lifecycle events — v5.0
+- ✓ Cross-exchange alert channels with source attribution — v5.0
+- ✓ IRestClient interface with pluggable REST clients — v5.0
+- ✓ BinanceRestClient and BinanceAdapter — v5.0
 
-### Next Milestone Goals (v4.1+)
+### Active
 
-- Orderbook imbalance detection (scalper-orderbook mode implementation)
-- Trading contracts (orders, positions, paper trading)
-- Multi-exchange adapters (Binance.us, Binance.com)
-- Azure pub/sub for multi-instance deployment (identity_sub as channel)
-- Router auth tech debt (convert publicProcedure to protectedProcedure)
+**v6.0 Perseus Network — Instance Registration & Health**
+
+- [ ] Exchange-scoped instance status key `exchange:<exchange_id>:status` (replaces prototype `exchange:status`)
+- [ ] Full status payload: exchangeId, exchangeName, connectionState, connectedAt, lastHeartbeat, symbolCount, adminEmail, adminDisplayName, ipAddress (public), hostname, lastError
+- [ ] Connection state machine: `idle → starting → warming → active → stopping → stopped`
+- [ ] State transitions maintained throughout full API lifecycle (startup, warmup, active, shutdown)
+- [ ] Heartbeat with Redis TTL (key expiry = instance is dead, no clean shutdown)
+- [ ] Public IP detection via external service at startup
+- [ ] Network activity log via Redis Streams (`logs:network:<exchange_name>`) with 90-day retention
+- [ ] Log events: state transitions and errors
+- [ ] Admin UI "Network" view showing all registered instances with real-time status and activity feed
+- [ ] Fix existing bugs: heartbeat not updating, error not populating, connectionState stuck on `idle` when instance is down
 
 ### Out of Scope
 
@@ -66,48 +95,24 @@ Data accuracy and timely alerts — indicators must calculate on complete, accur
 - Trade Execution — monitoring only
 - CCXT Library — performance overhead unnecessary
 - Cross-Region Replication — single-region sufficient
-- Orderbook imbalance implementation — stub only in v4.0, full implementation v4.1
 - Azure pub/sub — Redis pub/sub sufficient for single-instance, Azure deferred
-- Router auth hardening — tech debt accepted, defer to v4.1
-
-## Context
-
-**Current architecture (v2.0):**
-```
-WebSocket Layer (CoinbaseAdapter)
-    │
-    │ Native 5m candles + ticker from Coinbase channels
-    ▼
-┌─────────────────┐
-│   Redis Cache   │◄── Backfill Service (startup)
-└─────────────────┘◄── BoundaryRestService (15m/1h/4h/1d at boundaries)
-    │
-    │ candle:close events + ticker pub/sub
-    ▼
-Indicator Service (cache-only reads)
-    │
-    ▼
-Alert Evaluation (receives ticker prices)
-```
-
-**What v2.0 solved:**
-- 17,309 429 errors from REST-heavy architecture → eliminated
-- 93% data gaps from ticker-built candles → native 5m candles
-- $0.00 price in alert notifications → ticker pub/sub
-
-**Multi-exchange readiness:**
-- `IExchangeAdapter` interface defined
-- `BaseExchangeAdapter` abstract class with reconnection logic
-- `UnifiedCandle` schema normalizes exchange data
-- Binance adapters can be added without modifying indicator service
+- 1m candle support — Coinbase WebSocket only provides native 5m
+- Real-time arbitrage execution — soft-arbitrage (signals only) is safer
+- Standby/passive instance registration — foundation first, failover in v6.1+
+- Graceful handoff protocol (notify → takeover → confirm → shutdown) — requires standby, deferred
+- Remote Admin control (ngrok tunnels, cross-instance management) — requires handoff, deferred
+- Authorization/permission schema for remote control — requires remote admin, deferred
 
 ## Constraints
 
 - **Event-driven**: No timer-based polling for indicator calculations. System must be driven by exchange data.
 - **60-candle minimum**: MACDV requires at least 60 candles per symbol/timeframe for accurate alignment with charts.
 - **Latency targets**: 1m/5m signals <10s, 4h/1d signals can tolerate 30s-1m delay.
-- **Coinbase rate limits**: Must respect API limits, hence move to WebSocket + cache-first.
+- **Rate limits**: Must respect per-exchange API limits, hence WebSocket + cache-first.
 - **Incremental refactor**: Existing MACDV functionality must work throughout refactor.
+- **No silent defaults**: If exchange or configuration is unknown, surface the error — never silently fall back to Coinbase.
+- **One instance per exchange**: Only one Livermore API may actively serve a given exchange at any time. Enforced via Redis status keys.
+- **Heartbeat TTL**: If an instance stops heartbeating, it is considered dead. No separate health-check service.
 
 ## Key Decisions
 
@@ -118,15 +123,22 @@ Alert Evaluation (receives ticker prices)
 | Native 5m candles | Eliminates data gaps from ticker-built candles | ✓ Shipped v2.0 |
 | Boundary-triggered REST | Higher timeframes fetched at 5m boundaries (no cron) | ✓ Shipped v2.0 |
 | Exchange adapter pattern | Multi-exchange support without indicator changes | ✓ Shipped v2.0 |
-| Preserve legacy service | Deprecated but kept for rollback during observation | ✓ Shipped v2.0 |
 | Atlas-only migrations | Database schema (schema.sql) is source of truth; Drizzle migrations BANNED | ✓ Shipped v3.0 |
 | Database-first ORM | Use `drizzle-kit pull` to generate TypeScript from database (like EF scaffolding) | ✓ Shipped v3.0 |
 | Sandbox as shared DB | Azure PostgreSQL (Sandbox) shared between Livermore and Kaia's UI | ✓ Shipped v3.0 |
-| Settings as JSONB | Single JSONB column on users table for flexible settings schema | — v4.0 |
-| Redis pub/sub for control | Admin→API commands via Redis, future Azure pub/sub | — v4.0 |
-| Pause mode not shutdown | API stays running but idles; keeps pub/sub channel open | — v4.0 |
-| Credentials in env vars | Settings store env var names, not actual secrets | — v4.0 |
-| Hybrid symbol management | Scanner from exchange + user curation in Admin | — v4.0 |
+| Settings as JSONB | Single JSONB column on users table for flexible settings schema | ✓ Shipped v4.0 |
+| Redis pub/sub for control | Admin→API commands via Redis, future Azure pub/sub | ✓ Shipped v4.0 |
+| Credentials in env vars | Settings store env var names, not actual secrets | ✓ Shipped v4.0 |
+| Manual shadcn components | Project doesn't use shadcn CLI; components created manually with CVA | ✓ Shipped v4.0 |
+| Exchange-scoped shared keys | Tier 1 symbols share data across users/instances | ✓ Shipped v5.0 |
+| User overflow with TTL | Tier 2 symbols have TTL-based auto-cleanup | ✓ Shipped v5.0 |
+| Idle startup mode | API doesn't connect until `start` command | ✓ Shipped v5.0 |
+| Adapter factory pattern | Factory instantiates correct adapter by exchange type | ✓ Shipped v5.0 |
+| Dual-read for migration | Check exchange-scoped first, fall back to user-scoped | ✓ Shipped v5.0 |
+| IRestClient interface | Decouple REST clients from exchange-specific implementations | ✓ Shipped v5.0 |
+| Package rename (exchange-core) | coinbase-client contained exchange-agnostic services | ✓ Shipped v5.0 |
+| 3 separate Redis env vars | Never store full connection URL; construct at runtime | ✓ Shipped v5.0 |
+| No silent exchange defaults | If exchange unknown, surface error — never default to Coinbase | ✓ Shipped v5.0 |
 
 ## Partnership Context
 
@@ -134,12 +146,12 @@ Alert Evaluation (receives ticker prices)
 
 **Integration points:**
 - Sandbox PostgreSQL: Shared database for IAM and user settings
-- WebSocket: Real-time data feed (candles, indicators, signals) — future milestone
-- Contracts: Shared TypeScript models for API communication — future milestone
+- Redis pub/sub: Cross-exchange visibility — Kaia subscribes to Coinbase alerts, Mike subscribes to Binance alerts
+- Binance support: Kaia runs Binance exchange, data flows through same architecture
 
-**v3.0 unblocked Kaia:** IAM tables deployed, KAIA-IAM-HANDOFF.md delivered.
+**v5.0 enabled:** Kaia's Binance instance publishes to Redis, Mike's Coinbase instance subscribes. Cross-exchange soft-arbitrage signals operational.
 
-**v4.0 adds:** User settings schema that Kaia's PerseusWeb can also leverage for her Binance.com configuration.
+**v6.0 goal:** Each Livermore API instance becomes a visible, identifiable node in the Perseus Network. Admins can see who's running what, where, and whether it's healthy — the foundation for future active/passive failover and remote administration.
 
 ---
-*Last updated: 2026-01-31 — v4.0 milestone started*
+*Last updated: 2026-02-08 — start v6.0 Perseus Network milestone*

@@ -1,4 +1,4 @@
-import { getRedisClient, commandChannel, responseChannel, deleteKeysClusterSafe, type RedisClient } from '@livermore/cache';
+import { getRedisClient, commandChannel, responseChannel, deleteKeysClusterSafe, exchangeCandleKey, exchangeIndicatorKey, type RedisClient } from '@livermore/cache';
 import { createLogger } from '@livermore/utils';
 import {
   CommandSchema,
@@ -7,11 +7,18 @@ import {
   type CommandType,
   type Timeframe,
 } from '@livermore/schemas';
-import { StartupBackfillService } from '@livermore/coinbase-client';
+import { StartupBackfillService } from '@livermore/exchange-core';
+import { createRestClient } from './exchange/rest-client-factory';
+import { SymbolSourceService } from './symbol-source.service';
+import { hostname } from 'node:os';
+import { InstanceRegistryService } from './instance-registry.service';
+import { StateMachineService } from './state-machine.service';
+import { NetworkActivityLogger } from './network-activity-logger';
+import { detectPublicIp } from '../utils/detect-public-ip';
 import { eq, and, sql } from 'drizzle-orm';
-import { users } from '@livermore/database';
+import { users, userExchanges } from '@livermore/database';
 import type { ServiceRegistry } from './types/service-registry';
-import { updateRuntimeState } from './runtime-state';
+import { updateRuntimeState, type StartupProgress } from './runtime-state';
 
 const logger = createLogger({ name: 'control-channel', service: 'control' });
 
@@ -19,7 +26,7 @@ const logger = createLogger({ name: 'control-channel', service: 'control' });
  * Priority levels for command ordering (RUN-13)
  * Lower number = higher priority (processed first)
  *
- * Priority 1: Critical control commands (pause/resume)
+ * Priority 1: Critical control commands (pause/resume/start/stop)
  * Priority 10: Settings and mode changes
  * Priority 15: Symbol management
  * Priority 20: Resource-intensive operations
@@ -27,6 +34,8 @@ const logger = createLogger({ name: 'control-channel', service: 'control' });
 const PRIORITY: Record<CommandType, number> = {
   pause: 1,
   resume: 1,
+  start: 1,  // Phase 26: Startup control
+  stop: 1,   // Phase 26: Startup control
   'reload-settings': 10,
   'switch-mode': 10,
   'force-backfill': 20,
@@ -70,6 +79,9 @@ export class ControlChannelService {
 
   /** Paused state for pause/resume commands (RUN-04, RUN-05) */
   private isPaused = false;
+
+  /** Idle state - services not started yet (Phase 26 CTL-01) */
+  private isIdle = true;
 
   /**
    * Constructor accepts optional services parameter for backward compatibility.
@@ -290,6 +302,10 @@ export class ControlChannelService {
         return this.handlePause();
       case 'resume':
         return this.handleResume();
+      case 'start':
+        return this.handleStart(payload);
+      case 'stop':
+        return this.handleStop();
       case 'reload-settings':
         return this.handleReloadSettings();
       case 'switch-mode':
@@ -393,6 +409,289 @@ export class ControlChannelService {
 
     return {
       status: 'resumed',
+      timestamp: Date.now(),
+    };
+  }
+
+  /**
+   * Handle start command (Phase 26 CTL-02)
+   * Initiates exchange connections, exits idle mode
+   *
+   * Payload:
+   * - exchange: string (optional) - Specific exchange to start, defaults to 'coinbase'
+   */
+  private async handleStart(payload?: Record<string, unknown>): Promise<Record<string, unknown>> {
+    if (!this.services) {
+      throw new Error('Services not initialized');
+    }
+
+    const exchangeName = (payload?.exchange as string) || 'coinbase';
+
+    // Already started
+    if (!this.isIdle) {
+      return {
+        status: 'already_started',
+        exchange: exchangeName,
+        message: 'Exchange connection already active',
+      };
+    }
+
+    logger.info({ exchange: exchangeName }, 'Starting exchange connection...');
+
+    // Helper to update startup progress
+    const setProgress = (progress: StartupProgress) => {
+      updateRuntimeState({ startup: progress });
+    };
+
+    try {
+      // If symbols not yet loaded (idle startup), load Tier 1 from user's exchange
+      if (this.services.monitoredSymbols.length === 0) {
+        setProgress({ phase: 'indicators', phaseLabel: 'Loading Tier 1 symbols', percent: 5 });
+
+        // Resolve user's default exchange from user_exchanges
+        const [userExchange] = await this.services.db
+          .select({
+            exchangeId: userExchanges.exchangeId,
+            exchangeName: userExchanges.exchangeName,
+            apiKeyEnvVar: userExchanges.apiKeyEnvVar,
+            apiSecretEnvVar: userExchanges.apiSecretEnvVar,
+          })
+          .from(userExchanges)
+          .innerJoin(users, eq(users.id, userExchanges.userId))
+          .where(
+            and(
+              eq(users.identityProvider, 'clerk'),
+              eq(users.identitySub, this.identitySub),
+              eq(userExchanges.isDefault, true),
+              eq(userExchanges.isActive, true)
+            )
+          )
+          .limit(1);
+
+        if (!userExchange?.exchangeId) {
+          throw new Error('No exchange configured. Set up your exchange in Admin first.');
+        }
+
+        // Create exchange-specific REST client and store on registry
+        const restClient = createRestClient(
+          userExchange.exchangeName,
+          userExchange.apiKeyEnvVar,
+          userExchange.apiSecretEnvVar
+        );
+        this.services.restClient = restClient;
+        this.services.exchangeId = userExchange.exchangeId;
+
+        // Update services with resolved exchange ID
+        this.services.indicatorService.setExchangeId(userExchange.exchangeId);
+        this.services.alertService.setExchange(userExchange.exchangeId, userExchange.exchangeName);
+        this.services.boundaryRestService.setExchange(userExchange.exchangeId, userExchange.exchangeName, restClient);
+
+        const symbolSourceService = new SymbolSourceService(userExchange.exchangeId);
+        const tier1 = await symbolSourceService.getTier1Symbols();
+
+        if (tier1.length === 0) {
+          throw new Error('No Tier 1 symbols in exchange_symbols table. Populate exchange_symbols first.');
+        }
+
+        this.services.monitoredSymbols = tier1.map(s => s.symbol);
+
+        // Rebuild indicator configs
+        const timeframes = this.services.timeframes;
+        this.services.indicatorConfigs = this.services.monitoredSymbols.flatMap((symbol) =>
+          timeframes.map((timeframe) => ({ symbol, timeframe }))
+        );
+
+        logger.info(
+          { total: this.services.monitoredSymbols.length, exchangeId: userExchange.exchangeId, symbols: this.services.monitoredSymbols },
+          'Loaded Tier 1 symbols from user exchange'
+        );
+      }
+
+      // Phase 30: Create registry for this exchange and attempt atomic claim
+      const registry = new InstanceRegistryService({
+        exchangeId: this.services.exchangeId!,
+        exchangeName: exchangeName,
+        redis: this.services.redis,
+      });
+      this.services.instanceRegistry = registry;
+
+      // Phase 31: Create activity logger for this exchange
+      const activityLogger = new NetworkActivityLogger({
+        redis: this.services.redis,
+        exchangeId: this.services.exchangeId!,
+        exchangeName: exchangeName,
+        hostname: hostname(),
+        adminEmail: this.identitySub,
+      });
+      this.services.activityLogger = activityLogger;
+      this.services.stateMachine = new StateMachineService(registry, activityLogger);
+
+      // Update logger IP asynchronously
+      detectPublicIp().then((ip) => {
+        if (ip) activityLogger.setIp(ip);
+      });
+
+      const registered = await registry.register();
+      if (!registered) {
+        throw new Error('Failed to register instance');
+      }
+
+      await this.services.stateMachine.transition('starting');
+
+      // Backfill cache with historical candles (MUST complete before indicators)
+      setProgress({ phase: 'indicators', phaseLabel: 'Backfilling historical candles', percent: 10 });
+      const backfillTimeframes: Timeframe[] = ['1m', '5m', '15m', '1h', '4h', '1d'];
+      if (!this.services.restClient) {
+        throw new Error('No REST client available. Exchange setup may be incomplete.');
+      }
+      if (!this.services.exchangeId) {
+        throw new Error('No exchange ID resolved. Exchange setup may be incomplete.');
+      }
+      const backfillService = new StartupBackfillService(this.services.restClient, this.services.redis, {
+        userId: 1, // legacy
+        exchangeId: this.services.exchangeId,
+      });
+      await backfillService.backfill(this.services.monitoredSymbols, backfillTimeframes);
+      logger.info('Cache backfill complete');
+
+      // Phase 30: Transition to warming after backfill
+      await this.services.stateMachine.transition('warming');
+
+      // Start in dependency order (upstream to downstream)
+
+      // 1. IndicatorService - needs to be listening before events arrive
+      setProgress({ phase: 'indicators', phaseLabel: 'Starting Indicator Service', percent: 15 });
+      await this.services.indicatorService.start(this.services.indicatorConfigs);
+      logger.debug('IndicatorService started');
+
+      // 2. Warmup - force initial indicator calculations from backfilled data
+      setProgress({ phase: 'warmup', phaseLabel: 'Warming up indicators', percent: 20, current: 0, total: this.services.indicatorConfigs.length });
+      let warmupCount = 0;
+      for (const cfg of this.services.indicatorConfigs) {
+        setProgress({
+          phase: 'warmup',
+          phaseLabel: 'Warming up indicators',
+          percent: 20 + Math.floor((warmupCount / this.services.indicatorConfigs.length) * 40),
+          currentItem: `${cfg.symbol} ${cfg.timeframe}`,
+          current: warmupCount + 1,
+          total: this.services.indicatorConfigs.length,
+        });
+        await this.services.indicatorService.forceRecalculate(cfg.symbol, cfg.timeframe);
+        warmupCount++;
+      }
+      logger.debug({ warmupCount }, 'Indicator warmup complete');
+
+      // 3. CoinbaseAdapter - connect WebSocket and subscribe
+      setProgress({ phase: 'websocket', phaseLabel: 'Connecting to exchange', percent: 65 });
+      await this.services.coinbaseAdapter.connect();
+      this.services.coinbaseAdapter.subscribe(this.services.monitoredSymbols, '5m');
+      logger.debug('CoinbaseAdapter connected and subscribed');
+
+      // 4. BoundaryRestService - start listening for boundary events
+      setProgress({ phase: 'boundary', phaseLabel: 'Starting boundary service', percent: 80 });
+      await this.services.boundaryRestService.start(this.services.monitoredSymbols);
+      logger.debug('BoundaryRestService started');
+
+      // 5. AlertService - start evaluating alerts
+      setProgress({ phase: 'boundary', phaseLabel: 'Starting alert service', percent: 90 });
+      await this.services.alertService.start(
+        this.services.monitoredSymbols,
+        this.services.timeframes
+      );
+      logger.debug('AlertService started');
+
+      this.isIdle = false;
+      this.isPaused = false;
+
+      // Phase 30: Transition to active and update symbol count
+      await this.services.stateMachine.transition('active');
+      this.services.instanceRegistry.setSymbolCount(this.services.monitoredSymbols.length);
+
+      // Complete!
+      setProgress({ phase: 'complete', phaseLabel: 'Connected', percent: 100 });
+
+      logger.info({ exchange: exchangeName, symbolCount: this.services.monitoredSymbols.length }, 'Exchange connection started');
+
+      return {
+        status: 'started',
+        exchange: exchangeName,
+        symbolCount: this.services.monitoredSymbols.length,
+        timestamp: Date.now(),
+      };
+    } catch (error) {
+      // Clear startup progress on error
+      setProgress({ phase: 'idle', phaseLabel: 'Error', percent: 0 });
+
+      // Phase 30: Record error on registry and reset state machine
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      try {
+        await this.services.instanceRegistry.recordError(errorMessage);
+      } catch { /* registry may not be initialized yet */ }
+
+      // Phase 31: Log error to Redis Stream (fire-and-forget)
+      if (this.services.activityLogger) {
+        this.services.activityLogger.logError(
+          errorMessage,
+          this.services.stateMachine.getCurrentState()
+        ).catch(() => {});
+      }
+
+      this.services.stateMachine.resetToIdle();
+
+      throw error;
+    }
+  }
+
+  /**
+   * Handle stop command (Phase 26 - graceful disconnect)
+   * Disconnects from exchanges, enters idle mode
+   */
+  private async handleStop(): Promise<Record<string, unknown>> {
+    if (!this.services) {
+      throw new Error('Services not initialized');
+    }
+
+    if (this.isIdle) {
+      return {
+        status: 'already_idle',
+        message: 'No active exchange connections',
+      };
+    }
+
+    logger.info('Stopping exchange connection...');
+
+    // Phase 30: Transition to stopping before shutting down services
+    await this.services.stateMachine.transition('stopping');
+
+    // Stop in dependency order (downstream to upstream)
+    // 1. AlertService - consumes indicator events
+    await this.services.alertService.stop();
+    logger.debug('AlertService stopped');
+
+    // 2. CoinbaseAdapter - produces candle events (disconnect WebSocket)
+    this.services.coinbaseAdapter.disconnect();
+    logger.debug('CoinbaseAdapter disconnected');
+
+    // 3. BoundaryRestService - produces candle events from REST
+    await this.services.boundaryRestService.stop();
+    logger.debug('BoundaryRestService stopped');
+
+    // 4. IndicatorService - consumes candle events
+    await this.services.indicatorService.stop();
+    logger.debug('IndicatorService stopped');
+
+    // Phase 30: Transition to stopped, deregister, then reset to idle
+    await this.services.stateMachine.transition('stopped');
+    await this.services.instanceRegistry.deregister();
+    this.services.stateMachine.resetToIdle();
+
+    this.isIdle = true;
+    this.isPaused = false;
+
+    logger.info('Exchange connection stopped, entered idle mode');
+
+    return {
+      status: 'stopped',
       timestamp: Date.now(),
     };
   }
@@ -507,12 +806,13 @@ export class ControlChannelService {
 
     logger.info({ symbol, timeframes }, 'Starting force backfill');
 
-    // Create backfill service with credentials from config
-    const backfillService = new StartupBackfillService(
-      this.services.config.apiKeyId,
-      this.services.config.privateKeyPem,
-      this.services.redis
-    );
+    if (!this.services.restClient || !this.services.exchangeId) {
+      throw new Error('No REST client available. Run "start" first.');
+    }
+    const backfillService = new StartupBackfillService(this.services.restClient, this.services.redis, {
+      userId: 1, // legacy
+      exchangeId: this.services.exchangeId,
+    });
 
     // Run backfill for the symbol
     await backfillService.backfill([symbol], timeframes);
@@ -554,18 +854,19 @@ export class ControlChannelService {
     const symbol = payload?.symbol as string | undefined;
     const timeframe = payload?.timeframe as Timeframe | undefined;
 
-    // Hardcoded for now - will use identity mapping when multi-user is implemented
-    const userId = 1;
-    const exchangeId = 1;
+    if (!this.services.exchangeId) {
+      throw new Error('No exchange ID available. Run "start" first.');
+    }
+    const exchangeId = this.services.exchangeId;
 
     let deletedCount = 0;
 
     switch (scope) {
       case 'all': {
-        // Delete all candles and indicators for this user
-        const candlePattern = `candles:${userId}:${exchangeId}:*`;
-        const indicatorPattern = `indicator:${userId}:${exchangeId}:*`;
-        const tickerPattern = `ticker:${userId}:${exchangeId}:*`;
+        // Delete all candles and indicators for this exchange (exchange-scoped)
+        const candlePattern = `candles:${exchangeId}:*`;
+        const indicatorPattern = `indicator:${exchangeId}:*`;
+        const tickerPattern = `ticker:${exchangeId}:*`;
 
         const candleKeys = await this.services.redis.keys(candlePattern);
         const indicatorKeys = await this.services.redis.keys(indicatorPattern);
@@ -583,10 +884,10 @@ export class ControlChannelService {
           throw new Error('symbol is required when scope=symbol');
         }
 
-        // Delete all timeframes for this symbol
-        const candlePattern = `candles:${userId}:${exchangeId}:${symbol}:*`;
-        const indicatorPattern = `indicator:${userId}:${exchangeId}:${symbol}:*`;
-        const tickerKey = `ticker:${userId}:${exchangeId}:${symbol}`;
+        // Delete all timeframes for this symbol (exchange-scoped)
+        const candlePattern = `candles:${exchangeId}:${symbol}:*`;
+        const indicatorPattern = `indicator:${exchangeId}:${symbol}:*`;
+        const tickerKey = `ticker:${exchangeId}:${symbol}`;
 
         const candleKeys = await this.services.redis.keys(candlePattern);
         const indicatorKeys = await this.services.redis.keys(indicatorPattern);
@@ -603,9 +904,9 @@ export class ControlChannelService {
           throw new Error('timeframe is required when scope=timeframe');
         }
 
-        // Delete all symbols for this timeframe
-        const candlePattern = `candles:${userId}:${exchangeId}:*:${timeframe}`;
-        const indicatorPattern = `indicator:${userId}:${exchangeId}:*:${timeframe}:*`;
+        // Delete all symbols for this timeframe (exchange-scoped)
+        const candlePattern = `candles:${exchangeId}:*:${timeframe}`;
+        const indicatorPattern = `indicator:${exchangeId}:*:${timeframe}:*`;
 
         const candleKeys = await this.services.redis.keys(candlePattern);
         const indicatorKeys = await this.services.redis.keys(indicatorPattern);
@@ -703,11 +1004,13 @@ export class ControlChannelService {
     // 5. If not paused, start monitoring the new symbol
     if (!this.isPaused) {
       // 5a. Backfill historical data first
-      const backfillService = new StartupBackfillService(
-        this.services.config.apiKeyId,
-        this.services.config.privateKeyPem,
-        this.services.redis
-      );
+      if (!this.services.restClient || !this.services.exchangeId) {
+        throw new Error('No REST client available. Run "start" first.');
+      }
+      const backfillService = new StartupBackfillService(this.services.restClient, this.services.redis, {
+        userId: 1, // legacy
+        exchangeId: this.services.exchangeId,
+      });
       await backfillService.backfill([normalizedSymbol], this.services.timeframes);
 
       // 5b. Add indicator configs
@@ -914,11 +1217,13 @@ export class ControlChannelService {
 
     if (!this.isPaused) {
       // Backfill all new symbols
-      const backfillService = new StartupBackfillService(
-        this.services.config.apiKeyId,
-        this.services.config.privateKeyPem,
-        this.services.redis
-      );
+      if (!this.services.restClient || !this.services.exchangeId) {
+        throw new Error('No REST client available. Run "start" first.');
+      }
+      const backfillService = new StartupBackfillService(this.services.restClient, this.services.redis, {
+        userId: 1, // legacy
+        exchangeId: this.services.exchangeId,
+      });
       await backfillService.backfill(toAdd, this.services.timeframes);
 
       // Add indicator configs for all new symbols
@@ -962,21 +1267,19 @@ export class ControlChannelService {
 
   /**
    * Clean up Redis cache for a removed symbol
-   * Deletes ticker, candles, and indicator keys
+   * Deletes ticker, candles, and indicator keys (exchange-scoped)
    */
   private async cleanupSymbolCache(symbol: string): Promise<void> {
-    // Hardcoded userId/exchangeId - will be dynamic in multi-user
-    const userId = 1;
-    const exchangeId = 1;
+    const exchangeId = this.services!.exchangeId ?? 1;
     const keysToDelete: string[] = [];
 
-    // Ticker key
-    keysToDelete.push(`ticker:${userId}:${exchangeId}:${symbol}`);
+    // Ticker key (exchange-scoped)
+    keysToDelete.push(`ticker:${exchangeId}:${symbol}`);
 
-    // Candle and indicator keys for all timeframes
+    // Candle and indicator keys for all timeframes (exchange-scoped)
     for (const tf of this.services!.timeframes) {
-      keysToDelete.push(`candles:${userId}:${exchangeId}:${symbol}:${tf}`);
-      keysToDelete.push(`indicator:${userId}:${exchangeId}:${symbol}:${tf}:macd-v`);
+      keysToDelete.push(exchangeCandleKey(exchangeId, symbol, tf));
+      keysToDelete.push(exchangeIndicatorKey(exchangeId, symbol, tf, 'macd-v'));
     }
 
     if (keysToDelete.length > 0) {
