@@ -4,6 +4,7 @@ import { createLogger } from '@livermore/utils';
 import { updateRuntimeState } from './runtime-state';
 import type { InstanceRegistryService } from './instance-registry.service';
 import type { NetworkActivityLogger } from './network-activity-logger';
+import { getDiscordService } from './discord-notification.service';
 
 const logger = createLogger({ name: 'state-machine', service: 'network' });
 
@@ -114,6 +115,27 @@ export class StateMachineService {
       this.activityLogger.logTransition(from, to).catch(() => {
         // Already logged inside logTransition; swallow here
       });
+    }
+
+    // Phase 33: Discord notification for state changes (fire-and-forget)
+    try {
+      const discord = getDiscordService();
+      if (discord.isEnabled()) {
+        this.registry.getStatus().then((registryStatus) => {
+          const exchangeName = registryStatus?.exchangeName ?? 'Unknown';
+          const hostname = registryStatus?.hostname ?? 'Unknown';
+          discord.sendSystemNotification(
+            `Perseus Network: ${exchangeName}`,
+            `State changed: **${from}** -> **${to}** (${hostname})`
+          ).catch(() => {
+            // Swallow -- Discord failures must never block state transitions
+          });
+        }).catch(() => {
+          // getStatus() failed -- swallow
+        });
+      }
+    } catch {
+      // getDiscordService() failed -- swallow
     }
   }
 
