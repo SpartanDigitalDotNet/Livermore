@@ -19,7 +19,7 @@ interface RuntimeStatusProps {
     uptime: number;
     exchangeConnected: boolean;
     queueDepth: number;
-    connectionState?: 'idle' | 'connecting' | 'connected' | 'disconnected' | 'error';
+    connectionState?: 'idle' | 'connecting' | 'connected' | 'disconnected' | 'error' | 'starting' | 'warming' | 'active' | 'stopping' | 'stopped';
     startup?: StartupProgress;
   } | null;
   isLoading: boolean;

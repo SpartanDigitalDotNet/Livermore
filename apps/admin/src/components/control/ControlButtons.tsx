@@ -10,7 +10,7 @@ import {
 import { Play, Pause, RefreshCw, Trash2, Power, PowerOff } from 'lucide-react';
 import { ConfirmationDialog } from './ConfirmationDialog';
 
-type ConnectionState = 'idle' | 'connecting' | 'connected' | 'disconnected' | 'error';
+type ConnectionState = 'idle' | 'connecting' | 'connected' | 'disconnected' | 'error' | 'starting' | 'warming' | 'active' | 'stopping' | 'stopped';
 
 interface ControlButtonsProps {
   isPaused: boolean;
