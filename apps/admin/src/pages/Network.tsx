@@ -89,6 +89,7 @@ export function Network() {
       {/* Activity Feed */}
       <ActivityFeed
         entries={activityData?.entries ?? []}
+        exchanges={instanceData?.instances.map((i) => i.exchangeName) ?? []}
         isLoading={activityLoading}
       />
     </div>

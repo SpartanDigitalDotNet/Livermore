@@ -567,6 +567,11 @@ async function start() {
     // Close subscriber Redis connection
     await subscriberRedis.quit();
 
+    // Signal stopped state
+    try {
+      await stateMachine.transition('stopped');
+    } catch { /* may fail if already stopped or in incompatible state */ }
+
     // Send shutdown notification
     if (discordService.isEnabled()) {
       await discordService.sendSystemNotification(
