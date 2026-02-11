@@ -10,16 +10,16 @@ See: .planning/PROJECT.md (updated 2026-02-08)
 ## Current Position
 
 **Milestone:** v6.0 Perseus Network
-**Phase:** 31 of 33 (Network Activity Logging) -- Complete
-**Plan:** 2 of 2 complete
-**Status:** Phase complete
+**Phase:** 33 of 33 (Admin UI Network View)
+**Plan:** 2 of 2 complete (33-01 pending separate execution)
+**Status:** In progress
 
 ```
-Progress: [########..] 42%
-Phase 30 [===]  Phase 31 [==]  Phase 32 [ ]  Phase 33 [ ]
+Progress: [########..] 75%
+Phase 30 [===]  Phase 31 [==]  Phase 32 [ ]  Phase 33 [.=]
 ```
 
-**Last activity:** 2026-02-10 -- Completed 31-02-PLAN.md (Wire Activity Logger into State Machine and Error Paths)
+**Last activity:** 2026-02-10 -- Completed 33-02-PLAN.md (Discord State Transition Notifications)
 
 ## Milestones
 
@@ -37,9 +37,9 @@ See `.planning/MILESTONES.md` for full history.
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 5
-- Average duration: 4m 21s
-- Total execution time: 21m 43s
+- Total plans completed: 6
+- Average duration: 3m 57s
+- Total execution time: 23m 43s
 
 **By Phase:**
 
@@ -47,6 +47,7 @@ See `.planning/MILESTONES.md` for full history.
 |-------|-------|-------|----------|
 | 30 | 3 | 13m 54s | 4m 38s |
 | 31 | 2 | 7m 49s | 3m 55s |
+| 33 | 1 | 2m 00s | 2m 00s |
 
 ## Tech Debt (Carried Forward)
 
@@ -105,27 +106,22 @@ None yet.
 ### Last Session
 
 **Date:** 2026-02-10
-**Activity:** Executed 31-02-PLAN.md (Wire Activity Logger into State Machine and Error Paths, 2 tasks)
-**Stopped At:** Completed 31-02-PLAN.md
+**Activity:** Executed 33-02-PLAN.md (Discord State Transition Notifications, 1 task)
+**Stopped At:** Completed 33-02-PLAN.md
 
 ### Resume Context
 
-Phase 31 complete. All network activity logging infrastructure is in place.
+33-02 complete. Discord notifications fire on every state machine transition.
 
-Delivered in 31-01:
-- Activity log Zod schemas (StateTransitionEntry, ErrorEntry, NetworkActivityEntry discriminated union)
-- networkActivityStreamKey in cache/keys.ts
-- NetworkActivityLogger service with logTransition, logError, setIp, setAdminEmail
+Delivered in 33-02:
+- StateMachineService.transition() sends fire-and-forget Discord notification
+- Notification includes exchange name, from/to states, hostname
+- Uses getDiscordService() singleton with isEnabled() check
+- resetToIdle() intentionally excluded (recovery mechanism)
 
-Delivered in 31-02:
-- activityLogger field on ServiceRegistry
-- StateMachineService accepts optional logger, calls logTransition after transitions
-- ControlChannelService creates logger in handleStart, calls logError in catch block
-- server.ts creates logger, passes to StateMachineService, adds to ServiceRegistry
-- Admin email set on logger when ControlChannelService initializes
-- IP set asynchronously via detectPublicIp in both startup paths
-
-Phase 32 is next.
+Remaining for v6.0 Perseus Network:
+- Phase 32: 32-01 (tRPC network router) not yet executed
+- Phase 33: 33-01 (Admin UI network view page) not yet executed
 
 ---
 *State initialized: 2026-01-18*
