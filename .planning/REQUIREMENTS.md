@@ -41,11 +41,11 @@ Requirements for v6.0 release. Each maps to roadmap phases.
 
 ### Admin UI Network View
 
-- [ ] **UI-01**: "Network" page accessible from Admin header navigation
-- [ ] **UI-02**: Instance card per exchange showing: exchange name, connection state (color-coded badge), hostname, IP, admin name, symbol count, last heartbeat, connected since
-- [ ] **UI-03**: Dead instance detection — when key is expired/missing, show card as "Offline" with last-known info from most recent stream entry
-- [ ] **UI-04**: Scrollable activity feed showing state transitions and errors from Redis Streams (reverse chronological)
-- [ ] **UI-05**: Polling-based refresh at 5s interval (matches existing control panel pattern)
+- [x] **UI-01**: "Network" page accessible from Admin header navigation
+- [x] **UI-02**: Instance card per exchange showing: exchange name, connection state (color-coded badge), hostname, IP, admin name, symbol count, last heartbeat, connected since
+- [x] **UI-03**: Dead instance detection — when key is expired/missing, show card as "Offline" with last-known info from most recent stream entry
+- [x] **UI-04**: Scrollable activity feed showing state transitions and errors from Redis Streams (reverse chronological)
+- [x] **UI-05**: Polling-based refresh at 5s interval (matches existing control panel pattern)
 
 ### tRPC Endpoints
 
@@ -61,9 +61,9 @@ Requirements for v6.0 release. Each maps to roadmap phases.
 
 ### Differentiators
 
-- [ ] **DIFF-01**: Instance uptime display ("Running for 4h 23m") calculated from connectedAt
-- [ ] **DIFF-02**: Heartbeat latency indicator with color degradation (green < 10s, yellow < 30s, red > 30s)
-- [ ] **DIFF-04**: Discord notifications for instance state changes (leverages existing Discord service)
+- [x] **DIFF-01**: Instance uptime display ("Running for 4h 23m") calculated from connectedAt
+- [x] **DIFF-02**: Heartbeat latency indicator with color degradation (green < 10s, yellow < 30s, red > 30s)
+- [x] **DIFF-04**: Discord notifications for instance state changes (leverages existing Discord service)
 
 ## v2 Requirements (Deferred to v6.1+)
 
@@ -121,20 +121,20 @@ Requirements for v6.0 release. Each maps to roadmap phases.
 | LOG-04 | Phase 31 | Done |
 | LOG-05 | Phase 31 | Done |
 | LOG-06 | Phase 31 | Done |
-| UI-01 | Phase 33 | Pending |
-| UI-02 | Phase 33 | Pending |
-| UI-03 | Phase 33 | Pending |
-| UI-04 | Phase 33 | Pending |
-| UI-05 | Phase 33 | Pending |
+| UI-01 | Phase 33 | Done |
+| UI-02 | Phase 33 | Done |
+| UI-03 | Phase 33 | Done |
+| UI-04 | Phase 33 | Done |
+| UI-05 | Phase 33 | Done |
 | RPC-01 | Phase 32 | Done |
 | RPC-02 | Phase 32 | Done |
 | RPC-03 | Phase 32 | Done |
 | FIX-01 | Phase 30 | Done |
 | FIX-02 | Phase 30 | Done |
 | FIX-03 | Phase 30 | Done |
-| DIFF-01 | Phase 33 | Pending |
-| DIFF-02 | Phase 33 | Pending |
-| DIFF-04 | Phase 33 | Pending |
+| DIFF-01 | Phase 33 | Done |
+| DIFF-02 | Phase 33 | Done |
+| DIFF-04 | Phase 33 | Done |
 
 **Coverage:**
 - v1 requirements: 34 total
@@ -143,4 +143,4 @@ Requirements for v6.0 release. Each maps to roadmap phases.
 
 ---
 *Requirements defined: 2026-02-10*
-*Last updated: 2026-02-10 -- Phase 32 complete (26/34 done)*
+*Last updated: 2026-02-10 -- ALL REQUIREMENTS COMPLETE (34/34 done)*

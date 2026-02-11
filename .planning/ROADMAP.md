@@ -15,7 +15,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 30: Instance Registry and State Machine** - Exchange-scoped registration with typed state machine, TTL heartbeat, and one-instance-per-exchange enforcement
 - [x] **Phase 31: Network Activity Logging** - Redis Streams event log for state transitions and errors with 90-day retention
 - [x] **Phase 32: tRPC Network Router** - API endpoints for reading instance status and activity logs
-- [ ] **Phase 33: Admin UI Network View** - Visual network dashboard with instance cards, status badges, activity feed, and differentiators
+- [x] **Phase 33: Admin UI Network View** - Visual network dashboard with instance cards, status badges, activity feed, and differentiators
 
 ## Phase Details
 
@@ -77,8 +77,8 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 33-01-PLAN.md -- Admin UI: Network page, InstanceCard, ActivityFeed components, header nav link
-- [ ] 33-02-PLAN.md -- Discord notifications: Wire state change notifications into StateMachineService
+- [x] 33-01-PLAN.md -- Admin UI: Network page, InstanceCard, ActivityFeed components, header nav link
+- [x] 33-02-PLAN.md -- Discord notifications: Wire state change notifications into StateMachineService
 
 ## Progress
 
@@ -90,8 +90,8 @@ Phases execute in numeric order: 30 -> 31 -> 32 -> 33
 | 30. Instance Registry and State Machine | 3/3 | Complete | 2026-02-10 |
 | 31. Network Activity Logging | 2/2 | Complete | 2026-02-10 |
 | 32. tRPC Network Router | 1/1 | Complete | 2026-02-10 |
-| 33. Admin UI Network View | 0/2 | Not started | - |
+| 33. Admin UI Network View | 2/2 | Complete | 2026-02-10 |
 
 ---
 *Roadmap created: 2026-02-10*
-*Last updated: 2026-02-10 -- Phase 33 planned*
+*Last updated: 2026-02-10 -- ALL PHASES COMPLETE -- v6.0 milestone delivered*
