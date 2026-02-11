@@ -49,9 +49,9 @@ Requirements for v6.0 release. Each maps to roadmap phases.
 
 ### tRPC Endpoints
 
-- [ ] **RPC-01**: `network.getInstances` returns all exchange instance statuses (read from known exchange IDs in DB, not SCAN/KEYS)
-- [ ] **RPC-02**: `network.getActivityLog` returns recent events from stream via XREVRANGE with COUNT for pagination
-- [ ] **RPC-03**: `network.getExchangeStatus` returns status for a single exchange by ID
+- [x] **RPC-01**: `network.getInstances` returns all exchange instance statuses (read from known exchange IDs in DB, not SCAN/KEYS)
+- [x] **RPC-02**: `network.getActivityLog` returns recent events from stream via XREVRANGE with COUNT for pagination
+- [x] **RPC-03**: `network.getExchangeStatus` returns status for a single exchange by ID
 
 ### Bug Fixes
 
@@ -126,9 +126,9 @@ Requirements for v6.0 release. Each maps to roadmap phases.
 | UI-03 | Phase 33 | Pending |
 | UI-04 | Phase 33 | Pending |
 | UI-05 | Phase 33 | Pending |
-| RPC-01 | Phase 32 | Pending |
-| RPC-02 | Phase 32 | Pending |
-| RPC-03 | Phase 32 | Pending |
+| RPC-01 | Phase 32 | Done |
+| RPC-02 | Phase 32 | Done |
+| RPC-03 | Phase 32 | Done |
 | FIX-01 | Phase 30 | Done |
 | FIX-02 | Phase 30 | Done |
 | FIX-03 | Phase 30 | Done |
@@ -143,4 +143,4 @@ Requirements for v6.0 release. Each maps to roadmap phases.
 
 ---
 *Requirements defined: 2026-02-10*
-*Last updated: 2026-02-10 -- Phase 31 complete (23/34 done)*
+*Last updated: 2026-02-10 -- Phase 32 complete (26/34 done)*
