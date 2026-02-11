@@ -74,11 +74,11 @@ Plans:
   3. A scrollable activity feed below the cards shows state transitions and errors in reverse chronological order, auto-refreshing alongside the instance cards
   4. The entire page polls at a 5-second interval consistent with the existing control panel pattern, showing live heartbeat latency with color degradation (green < 10s, yellow < 30s, red > 30s) and uptime duration ("Running for 4h 23m")
   5. Discord notifications fire when an instance changes state (e.g., goes offline, comes online), leveraging the existing Discord notification service
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 33-01: TBD
-- [ ] 33-02: TBD
+- [ ] 33-01-PLAN.md -- Admin UI: Network page, InstanceCard, ActivityFeed components, header nav link
+- [ ] 33-02-PLAN.md -- Discord notifications: Wire state change notifications into StateMachineService
 
 ## Progress
 
@@ -90,8 +90,8 @@ Phases execute in numeric order: 30 -> 31 -> 32 -> 33
 | 30. Instance Registry and State Machine | 3/3 | Complete | 2026-02-10 |
 | 31. Network Activity Logging | 2/2 | Complete | 2026-02-10 |
 | 32. tRPC Network Router | 1/1 | Complete | 2026-02-10 |
-| 33. Admin UI Network View | 0/TBD | Not started | - |
+| 33. Admin UI Network View | 0/2 | Not started | - |
 
 ---
 *Roadmap created: 2026-02-10*
-*Last updated: 2026-02-10 -- Phase 32 complete*
+*Last updated: 2026-02-10 -- Phase 33 planned*
