@@ -5,21 +5,21 @@
 See: .planning/PROJECT.md (updated 2026-02-08)
 
 **Core value:** Data accuracy and timely alerts
-**Current focus:** v6.0 Perseus Network -- Network Activity Logging
+**Current focus:** v6.0 Perseus Network -- Admin UI Network View
 
 ## Current Position
 
 **Milestone:** v6.0 Perseus Network
-**Phase:** 33 of 33 (Admin UI Network View)
-**Plan:** 2 of 2 complete (33-01 pending separate execution)
-**Status:** In progress
+**Phase:** 33 of 33 (Admin UI Network View) -- Complete
+**Plan:** 2 of 2 complete
+**Status:** Phase complete
 
 ```
-Progress: [########..] 75%
-Phase 30 [===]  Phase 31 [==]  Phase 32 [ ]  Phase 33 [.=]
+Progress: [########.] 88%
+Phase 30 [===]  Phase 31 [==]  Phase 32 [ ]  Phase 33 [==]
 ```
 
-**Last activity:** 2026-02-10 -- Completed 33-02-PLAN.md (Discord State Transition Notifications)
+**Last activity:** 2026-02-10 -- Completed 33-01-PLAN.md (Network Page and Components)
 
 ## Milestones
 
@@ -37,9 +37,9 @@ See `.planning/MILESTONES.md` for full history.
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 6
-- Average duration: 3m 57s
-- Total execution time: 23m 43s
+- Total plans completed: 7
+- Average duration: 3m 52s
+- Total execution time: 27m 03s
 
 **By Phase:**
 
@@ -47,7 +47,7 @@ See `.planning/MILESTONES.md` for full history.
 |-------|-------|-------|----------|
 | 30 | 3 | 13m 54s | 4m 38s |
 | 31 | 2 | 7m 49s | 3m 55s |
-| 33 | 1 | 2m 00s | 2m 00s |
+| 33 | 2 | 5m 20s | 2m 40s |
 
 ## Tech Debt (Carried Forward)
 
@@ -106,23 +106,27 @@ None yet.
 ### Last Session
 
 **Date:** 2026-02-10
-**Activity:** Executed 33-02-PLAN.md (Discord State Transition Notifications, 1 task)
-**Stopped At:** Completed 33-02-PLAN.md
+**Activity:** Executed 33-01-PLAN.md (Network Page and Components, 2 tasks)
+**Stopped At:** Completed 33-01-PLAN.md
 
 ### Resume Context
 
-33-02 complete. Discord notifications fire on every state machine transition.
+Phase 33 complete. Admin UI Network page is fully functional.
+
+Delivered in 33-01:
+- InstanceCard component with color-coded state badges, heartbeat latency, uptime display
+- ActivityFeed component with scrollable reverse-chronological event feed
+- Network page with dual polling queries (getInstances + getActivityLog) at 5s
+- Hash route #/network with nav link between Control and Symbols
 
 Delivered in 33-02:
 - StateMachineService.transition() sends fire-and-forget Discord notification
 - Notification includes exchange name, from/to states, hostname
 - Uses getDiscordService() singleton with isEnabled() check
-- resetToIdle() intentionally excluded (recovery mechanism)
 
 Remaining for v6.0 Perseus Network:
-- Phase 32: 32-01 (tRPC network router) not yet executed
-- Phase 33: 33-01 (Admin UI network view page) not yet executed
+- Phase 32: 32-01 (tRPC network router) -- code exists but plan not formally executed
 
 ---
 *State initialized: 2026-01-18*
-*Last updated: 2026-02-10 -- Completed 31-02-PLAN.md*
+*Last updated: 2026-02-10 -- Completed 33-01-PLAN.md*
