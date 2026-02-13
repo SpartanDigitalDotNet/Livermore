@@ -11,10 +11,10 @@ See: .planning/PROJECT.md (updated 2026-02-13)
 
 **Milestone:** v7.0 Smart Warmup & Binance Adapter
 **Phase:** 35 of 38 (Smart Warmup Engine)
-**Plan:** 1 of 2 complete
-**Status:** In progress - Plan 35-01 complete (scanner & schedule builder)
+**Plan:** 2 of 2 complete
+**Status:** Phase 35 complete -- SmartWarmupService wired into handleStart()
 
-**Last activity:** 2026-02-13 -- Completed 35-01 (candle status scanner & warmup schedule builder)
+**Last activity:** 2026-02-13 -- Completed 35-02 (SmartWarmupService executor & handleStart integration)
 
 ## Milestones
 
@@ -71,6 +71,9 @@ Recent decisions affecting current work:
 - SCAN_TIMEFRAME_ORDER: 1d -> 1m (largest to smallest per WARM-01)
 - MIN_CANDLE_THRESHOLD: 60 candles determines sufficient vs insufficient pairs
 - Schedule persisted as JSON to exchange:<id>:warm-up-schedule:symbols for external observability
+- SmartWarmupService replaces StartupBackfillService for startup only; ad-hoc backfill unchanged
+- Warmup stats persisted without TTL so Admin UI can read after warmup completes
+- Batch size 5 with 1s delay matching existing rate limiting pattern
 
 ### Pending Todos
 
@@ -85,8 +88,8 @@ None.
 ### Last Session
 
 **Date:** 2026-02-13
-**Activity:** Completed Plan 35-01 (candle status scanner & warmup schedule builder)
-**Stopped At:** Completed 35-01-PLAN.md, created CandleStatusScanner and WarmupScheduleBuilder
+**Activity:** Completed Plan 35-02 (SmartWarmupService executor & handleStart integration)
+**Stopped At:** Completed 35-02-PLAN.md, Phase 35 fully complete
 
 ### Resume Context
 
@@ -103,4 +106,4 @@ Key context:
 
 ---
 *State initialized: 2026-01-18*
-*Last updated: 2026-02-13 -- Phase 35 Plan 01 complete (scanner & schedule builder)*
+*Last updated: 2026-02-13 -- Phase 35 complete (smart warmup engine)*
