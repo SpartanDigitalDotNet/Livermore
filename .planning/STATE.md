@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-02-13)
 ## Current Position
 
 **Milestone:** v7.0 Smart Warmup & Binance Adapter
-**Phase:** 36 of 38 (Binance WebSocket Adapter)
-**Plan:** 2 of 2 complete
-**Status:** Phase 36 COMPLETE -- BinanceAdapter + Factory wire-up done
+**Phase:** 37 of 38 (Admin UI - Connect/Setup/Warmup)
+**Plan:** 1 of 3 complete
+**Status:** Phase 37 IN PROGRESS -- ConnectButton with lock-check complete
 
-**Last activity:** 2026-02-13 -- Completed Plan 36-02 (Binance Exchange Factory Wire-up)
+**Last activity:** 2026-02-13 -- Completed Plan 37-01 (Connect Button with Lock Check)
 
 ## Milestones
 
@@ -78,6 +78,8 @@ Recent decisions affecting current work:
 - Batch size 5 with 1s delay matching existing rate limiting pattern
 - BinanceRestClient created in factory (not adapter) to keep exchange-core free from binance-client dependency
 - Factory wsUrl/restUrl sourced from exchanges DB table -- binance.com vs binance.us is data-driven
+- [Phase 37]: Use trpcClient directly for imperative calls instead of hooks
+- [Phase 37]: Show ConnectButton for offline, idle, and stopped states only
 
 ### Pending Todos
 
@@ -92,8 +94,8 @@ None.
 ### Last Session
 
 **Date:** 2026-02-13
-**Activity:** Completed Plan 36-02 (Binance Exchange Factory Wire-up) -- Phase 36 complete
-**Stopped At:** Completed 36-02-PLAN.md -- Phase 36 fully done, ready for Phase 37
+**Activity:** Completed Plan 37-01 (Connect Button with Lock Check)
+**Stopped At:** Completed 37-01-PLAN.md
 
 ### Resume Context
 
@@ -110,4 +112,4 @@ Key context:
 
 ---
 *State initialized: 2026-01-18*
-*Last updated: 2026-02-13 -- Phase 36 complete (Binance WebSocket Adapter)*
+*Last updated: 2026-02-13 -- Phase 37-01 complete (Connect Button with Lock Check)*
