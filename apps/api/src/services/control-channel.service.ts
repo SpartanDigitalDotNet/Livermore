@@ -7,7 +7,7 @@ import {
   type CommandType,
   type Timeframe,
 } from '@livermore/schemas';
-import { StartupBackfillService } from '@livermore/exchange-core';
+import { StartupBackfillService, SmartWarmupService } from '@livermore/exchange-core';
 import { createRestClient } from './exchange/rest-client-factory';
 import { SymbolSourceService } from './symbol-source.service';
 import { hostname } from 'node:os';
@@ -541,21 +541,27 @@ export class ControlChannelService {
 
       await this.services.stateMachine.transition('starting');
 
-      // Backfill cache with historical candles (MUST complete before indicators)
-      setProgress({ phase: 'indicators', phaseLabel: 'Backfilling historical candles', percent: 10 });
-      const backfillTimeframes: Timeframe[] = ['1m', '5m', '15m', '1h', '4h', '1d'];
+      // Smart warmup: scan cached data, build schedule, fetch only what's missing (Phase 35)
+      setProgress({ phase: 'indicators', phaseLabel: 'Scanning cached candle data', percent: 10 });
+      const warmupTimeframes: Timeframe[] = ['1d', '4h', '1h', '15m', '5m', '1m'];
       if (!this.services.restClient) {
         throw new Error('No REST client available. Exchange setup may be incomplete.');
       }
       if (!this.services.exchangeId) {
         throw new Error('No exchange ID resolved. Exchange setup may be incomplete.');
       }
-      const backfillService = new StartupBackfillService(this.services.restClient, this.services.redis, {
-        userId: 1, // legacy
+      const smartWarmup = new SmartWarmupService({
+        redis: this.services.redis,
         exchangeId: this.services.exchangeId,
+        restClient: this.services.restClient,
       });
-      await backfillService.backfill(this.services.monitoredSymbols, backfillTimeframes);
-      logger.info('Cache backfill complete');
+      const warmupSchedule = await smartWarmup.warmup(this.services.monitoredSymbols, warmupTimeframes);
+      logger.info({
+        event: 'smart_warmup_complete',
+        totalPairs: warmupSchedule.totalPairs,
+        skipped: warmupSchedule.sufficientPairs,
+        fetched: warmupSchedule.needsFetching,
+      }, `Smart warmup complete: ${warmupSchedule.sufficientPairs} skipped, ${warmupSchedule.needsFetching} fetched`);
 
       // Phase 30: Transition to warming after backfill
       await this.services.stateMachine.transition('warming');
