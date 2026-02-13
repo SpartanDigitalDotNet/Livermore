@@ -42,7 +42,10 @@ Plans:
   2. The scan results are compiled into a warmup schedule stored at `exchange:<exchange_id>:warm-up-schedule:symbols` in Redis, listing only the symbol/timeframe pairs that need fetching -- an external observer (or Admin UI) can read this key to see what warmup will do before it starts
   3. Warmup execution follows the schedule, making REST calls only for symbol/timeframe pairs listed as needing data -- a warm restart with fully cached data results in zero REST backfill calls
   4. Warmup progress stats (percent complete, ETA, symbols remaining, failures) are continuously updated at `exchange:<exchange_id>:warm-up-schedule:stats` in Redis as warmup progresses, reflecting real-time status
-**Plans**: TBD
+**Plans:** 2 plans
+Plans:
+- [ ] 35-01-PLAN.md -- Candle Status Scanner + Warmup Schedule Builder (types, scanner, schedule builder, Redis keys)
+- [ ] 35-02-PLAN.md -- SmartWarmupService executor with progress stats + handleStart() integration
 
 ### Phase 36: Binance WebSocket Adapter
 **Goal**: BinanceAdapter streams real-time candle data via WebSocket, handles Binance message formats, and integrates into the existing exchange adapter pipeline
@@ -85,11 +88,11 @@ Phases execute in numeric order: 34 -> 35 -> 36 -> 37 -> 38
 | Phase | Plans Complete | Status | Completed |
 |-------|---------------|--------|-----------|
 | 34. Ticker Key Migration | 2/2 | Complete | 2026-02-13 |
-| 35. Smart Warmup Engine | 0/TBD | Not started | - |
+| 35. Smart Warmup Engine | 0/2 | Planning complete | - |
 | 36. Binance WebSocket Adapter | 0/TBD | Not started | - |
 | 37. Admin UI -- Connect, Exchange Setup & Warmup Progress | 0/TBD | Not started | - |
 | 38. Binance Test Harness & Handoff | 0/TBD | Not started | - |
 
 ---
 *Roadmap created: 2026-02-13*
-*Last updated: 2026-02-13 -- Phase 34 complete*
+*Last updated: 2026-02-13 -- Phase 35 planned (2 plans)*
