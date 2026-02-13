@@ -28,7 +28,10 @@ Decimal phases appear between their surrounding integers in numeric order.
   1. An impact assessment documents every service, router, and component that reads or writes ticker keys or subscribes to ticker pub/sub channels, confirming nothing is missed before code changes begin
   2. Ticker data is stored at `ticker:{exchangeId}:{symbol}` instead of `ticker:{userId}:{exchangeId}:{symbol}`, and all services that read ticker data (alert price display, Admin UI) resolve prices correctly from the new key
   3. Ticker pub/sub channels use the new exchange-scoped pattern, and real-time price updates flow from the WebSocket ticker handler through pub/sub to any subscriber without interruption
-**Plans**: TBD
+**Plans:** 2 plans
+Plans:
+- [ ] 34-01-PLAN.md -- Impact assessment + cache layer migration (tickerKey, tickerChannel, TickerCacheStrategy)
+- [ ] 34-02-PLAN.md -- Update all consumer code + final verification audit
 
 ### Phase 35: Smart Warmup Engine
 **Goal**: Warmup only fetches candle data that is actually missing, skipping symbol/timeframe pairs that already have sufficient cached data, with real-time progress visible in Redis
@@ -81,7 +84,7 @@ Phases execute in numeric order: 34 -> 35 -> 36 -> 37 -> 38
 
 | Phase | Plans Complete | Status | Completed |
 |-------|---------------|--------|-----------|
-| 34. Ticker Key Migration | 0/TBD | Not started | - |
+| 34. Ticker Key Migration | 0/2 | Planned | - |
 | 35. Smart Warmup Engine | 0/TBD | Not started | - |
 | 36. Binance WebSocket Adapter | 0/TBD | Not started | - |
 | 37. Admin UI -- Connect, Exchange Setup & Warmup Progress | 0/TBD | Not started | - |
