@@ -11,10 +11,10 @@ See: .planning/PROJECT.md (updated 2026-02-13)
 
 **Milestone:** v7.0 Smart Warmup & Binance Adapter
 **Phase:** 37 of 38 (Admin UI - Connect/Setup/Warmup)
-**Plan:** 1 of 3 complete
-**Status:** Phase 37 IN PROGRESS -- ConnectButton with lock-check complete
+**Plan:** 2 of 3 complete
+**Status:** Phase 37 IN PROGRESS -- updateExchange mutation and ExchangeSetupModal edit mode complete
 
-**Last activity:** 2026-02-13 -- Completed Plan 37-01 (Connect Button with Lock Check)
+**Last activity:** 2026-02-13 -- Completed Plan 37-02 (Update Exchange Config & Edit Mode)
 
 ## Milestones
 
@@ -80,6 +80,9 @@ Recent decisions affecting current work:
 - Factory wsUrl/restUrl sourced from exchanges DB table -- binance.com vs binance.us is data-driven
 - [Phase 37]: Use trpcClient directly for imperative calls instead of hooks
 - [Phase 37]: Show ConnectButton for offline, idle, and stopped states only
+- [Phase 37-02]: is_default orchestration pattern: unset all other defaults before setting new default (prevents multiple defaults per user)
+- [Phase 37-02]: ExchangeSetupModal supports both create (existing flow) and edit mode (pre-populated, calls updateExchange)
+- [Phase 37-02]: Edit mode skips exchange selection step and is dismissable (vs non-dismissable create mode)
 
 ### Pending Todos
 
@@ -94,8 +97,8 @@ None.
 ### Last Session
 
 **Date:** 2026-02-13
-**Activity:** Completed Plan 37-01 (Connect Button with Lock Check)
-**Stopped At:** Completed 37-01-PLAN.md
+**Activity:** Completed Plan 37-02 (Update Exchange Config & Edit Mode)
+**Stopped At:** Completed 37-02-PLAN.md -- updateExchange mutation and ExchangeSetupModal edit mode complete
 
 ### Resume Context
 
