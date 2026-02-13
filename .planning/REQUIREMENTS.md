@@ -26,7 +26,6 @@ Requirements for v7.0 release. Each maps to roadmap phases.
 
 - [ ] **BIN-01**: BinanceAdapter implements IExchangeAdapter interface with WebSocket streaming for real-time candle data
 - [ ] **BIN-02**: BinanceAdapter supports both binance.com and binance.us using wsUrl/restUrl from the exchanges table (only URL difference)
-- [ ] **BIN-03**: Symbol normalization converts between Binance format (BTCUSDT) and project format (BTC-USD) in both directions
 - [ ] **BIN-04**: ExchangeAdapterFactory creates BinanceAdapter when exchange name is 'binance' or 'binance_us' (no longer commented out)
 - [ ] **BIN-05**: BinanceAdapter handles Binance WebSocket message format, heartbeat/ping-pong, and automatic reconnection
 
@@ -74,39 +73,39 @@ Requirements for v7.0 release. Each maps to roadmap phases.
 | Aggregated candle building from trades | Binance provides native kline WebSocket streams |
 | Automatic exchange failover | Foundation first, failover deferred to standby/failover milestone |
 | REST-only Binance mode | WebSocket streaming is required for real-time data |
+| Symbol normalization (BTCUSDT to BTC-USD) | exchange_symbols table stores native format per exchange; normalization only needed for future user custom symbol lists |
 
 ## Traceability
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| WARM-01 | — | Pending |
-| WARM-02 | — | Pending |
-| WARM-03 | — | Pending |
-| WARM-04 | — | Pending |
-| WARM-05 | — | Pending |
-| WARM-06 | — | Pending |
-| TICK-01 | — | Pending |
-| TICK-02 | — | Pending |
-| TICK-03 | — | Pending |
-| BIN-01 | — | Pending |
-| BIN-02 | — | Pending |
-| BIN-03 | — | Pending |
-| BIN-04 | — | Pending |
-| BIN-05 | — | Pending |
-| ADM-01 | — | Pending |
-| ADM-02 | — | Pending |
-| ADM-03 | — | Pending |
-| ADM-04 | — | Pending |
-| TST-01 | — | Pending |
-| TST-02 | — | Pending |
-| TST-03 | — | Pending |
-| TST-04 | — | Pending |
+| WARM-01 | Phase 35 | Pending |
+| WARM-02 | Phase 35 | Pending |
+| WARM-03 | Phase 35 | Pending |
+| WARM-04 | Phase 35 | Pending |
+| WARM-05 | Phase 35 | Pending |
+| WARM-06 | Phase 37 | Pending |
+| TICK-01 | Phase 34 | Pending |
+| TICK-02 | Phase 34 | Pending |
+| TICK-03 | Phase 34 | Pending |
+| BIN-01 | Phase 36 | Pending |
+| BIN-02 | Phase 36 | Pending |
+| BIN-04 | Phase 36 | Pending |
+| BIN-05 | Phase 36 | Pending |
+| ADM-01 | Phase 37 | Pending |
+| ADM-02 | Phase 37 | Pending |
+| ADM-03 | Phase 37 | Pending |
+| ADM-04 | Phase 37 | Pending |
+| TST-01 | Phase 38 | Pending |
+| TST-02 | Phase 38 | Pending |
+| TST-03 | Phase 38 | Pending |
+| TST-04 | Phase 38 | Pending |
 
 **Coverage:**
-- v1 requirements: 22 total
-- Mapped to phases: 0
-- Unmapped: 22 (pending roadmap creation)
+- v1 requirements: 21 total
+- Mapped to phases: 21
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-02-13*
-*Last updated: 2026-02-13 after initial definition*
+*Last updated: 2026-02-13 -- traceability updated with phase assignments*

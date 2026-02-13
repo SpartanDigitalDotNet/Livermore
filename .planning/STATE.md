@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-02-13)
 ## Current Position
 
 **Milestone:** v7.0 Smart Warmup & Binance Adapter
-**Phase:** Not started (defining requirements)
-**Plan:** —
-**Status:** Defining requirements
+**Phase:** 34 of 38 (Ticker Key Migration)
+**Plan:** --
+**Status:** Roadmap created, ready to plan Phase 34
 
-**Last activity:** 2026-02-13 — Milestone v7.0 started
+**Last activity:** 2026-02-13 -- Roadmap created (5 phases, 22 requirements mapped)
 
 ## Milestones
 
@@ -63,9 +63,10 @@ Decisions are logged in PROJECT.md Key Decisions table.
 Recent decisions affecting current work:
 
 - exchangeName bug fix: control-channel.service.ts line 428 was hardcoding "coinbase" -- fixed to use DB value
-- Ticker keys still user-scoped (to be migrated in v7.0)
-- BinanceRestClient exists (REST) but BinanceAdapter (WebSocket) does not exist yet
-- Exchange Candle Status Scan approach: check largest→smallest timeframe per symbol
+- Ticker keys still user-scoped (to be migrated in Phase 34)
+- BinanceRestClient exists (REST) but BinanceAdapter WebSocket does not exist yet
+- Exchange Candle Status Scan approach: check largest to smallest timeframe per symbol
+- Smart warmup scans cached data first, only fetches what is missing (not multi-exchange simultaneous)
 
 ### Pending Todos
 
@@ -80,20 +81,22 @@ None.
 ### Last Session
 
 **Date:** 2026-02-13
-**Activity:** Starting v7.0 milestone -- defining requirements
-**Stopped At:** Milestone initialization
+**Activity:** Created v7.0 roadmap -- 5 phases, 22 requirements, phases 34-38
+**Stopped At:** Roadmap creation complete, ready to plan Phase 34
 
 ### Resume Context
 
-**v7.0 MULTI-EXCHANGE WARMUP & BINANCE ADAPTER -- STARTING**
+**v7.0 SMART WARMUP & BINANCE ADAPTER -- ROADMAP CREATED**
 
 Key context:
-- v6.0 Perseus Network complete (34/34 requirements, phases 30-33)
-- exchangeName bug fixed (control-channel.service.ts hardcoded "coinbase")
-- BinanceRestClient exists but no WebSocket adapter
-- Ticker keys still user-scoped, need migration
-- Current warmup is brute-force backfill (fetches everything regardless of cached state)
+- v6.0 Perseus Network complete (phases 30-33)
+- v7.0 roadmap: 5 phases (34-38), 22 requirements
+- Phase 34 (Ticker Key Migration) is first -- surgical refactor, 3 requirements
+- Phase 35 (Smart Warmup Engine) is the big one -- 5 requirements, core innovation
+- Phase 36 (Binance WebSocket Adapter) -- 5 requirements, BinanceRestClient already exists
+- Phase 37 (Admin UI) -- 5 requirements, combines connect/setup/warmup-progress
+- Phase 38 (Test Harness & Handoff) -- 4 requirements, validates everything for Kaia
 
 ---
 *State initialized: 2026-01-18*
-*Last updated: 2026-02-13 -- v7.0 milestone started*
+*Last updated: 2026-02-13 -- v7.0 roadmap created*
