@@ -11,10 +11,10 @@ See: .planning/PROJECT.md (updated 2026-02-13)
 
 **Milestone:** v7.0 Smart Warmup & Binance Adapter
 **Phase:** 34 of 38 (Ticker Key Migration)
-**Plan:** 1 of 2 complete
-**Status:** Plan 34-01 complete, ready for Plan 34-02
+**Plan:** 2 of 2 complete
+**Status:** Phase 34 complete, ready for Phase 35
 
-**Last activity:** 2026-02-13 -- Completed 34-01 (impact assessment + cache layer migration)
+**Last activity:** 2026-02-13 -- Completed 34-02 (consumer call site updates, phase 34 complete)
 
 ## Milestones
 
@@ -40,7 +40,7 @@ See `.planning/MILESTONES.md` for full history.
 | Autostart has no user context | High | Can't load user settings/symbols | v5.0 |
 | Autostart hardcodes exchangeId=1 (Coinbase) | Medium | Autostart only supports Coinbase | v5.0 |
 | Routers hardcode TEST_USER_ID/TEST_EXCHANGE_ID | Medium | Tied to publicProcedure debt | v3.0 |
-| Legacy userId param in cache calls | Low | Cache API signature requires unused param | v5.0 |
+| Legacy userId param in cache calls (candle/indicator only) | Low | Ticker keys migrated (v7.0 Phase 34); candle/indicator still have userId | v5.0 |
 
 ## Accumulated Context
 
@@ -63,7 +63,8 @@ Decisions are logged in PROJECT.md Key Decisions table.
 Recent decisions affecting current work:
 
 - exchangeName bug fix: control-channel.service.ts line 428 was hardcoding "coinbase" -- fixed to use DB value
-- Ticker keys migrated to exchange-scoped in cache package (Plan 34-01); consumer call sites pending (Plan 34-02)
+- Ticker keys fully migrated to exchange-scoped: cache layer (34-01) and all 5 consumer call sites (34-02) complete
+- Removed unused userId param from getCurrentPrice() in position-sync.service.ts during ticker migration
 - BinanceRestClient exists (REST) but BinanceAdapter WebSocket does not exist yet
 - Exchange Candle Status Scan approach: check largest to smallest timeframe per symbol
 - Smart warmup scans cached data first, only fetches what is missing (not multi-exchange simultaneous)
@@ -81,8 +82,8 @@ None.
 ### Last Session
 
 **Date:** 2026-02-13
-**Activity:** Completed Plan 34-01 (impact assessment + cache layer migration to exchange-scoped ticker keys)
-**Stopped At:** Completed 34-01-PLAN.md, ready for 34-02-PLAN.md (consumer call site updates)
+**Activity:** Completed Plan 34-02 (consumer call site updates) -- Phase 34 Ticker Key Migration fully complete
+**Stopped At:** Completed 34-02-PLAN.md, Phase 34 complete, ready for Phase 35 (Smart Warmup Engine)
 
 ### Resume Context
 
@@ -99,4 +100,4 @@ Key context:
 
 ---
 *State initialized: 2026-01-18*
-*Last updated: 2026-02-13 -- Plan 34-01 complete*
+*Last updated: 2026-02-13 -- Phase 34 complete (Plans 34-01, 34-02)*
