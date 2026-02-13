@@ -13,11 +13,20 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
 
 interface ExchangeSetupModalProps {
   open: boolean;
   onComplete: () => void;
   userName: string | null;
+  editExchange?: {
+    exchangeName: string;
+    displayName: string;
+    apiKeyEnvVar: string;
+    apiSecretEnvVar: string;
+    isDefault: boolean;
+  } | null;
 }
 
 interface ExchangeInfo {
@@ -28,10 +37,12 @@ interface ExchangeInfo {
   isBusy: boolean;
 }
 
-export function ExchangeSetupModal({ open, onComplete, userName }: ExchangeSetupModalProps) {
+export function ExchangeSetupModal({ open, onComplete, userName, editExchange }: ExchangeSetupModalProps) {
   const [selectedExchange, setSelectedExchange] = useState<ExchangeInfo | null>(null);
   const [apiKeyEnvVar, setApiKeyEnvVar] = useState('');
   const [apiSecretEnvVar, setApiSecretEnvVar] = useState('');
+  const [displayNameValue, setDisplayNameValue] = useState('');
+  const [isDefaultChecked, setIsDefaultChecked] = useState(false);
   const [saving, setSaving] = useState(false);
 
   // Fetch exchanges with availability
@@ -48,14 +59,32 @@ export function ExchangeSetupModal({ open, onComplete, userName }: ExchangeSetup
     )
   );
 
-  // Auto-populate env var names when exchange is selected
+  // Edit mode: pre-populate fields from editExchange prop
   useEffect(() => {
-    if (selectedExchange) {
+    if (editExchange) {
+      // Set synthetic exchange info for header display
+      setSelectedExchange({
+        id: 0,
+        name: editExchange.exchangeName,
+        displayName: editExchange.displayName,
+        geoRestrictions: null,
+        isBusy: false,
+      });
+      setApiKeyEnvVar(editExchange.apiKeyEnvVar);
+      setApiSecretEnvVar(editExchange.apiSecretEnvVar);
+      setDisplayNameValue(editExchange.displayName);
+      setIsDefaultChecked(false); // Switch only shown if not already default
+    }
+  }, [editExchange]);
+
+  // Auto-populate env var names when exchange is selected (create mode only)
+  useEffect(() => {
+    if (selectedExchange && !editExchange) {
       const prefix = selectedExchange.displayName.replace(/\s+/g, '');
       setApiKeyEnvVar(`${prefix}_ApiKeyId`);
       setApiSecretEnvVar(`${prefix}_ApiSecret`);
     }
-  }, [selectedExchange]);
+  }, [selectedExchange, editExchange]);
 
   const handleSelectExchange = (exchange: ExchangeInfo) => {
     if (exchange.isBusy) return;
@@ -66,18 +95,33 @@ export function ExchangeSetupModal({ open, onComplete, userName }: ExchangeSetup
     setSelectedExchange(null);
     setApiKeyEnvVar('');
     setApiSecretEnvVar('');
+    setDisplayNameValue('');
+    setIsDefaultChecked(false);
   };
 
   const handleSave = async () => {
     if (!selectedExchange || !apiKeyEnvVar || !apiSecretEnvVar) return;
     setSaving(true);
     try {
-      await trpcClient.exchangeSymbol.setupExchange.mutate({
-        exchangeName: selectedExchange.name,
-        apiKeyEnvVar,
-        apiSecretEnvVar,
-      });
-      toast.success('Exchange configured successfully!');
+      if (editExchange) {
+        // Edit mode: call updateExchange
+        await trpcClient.exchangeSymbol.updateExchange.mutate({
+          exchangeName: editExchange.exchangeName,
+          apiKeyEnvVar,
+          apiSecretEnvVar,
+          displayName: displayNameValue || undefined,
+          isDefault: isDefaultChecked ? true : undefined,
+        });
+        toast.success('Exchange updated successfully!');
+      } else {
+        // Create mode: call setupExchange
+        await trpcClient.exchangeSymbol.setupExchange.mutate({
+          exchangeName: selectedExchange.name,
+          apiKeyEnvVar,
+          apiSecretEnvVar,
+        });
+        toast.success('Exchange configured successfully!');
+      }
       await queryClient.invalidateQueries({ queryKey: [['exchangeSymbol']] });
       onComplete();
     } catch (err) {
@@ -94,32 +138,37 @@ export function ExchangeSetupModal({ open, onComplete, userName }: ExchangeSetup
 
   const envResults = envCheckData?.results ?? {};
 
+  const isEditMode = !!editExchange;
+  const isDismissable = isEditMode;
+
   return (
-    <Dialog open={open} onOpenChange={() => { /* non-dismissable */ }}>
+    <Dialog open={open} onOpenChange={isDismissable ? onComplete : undefined}>
       <DialogContent
         className="sm:max-w-md"
-        onPointerDownOutside={(e) => e.preventDefault()}
-        onEscapeKeyDown={(e) => e.preventDefault()}
-        onInteractOutside={(e) => e.preventDefault()}
-        // Hide the default close button via CSS override
-        style={{ ['--dialog-close-display' as string]: 'none' }}
+        onPointerDownOutside={(e) => !isDismissable && e.preventDefault()}
+        onEscapeKeyDown={(e) => !isDismissable && e.preventDefault()}
+        onInteractOutside={(e) => !isDismissable && e.preventDefault()}
+        // Hide the default close button via CSS override if not dismissable
+        style={!isDismissable ? { ['--dialog-close-display' as string]: 'none' } : {}}
       >
-        {/* Hide the built-in close button */}
-        <style>{`.absolute.right-4.top-4 { display: none !important; }`}</style>
+        {/* Hide the built-in close button in create mode */}
+        {!isDismissable && <style>{`.absolute.right-4.top-4 { display: none !important; }`}</style>}
 
         <DialogHeader>
           <DialogTitle>
-            {selectedExchange ? 'Configure Exchange' : 'Welcome!'}
+            {isEditMode ? 'Edit Exchange' : selectedExchange ? 'Configure Exchange' : 'Welcome!'}
           </DialogTitle>
           <DialogDescription>
-            {selectedExchange
-              ? `Set up API credentials for ${selectedExchange.displayName}`
-              : `${userName ? `Hi ${userName}! ` : ''}Your exchange is not yet set up. Select one to get started.`}
+            {isEditMode
+              ? `Update credentials for ${editExchange.exchangeName}`
+              : selectedExchange
+                ? `Set up API credentials for ${selectedExchange.displayName}`
+                : `${userName ? `Hi ${userName}! ` : ''}Your exchange is not yet set up. Select one to get started.`}
           </DialogDescription>
         </DialogHeader>
 
-        {!selectedExchange ? (
-          /* Step 1: Exchange selection */
+        {!selectedExchange && !isEditMode ? (
+          /* Step 1: Exchange selection (skipped in edit mode) */
           <div className="space-y-2">
             {statusLoading ? (
               <div className="flex items-center justify-center py-8">
@@ -155,18 +204,20 @@ export function ExchangeSetupModal({ open, onComplete, userName }: ExchangeSetup
               ))
             )}
           </div>
-        ) : (
-          /* Step 2: Env var configuration */
+        ) : selectedExchange ? (
+          /* Step 2: Env var configuration (create or edit mode) */
           <div className="space-y-4">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleBack}
-              className="mb-1 -ml-2"
-            >
-              <ArrowLeft className="mr-1 h-4 w-4" />
-              Back
-            </Button>
+            {!isEditMode && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleBack}
+                className="mb-1 -ml-2"
+              >
+                <ArrowLeft className="mr-1 h-4 w-4" />
+                Back
+              </Button>
+            )}
 
             {/* Geo-restriction warning */}
             {selectedExchange.geoRestrictions?.note && (
@@ -175,6 +226,21 @@ export function ExchangeSetupModal({ open, onComplete, userName }: ExchangeSetup
                 <p className="text-sm text-yellow-800">
                   {selectedExchange.geoRestrictions.note}
                 </p>
+              </div>
+            )}
+
+            {/* Display Name (edit mode only) */}
+            {isEditMode && (
+              <div className="space-y-1">
+                <label className="text-sm font-medium text-gray-700">
+                  Display Name (Optional)
+                </label>
+                <Input
+                  value={displayNameValue}
+                  onChange={(e) => setDisplayNameValue(e.target.value)}
+                  placeholder="e.g. My Binance Account"
+                  maxLength={100}
+                />
               </div>
             )}
 
@@ -208,6 +274,20 @@ export function ExchangeSetupModal({ open, onComplete, userName }: ExchangeSetup
               </div>
             </div>
 
+            {/* Set as Default switch (edit mode only, if not already default) */}
+            {isEditMode && editExchange && !editExchange.isDefault && (
+              <div className="flex items-center space-x-2">
+                <Switch
+                  id="is-default"
+                  checked={isDefaultChecked}
+                  onCheckedChange={setIsDefaultChecked}
+                />
+                <Label htmlFor="is-default" className="text-sm font-medium text-gray-700">
+                  Set as Default Exchange
+                </Label>
+              </div>
+            )}
+
             <p className="text-xs text-gray-500">
               Ensure these environment variables are set on the server running the API.
             </p>
@@ -218,10 +298,10 @@ export function ExchangeSetupModal({ open, onComplete, userName }: ExchangeSetup
               className="w-full"
             >
               {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Save Exchange
+              {isEditMode ? 'Update Exchange' : 'Save Exchange'}
             </Button>
           </div>
-        )}
+        ) : null}
       </DialogContent>
     </Dialog>
   );
