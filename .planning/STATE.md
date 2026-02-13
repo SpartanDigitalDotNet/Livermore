@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-02-13)
 ## Current Position
 
 **Milestone:** v7.0 Smart Warmup & Binance Adapter
-**Phase:** 35 of 38 (Smart Warmup Engine)
-**Plan:** 2 of 2 complete
-**Status:** Phase 35 complete -- SmartWarmupService wired into handleStart()
+**Phase:** 36 of 38 (Binance WebSocket Adapter)
+**Plan:** 0 of 2 complete
+**Status:** Phase 36 planned -- 2 plans in 2 waves, ready to execute
 
-**Last activity:** 2026-02-13 -- Completed 35-02 (SmartWarmupService executor & handleStart integration)
+**Last activity:** 2026-02-13 -- Planned Phase 36 (Binance WebSocket Adapter)
 
 ## Milestones
 

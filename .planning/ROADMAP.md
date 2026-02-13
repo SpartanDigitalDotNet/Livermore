@@ -92,10 +92,10 @@ Phases execute in numeric order: 34 -> 35 -> 36 -> 37 -> 38
 |-------|---------------|--------|-----------|
 | 34. Ticker Key Migration | 2/2 | Complete | 2026-02-13 |
 | 35. Smart Warmup Engine | 2/2 | Complete | 2026-02-13 |
-| 36. Binance WebSocket Adapter | 0/2 | Not started | - |
+| 36. Binance WebSocket Adapter | 0/2 | Planned | - |
 | 37. Admin UI -- Connect, Exchange Setup & Warmup Progress | 0/TBD | Not started | - |
 | 38. Binance Test Harness & Handoff | 0/TBD | Not started | - |
 
 ---
 *Roadmap created: 2026-02-13*
-*Last updated: 2026-02-13 -- Phase 35 complete (smart warmup engine)*
+*Last updated: 2026-02-13 -- Phase 36 planned (Binance WebSocket Adapter)*
