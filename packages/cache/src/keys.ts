@@ -34,6 +34,30 @@ export function networkActivityStreamKey(exchangeName: string): string {
 }
 
 // ============================================
+// WARMUP SCHEDULE: Smart Warmup Keys
+// ============================================
+
+/**
+ * Build Redis key for exchange warmup schedule (list of symbol/timeframe pairs needing data).
+ * Written by WarmupScheduleBuilder, read by Admin UI and warmup executor.
+ *
+ * @example warmupScheduleKey(1) // 'exchange:1:warm-up-schedule:symbols'
+ */
+export function warmupScheduleKey(exchangeId: number): string {
+  return `exchange:${exchangeId}:warm-up-schedule:symbols`;
+}
+
+/**
+ * Build Redis key for exchange warmup progress stats.
+ * Written by warmup executor, read by Admin UI for real-time progress.
+ *
+ * @example warmupStatsKey(1) // 'exchange:1:warm-up-schedule:stats'
+ */
+export function warmupStatsKey(exchangeId: number): string {
+  return `exchange:${exchangeId}:warm-up-schedule:stats`;
+}
+
+// ============================================
 // TIER 1: Exchange-Scoped Keys (Shared Data)
 // ============================================
 
