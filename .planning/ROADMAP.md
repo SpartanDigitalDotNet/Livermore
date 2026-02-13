@@ -56,7 +56,10 @@ Plans:
   2. The adapter works for both binance.com and binance.us by reading wsUrl and restUrl from the exchanges table -- no code changes needed to switch between the two, only the database row differs
   3. ExchangeAdapterFactory creates a BinanceAdapter when the exchange name is 'binance' or 'binance_us' -- the commented-out factory branch is replaced with working code
   4. The adapter handles Binance WebSocket specifics: ping/pong heartbeat, automatic reconnection on disconnect, and subscription management for multiple symbol streams
-**Plans**: TBD
+**Plans:** 2 plans
+Plans:
+- [ ] 36-01-PLAN.md -- BinanceAdapter core implementation (WebSocket streaming, kline/ticker handling, cache integration)
+- [ ] 36-02-PLAN.md -- ExchangeAdapterFactory wiring for binance/binance_us
 
 ### Phase 37: Admin UI -- Connect, Exchange Setup & Warmup Progress
 **Goal**: Admins can connect an exchange from the Network page, manage exchange credentials, and monitor warmup progress in real time
@@ -89,7 +92,7 @@ Phases execute in numeric order: 34 -> 35 -> 36 -> 37 -> 38
 |-------|---------------|--------|-----------|
 | 34. Ticker Key Migration | 2/2 | Complete | 2026-02-13 |
 | 35. Smart Warmup Engine | 2/2 | Complete | 2026-02-13 |
-| 36. Binance WebSocket Adapter | 0/TBD | Not started | - |
+| 36. Binance WebSocket Adapter | 0/2 | Not started | - |
 | 37. Admin UI -- Connect, Exchange Setup & Warmup Progress | 0/TBD | Not started | - |
 | 38. Binance Test Harness & Handoff | 0/TBD | Not started | - |
 
