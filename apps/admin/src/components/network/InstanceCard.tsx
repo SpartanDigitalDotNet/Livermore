@@ -2,6 +2,7 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Server, Clock, User, Hash, Wifi, WifiOff } from 'lucide-react';
 import { ConnectButton } from './ConnectButton';
+import { WarmupProgressPanel } from './WarmupProgressPanel';
 
 interface InstanceCardProps {
   instance: {
@@ -138,47 +139,56 @@ export function InstanceCard({ instance }: InstanceCardProps) {
       </CardHeader>
       <CardContent>
         {status ? (
-          <div className="grid grid-cols-2 gap-2 text-sm">
-            {/* Row 1: Hostname and IP */}
-            <div className="flex items-center gap-1.5">
-              <Server className="h-3.5 w-3.5 text-gray-400" />
-              <span className="text-gray-700 truncate">{status.hostname}</span>
-            </div>
-            <div className="text-gray-500 truncate">
-              {status.ipAddress ?? 'N/A'}
+          <>
+            <div className="grid grid-cols-2 gap-2 text-sm">
+              {/* Row 1: Hostname and IP */}
+              <div className="flex items-center gap-1.5">
+                <Server className="h-3.5 w-3.5 text-gray-400" />
+                <span className="text-gray-700 truncate">{status.hostname}</span>
+              </div>
+              <div className="text-gray-500 truncate">
+                {status.ipAddress ?? 'N/A'}
+              </div>
+
+              {/* Row 2: Admin and Symbol count */}
+              <div className="flex items-center gap-1.5">
+                <User className="h-3.5 w-3.5 text-gray-400" />
+                <span className="text-gray-700 truncate">
+                  {status.adminDisplayName ?? status.adminEmail ?? 'N/A'}
+                </span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <Hash className="h-3.5 w-3.5 text-gray-400" />
+                <span className="text-gray-700">{status.symbolCount} symbols</span>
+              </div>
+
+              {/* Row 3: Heartbeat and Uptime */}
+              <div className="flex items-center gap-1.5">
+                {(() => {
+                  const hb = getHeartbeatInfo(status.lastHeartbeat);
+                  return (
+                    <>
+                      <Wifi className={`h-3.5 w-3.5 ${hb.colorClass}`} />
+                      <span className={hb.colorClass}>{hb.ageSec}s ago</span>
+                    </>
+                  );
+                })()}
+              </div>
+              <div className="flex items-center gap-1.5">
+                <Clock className="h-3.5 w-3.5 text-gray-400" />
+                <span className="text-gray-700">
+                  Running for {formatUptime(status.connectedAt)}
+                </span>
+              </div>
             </div>
 
-            {/* Row 2: Admin and Symbol count */}
-            <div className="flex items-center gap-1.5">
-              <User className="h-3.5 w-3.5 text-gray-400" />
-              <span className="text-gray-700 truncate">
-                {status.adminDisplayName ?? status.adminEmail ?? 'N/A'}
-              </span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <Hash className="h-3.5 w-3.5 text-gray-400" />
-              <span className="text-gray-700">{status.symbolCount} symbols</span>
-            </div>
-
-            {/* Row 3: Heartbeat and Uptime */}
-            <div className="flex items-center gap-1.5">
-              {(() => {
-                const hb = getHeartbeatInfo(status.lastHeartbeat);
-                return (
-                  <>
-                    <Wifi className={`h-3.5 w-3.5 ${hb.colorClass}`} />
-                    <span className={hb.colorClass}>{hb.ageSec}s ago</span>
-                  </>
-                );
-              })()}
-            </div>
-            <div className="flex items-center gap-1.5">
-              <Clock className="h-3.5 w-3.5 text-gray-400" />
-              <span className="text-gray-700">
-                Running for {formatUptime(status.connectedAt)}
-              </span>
-            </div>
-          </div>
+            {/* Warmup Progress Panel (only for starting or warming states) */}
+            {(status.connectionState === 'starting' || status.connectionState === 'warming') && (
+              <div className="mt-3 pt-3 border-t">
+                <WarmupProgressPanel exchangeId={exchangeId} />
+              </div>
+            )}
+          </>
         ) : (
           <p className="text-gray-400 text-sm">No active connection</p>
         )}
