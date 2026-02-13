@@ -27,6 +27,8 @@ interface ExchangeSetupModalProps {
     apiSecretEnvVar: string;
     isDefault: boolean;
   } | null;
+  /** Pre-select an exchange by name, skipping the selection step (used by ConnectButton) */
+  preselectedExchange?: string;
 }
 
 interface ExchangeInfo {
@@ -37,7 +39,7 @@ interface ExchangeInfo {
   isBusy: boolean;
 }
 
-export function ExchangeSetupModal({ open, onComplete, userName, editExchange }: ExchangeSetupModalProps) {
+export function ExchangeSetupModal({ open, onComplete, userName, editExchange, preselectedExchange }: ExchangeSetupModalProps) {
   const [selectedExchange, setSelectedExchange] = useState<ExchangeInfo | null>(null);
   const [apiKeyEnvVar, setApiKeyEnvVar] = useState('');
   const [apiSecretEnvVar, setApiSecretEnvVar] = useState('');
@@ -76,6 +78,16 @@ export function ExchangeSetupModal({ open, onComplete, userName, editExchange }:
       setIsDefaultChecked(false); // Switch only shown if not already default
     }
   }, [editExchange]);
+
+  // Pre-select exchange when opened via ConnectButton (skips selection step)
+  useEffect(() => {
+    if (preselectedExchange && !editExchange && statusData?.exchanges) {
+      const match = statusData.exchanges.find((ex) => ex.name === preselectedExchange);
+      if (match) {
+        setSelectedExchange(match as ExchangeInfo);
+      }
+    }
+  }, [preselectedExchange, editExchange, statusData]);
 
   // Auto-populate env var names when exchange is selected (create mode only)
   useEffect(() => {
@@ -139,7 +151,7 @@ export function ExchangeSetupModal({ open, onComplete, userName, editExchange }:
   const envResults = envCheckData?.results ?? {};
 
   const isEditMode = !!editExchange;
-  const isDismissable = isEditMode;
+  const isDismissable = isEditMode || !!preselectedExchange;
 
   return (
     <Dialog open={open} onOpenChange={isDismissable ? onComplete : undefined}>

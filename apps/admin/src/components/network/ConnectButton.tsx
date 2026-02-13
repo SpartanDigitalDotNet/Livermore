@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { trpcClient, queryClient } from '@/lib/trpc';
 import { LockWarningModal } from './LockWarningModal';
+import { ExchangeSetupModal } from '../exchange/ExchangeSetupModal';
 
 interface ConnectButtonProps {
   exchangeId: number;
@@ -14,13 +15,17 @@ interface ConnectButtonProps {
 /**
  * ConnectButton Component
  *
- * Renders a "Connect" button that checks for existing locks before
- * attempting to start an exchange. If the exchange is already running
- * on another machine, shows a warning modal requiring confirmation.
+ * Renders a "Connect" button that:
+ * 1. Checks if user has a user_exchanges record for this exchange
+ * 2. If not, opens ExchangeSetupModal to create one first
+ * 3. Checks for existing locks before connecting
+ * 4. If locked on another machine, shows warning modal
+ * 5. Otherwise, starts the exchange
  *
  * Requirements:
  * - ADM-01: Display connect button for offline/idle exchanges
  * - ADM-02: Check lock status before connecting, warn if locked
+ * - ADM-03: Route through Exchange Setup Modal if no user_exchange record
  */
 export function ConnectButton({
   exchangeId,
@@ -29,6 +34,7 @@ export function ConnectButton({
 }: ConnectButtonProps) {
   const [loading, setLoading] = useState(false);
   const [showWarning, setShowWarning] = useState(false);
+  const [showSetup, setShowSetup] = useState(false);
   const [lockInfo, setLockInfo] = useState<{
     hostname: string;
     ipAddress: string | null;
@@ -36,12 +42,39 @@ export function ConnectButton({
   } | null>(null);
 
   /**
-   * Check if exchange is locked on another instance, then connect.
+   * Check if user has a user_exchanges record, then check lock, then connect.
    */
   const handleClick = async () => {
     setLoading(true);
     try {
-      // Check current lock status
+      // Step 1: Check if user has this exchange configured
+      const userStatus = await trpcClient.exchangeSymbol.userStatus.query();
+      const hasRecord = userStatus.statuses.some(
+        (s) => s.exchangeName === exchangeName
+      );
+
+      if (!hasRecord) {
+        // No user_exchange record — show setup modal first
+        setShowSetup(true);
+        setLoading(false);
+        return;
+      }
+
+      // Step 2: Check current lock status
+      await checkLockAndConnect();
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : 'Failed to check exchange status'
+      );
+      setLoading(false);
+    }
+  };
+
+  /**
+   * Check lock status and connect if clear.
+   */
+  const checkLockAndConnect = async () => {
+    try {
       const statusResult = await trpcClient.network.getExchangeStatus.query({
         exchangeId,
       });
@@ -106,6 +139,15 @@ export function ConnectButton({
     await handleConnect();
   };
 
+  /**
+   * Exchange setup completed — now proceed with lock check and connect.
+   */
+  const handleSetupComplete = async () => {
+    setShowSetup(false);
+    setLoading(true);
+    await checkLockAndConnect();
+  };
+
   return (
     <>
       <Button
@@ -137,6 +179,13 @@ export function ConnectButton({
           exchangeName={exchangeName}
         />
       )}
+
+      <ExchangeSetupModal
+        open={showSetup}
+        onComplete={handleSetupComplete}
+        userName={null}
+        preselectedExchange={exchangeName}
+      />
     </>
   );
 }
