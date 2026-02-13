@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-02-13)
 ## Current Position
 
 **Milestone:** v7.0 Smart Warmup & Binance Adapter
-**Phase:** 37 of 38 (Admin UI - Connect/Setup/Warmup)
-**Plan:** 3 of 3 complete
-**Status:** Phase 37 COMPLETE -- WarmupProgressPanel with real-time stats display complete
+**Phase:** 38 of 38 (Test Harness & Handoff)
+**Plan:** 1 of 2 complete
+**Status:** In Progress -- Subscription Test Harness complete
 
-**Last activity:** 2026-02-13 -- Completed Plan 37-03 (Warmup Progress Display)
+**Last activity:** 2026-02-13 -- Completed Plan 38-01 (Subscription Test Harness)
 
 ## Milestones
 
@@ -84,6 +84,8 @@ Recent decisions affecting current work:
 - [Phase 37-02]: ExchangeSetupModal supports both create (existing flow) and edit mode (pre-populated, calls updateExchange)
 - [Phase 37-02]: Edit mode skips exchange selection step and is dismissable (vs non-dismissable create mode)
 - [Phase 37-03]: Use conditional refetchInterval based on warmup status (2s active, 30s complete)
+- [Phase 38-01]: Use raw WebSocket (ws library) for 2s streaming test instead of full BinanceAdapter (simpler, no state)
+- [Phase 38-01]: Test harness validates both REST (TST-01) and WebSocket (TST-02) with real exchange data before Kaia handoff
 
 ### Pending Todos
 
@@ -98,8 +100,8 @@ None.
 ### Last Session
 
 **Date:** 2026-02-13
-**Activity:** Completed Plan 37-03 (Warmup Progress Display)
-**Stopped At:** Completed 37-03-PLAN.md -- WarmupProgressPanel with real-time stats display
+**Activity:** Completed Plan 38-01 (Subscription Test Harness)
+**Stopped At:** Completed 38-01-PLAN.md -- Test harness with TST-01 (REST) and TST-02 (WebSocket) validation
 
 ### Resume Context
 
