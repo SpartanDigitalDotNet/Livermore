@@ -1,18 +1,18 @@
 # Binance Instance Handoff - Kaia
 
 **Date:** 2026-02-13
-**Exchange:** Binance US (`binance_us`)
+**Exchange:** Binance (`binance`)
 **Status:** Validated and Ready for Deployment
 
 ---
 
 ## 1. Overview
 
-Livermore is a distributed multi-exchange trading data platform. Each Livermore API instance claims and serves exactly one exchange — you will run the Binance US instance, while Mike runs the Coinbase instance.
+Livermore is a distributed multi-exchange trading data platform. Each Livermore API instance claims and serves exactly one exchange — you will run the Binance instance (binance.com), while Mike runs the Coinbase instance.
 
 **What "your instance" means:**
 - A separate Livermore API process running on your machine
-- Connected to your Binance US exchange via the `binance_us` exchange record in the shared database
+- Connected to your Binance exchange via the `binance` exchange record in the shared database
 - Writes candles, indicators, and tickers to shared Azure PostgreSQL and Redis infrastructure
 - Uses exchange-scoped cache keys so data from different exchanges doesn't collide
 - Managed via the Admin UI Network page
@@ -20,7 +20,7 @@ Livermore is a distributed multi-exchange trading data platform. Each Livermore 
 **Architecture:**
 - **Shared Database:** Azure PostgreSQL Sandbox (Mike's instance writes Coinbase data, yours writes Binance data)
 - **Shared Redis:** Azure Managed Redis with OSS Cluster mode (exchange-scoped keys prevent conflicts)
-- **Instance Ownership:** The `user_exchanges` table links your user to the `binance_us` exchange
+- **Instance Ownership:** The `user_exchanges` table links your user to the `binance` exchange
 - **Admin UI:** The Network page shows all exchange instances across the system
 
 ---
@@ -70,22 +70,22 @@ If you later add trading capabilities:
 
 ## 3. Exchange Database Configuration
 
-The `exchanges` table is seeded with a `binance_us` entry:
+The `exchanges` table is seeded with a `binance` entry:
 
 ```sql
-name: 'binance_us'
-display_name: 'Binance US'
-ws_url: 'wss://stream.binance.us:9443'
-rest_url: 'https://api.binance.us'
+name: 'binance'
+display_name: 'Binance'
+ws_url: 'wss://stream.binance.com:9443'
+rest_url: 'https://api.binance.com'
 supported_timeframes: ["1m", "3m", "5m", "15m", "30m", "1h", "2h", "4h", "6h", "8h", "12h", "1d", "3d", "1w", "1M"]
 is_active: true
 ```
 
 **Your `user_exchanges` record:**
-- Links your user ID to the `binance_us` exchange
+- Links your user ID to the `binance` exchange
 - Created via the Admin UI Exchange Setup Modal (Phase 37)
 - Fields to configure:
-  - `display_name`: How the exchange appears in your UI (e.g., "My Binance US")
+  - `display_name`: How the exchange appears in your UI (e.g., "My Binance")
   - `api_key_env_var`: Name of environment variable holding API key (can leave blank)
   - `api_secret_env_var`: Name of environment variable holding API secret (can leave blank)
   - `is_active`: Whether this exchange is enabled for your account
@@ -131,7 +131,7 @@ Step-by-step instructions to get your Binance instance running:
    - Click "Network" in the sidebar
 
 7. **Your exchange instance should appear**
-   - Look for a card labeled "Binance US" (or your custom display name)
+   - Look for a card labeled "Binance" (or your custom display name)
    - Initial status: `idle` or `offline`
 
 8. **Configure your user_exchange record** (if not already done)
@@ -143,14 +143,14 @@ Step-by-step instructions to get your Binance instance running:
    - Click Save
 
 9. **Connect to start the instance**
-   - Click the "Connect" button on your Binance US card
+   - Click the "Connect" button on your Binance card
    - The instance will transition through states:
      - `idle` → `starting` → `warming` → `active`
 
 10. **Monitor warmup progress**
     - Watch the WarmupProgressPanel at the bottom of the instance card
     - Shows real-time progress: symbols scanned, candles cached, completion percentage
-    - Warmup typically completes in 30-60 seconds for Binance US
+    - Warmup typically completes in 30-60 seconds for Binance
 
 11. **Verify active status**
     - Card header should show green "active" status
@@ -165,7 +165,7 @@ How to verify your Binance instance is healthy:
 
 ### Admin UI Checks
 
-- [ ] Network page shows your Binance US exchange card
+- [ ] Network page shows your Binance exchange card
 - [ ] Card status is "active" with green indicator
 - [ ] WarmupProgressPanel shows 100% completion
 - [ ] Activity feed shows recent candle/ticker updates
@@ -184,14 +184,14 @@ Look for keys matching:
 - `candles:{exchangeId}:BTCUSDT:1m`
 - `ticker:{exchangeId}:BTCUSDT`
 
-Where `{exchangeId}` is your `binance_us` exchange ID from the database.
+Where `{exchangeId}` is your `binance` exchange ID from the database.
 
 ### Test Harness
 
 Run the subscription test harness (see Section 7):
 
 ```powershell
-.\scripts\test-subscription-harness.ps1 -Exchange binance_us
+.\scripts\test-subscription-harness.ps1 -Exchange binance
 ```
 
 Both TST-01 (REST) and TST-02 (WebSocket) should PASS.
@@ -209,14 +209,14 @@ Both TST-01 (REST) and TST-02 (WebSocket) should PASS.
 
 ### "Exchange not found in database"
 
-**Cause:** The `exchanges` table doesn't have a `binance_us` row.
+**Cause:** The `exchanges` table doesn't have a `binance` row.
 
 **Fix:**
-1. Verify seed data is applied: Check `packages/database/schema.sql` for the `binance_us` INSERT statement
+1. Verify seed data is applied: Check `packages/database/schema.sql` for the `binance` INSERT statement
 2. Run Atlas migrations if needed
 3. Verify with SQL:
    ```sql
-   SELECT id, name, display_name FROM exchanges WHERE name = 'binance_us';
+   SELECT id, name, display_name FROM exchanges WHERE name = 'binance';
    ```
 
 ### "No wsUrl configured for exchange"
@@ -224,23 +224,23 @@ Both TST-01 (REST) and TST-02 (WebSocket) should PASS.
 **Cause:** The `exchanges.ws_url` column is NULL or empty.
 
 **Fix:**
-1. Update the `binance_us` row:
+1. Update the `binance` row:
    ```sql
    UPDATE exchanges
-   SET ws_url = 'wss://stream.binance.us:9443'
-   WHERE name = 'binance_us';
+   SET ws_url = 'wss://stream.binance.com:9443'
+   WHERE name = 'binance';
    ```
 
 ### "Connection timeout" or "WebSocket connection failed"
 
-**Cause:** Binance US may be unreachable from your network (geo-blocking, firewall, ISP issues).
+**Cause:** Binance may be unreachable from your network (geo-blocking, firewall, ISP issues).
 
 **Diagnosis:**
-1. Test direct connection: `curl https://api.binance.us/api/v3/ping`
-2. Check WebSocket: Use a WebSocket client to connect to `wss://stream.binance.us:9443/ws`
+1. Test direct connection: `curl https://api.binance.com/api/v3/ping`
+2. Check WebSocket: Use a WebSocket client to connect to `wss://stream.binance.com:9443/ws`
 3. Try from a different network or VPN
 
-**Alternative:** If Binance US is inaccessible, you can use `binance` (international) instead, but note geo-restrictions (US users are blocked on binance.com).
+**Note:** Binance.com may be geo-restricted for US-based networks. If needed, use a VPN or verify access from your location.
 
 ### "Redis connection error: ECONNREFUSED"
 
@@ -257,14 +257,14 @@ Both TST-01 (REST) and TST-02 (WebSocket) should PASS.
 
 ### "No user_exchanges record found"
 
-**Cause:** Your user is not linked to the `binance_us` exchange.
+**Cause:** Your user is not linked to the `binance` exchange.
 
 **Fix:**
 1. Use the Exchange Setup Modal in the Admin UI to create the record
 2. Verify with SQL:
    ```sql
    SELECT * FROM user_exchanges
-   WHERE user_id = <your_user_id> AND exchange_name = 'binance_us';
+   WHERE user_id = <your_user_id> AND exchange_name = 'binance';
    ```
 
 ### General Diagnosis
@@ -272,7 +272,7 @@ Both TST-01 (REST) and TST-02 (WebSocket) should PASS.
 **First step:** Run the test harness. It validates the entire pipeline in isolation.
 
 ```powershell
-.\scripts\test-subscription-harness.ps1 -Exchange binance_us
+.\scripts\test-subscription-harness.ps1 -Exchange binance
 ```
 
 If the test harness passes but your instance doesn't connect:
@@ -287,12 +287,12 @@ If the test harness passes but your instance doesn't connect:
 
 **Validation Gate for Handoff**
 
-The subscription test harness was executed against Binance US to validate the complete data pipeline end-to-end.
+The subscription test harness was executed against Binance to validate the complete data pipeline end-to-end.
 
 ### Test Execution
 
 **Date:** 2026-02-13
-**Exchange:** `binance_us`
+**Exchange:** `binance`
 **Executor:** User (via PowerShell)
 
 ### Results
@@ -302,7 +302,7 @@ The subscription test harness was executed against Binance US to validate the co
 **Status:** ✓ PASS
 
 **Details:**
-- REST client connected to Binance US API (`https://api.binance.us`)
+- REST client connected to Binance API (`https://api.binance.com`)
 - Fetched BTC 1-day candles via `getCandles('BTCUSDT', '1d')`
 - Candles successfully cached to Redis using exchange-scoped key
 - Verification: `ZCARD` confirmed candles present in cache
@@ -318,20 +318,20 @@ The subscription test harness was executed against Binance US to validate the co
 **Status:** ✓ PASS
 
 **Details:**
-- WebSocket connected to Binance US stream (`wss://stream.binance.us:9443/ws`)
+- WebSocket connected to Binance stream (`wss://stream.binance.com:9443/ws`)
 - Subscribed to `btcusdt@kline_1m` stream using SUBSCRIBE method frame
 - Received kline messages within 2-second test window
 - Parsed OHLCV data successfully
 
 **Validation:**
 - WebSocket endpoint reachable
-- SUBSCRIBE method frame accepted by Binance US
+- SUBSCRIBE method frame accepted by Binance
 - Kline events streaming correctly (event type `e === 'kline'`)
 - Data parsing works (extracted `k.o`, `k.h`, `k.l`, `k.c`, `k.v`)
 
 ### Summary
 
-Both tests passed successfully. The Binance US adapter is fully functional and ready for production use. Kaia can proceed with confidence that:
+Both tests passed successfully. The Binance adapter is fully functional and ready for production use. Kaia can proceed with confidence that:
 
 1. REST candle fetching works (warmup will succeed)
 2. WebSocket streaming works (live data will flow)
@@ -348,9 +348,9 @@ Both tests passed successfully. The Binance US adapter is fully functional and r
 2. Follow First-Run Steps (Section 4)
 3. Run the test harness to verify your environment:
    ```powershell
-   .\scripts\test-subscription-harness.ps1 -Exchange binance_us
+   .\scripts\test-subscription-harness.ps1 -Exchange binance
    ```
-4. Start the Admin UI and connect to your Binance US instance
+4. Start the Admin UI and connect to your Binance instance
 5. Monitor warmup progress and verify active status
 6. Check Redis keys to confirm data is caching correctly
 
