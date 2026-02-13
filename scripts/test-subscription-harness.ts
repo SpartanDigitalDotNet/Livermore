@@ -14,8 +14,7 @@ import { Pool } from 'pg';
 import { eq } from 'drizzle-orm';
 import { exchanges } from '../packages/database/drizzle/schema';
 import { BinanceRestClient } from '@livermore/binance-client';
-import { getRedisClient, exchangeCandleKey } from '@livermore/cache';
-import { CandleCacheStrategy } from '@livermore/cache/strategies/candle-cache';
+import { getRedisClient, exchangeCandleKey, CandleCacheStrategy } from '@livermore/cache';
 import WebSocket from 'ws';
 
 // Test results tracking
