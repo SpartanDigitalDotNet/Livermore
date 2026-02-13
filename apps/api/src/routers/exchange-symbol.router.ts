@@ -333,6 +333,16 @@ export const exchangeSymbolRouter = router({
         throw new TRPCError({ code: 'CONFLICT', message: 'Exchange already configured for this user' });
       }
 
+      // is_default orchestration: unset any existing defaults before inserting new default
+      await db.update(userExchanges)
+        .set({ isDefault: false, updatedAt: new Date() })
+        .where(
+          and(
+            eq(userExchanges.userId, user.id),
+            eq(userExchanges.isDefault, true)
+          )
+        );
+
       const [inserted] = await db
         .insert(userExchanges)
         .values({
@@ -347,6 +357,86 @@ export const exchangeSymbolRouter = router({
         .returning({ id: userExchanges.id });
 
       return { success: true, userExchangeId: inserted.id };
+    }),
+
+  /**
+   * Update an existing user_exchanges record.
+   * Supports updating API key env var names, display name, and default status.
+   */
+  updateExchange: protectedProcedure
+    .input(
+      z.object({
+        exchangeName: z.string().min(1),
+        apiKeyEnvVar: z.string().min(1).optional(),
+        apiSecretEnvVar: z.string().min(1).optional(),
+        displayName: z.string().max(100).optional(),
+        isDefault: z.boolean().optional(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const db = getDbClient();
+      const clerkId = ctx.auth.userId;
+
+      // Get user ID from Clerk identity
+      const [user] = await db
+        .select({ id: users.id })
+        .from(users)
+        .where(
+          and(
+            eq(users.identityProvider, 'clerk'),
+            eq(users.identitySub, clerkId)
+          )
+        )
+        .limit(1);
+
+      if (!user) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'User not found' });
+      }
+
+      // Find the existing user_exchanges record
+      const [existing] = await db
+        .select({ id: userExchanges.id })
+        .from(userExchanges)
+        .where(
+          and(
+            eq(userExchanges.userId, user.id),
+            eq(userExchanges.exchangeName, input.exchangeName)
+          )
+        )
+        .limit(1);
+
+      if (!existing) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Exchange not configured for this user' });
+      }
+
+      // Build update object dynamically from provided fields
+      const updates: Record<string, unknown> = { updatedAt: new Date() };
+      if (input.apiKeyEnvVar) updates.apiKeyEnvVar = input.apiKeyEnvVar;
+      if (input.apiSecretEnvVar) updates.apiSecretEnvVar = input.apiSecretEnvVar;
+      if (input.displayName !== undefined) updates.displayName = input.displayName;
+
+      // is_default orchestration
+      if (input.isDefault === true) {
+        // Unset all other defaults for this user first
+        await db.update(userExchanges)
+          .set({ isDefault: false, updatedAt: new Date() })
+          .where(
+            and(
+              eq(userExchanges.userId, user.id),
+              eq(userExchanges.isDefault, true)
+            )
+          );
+        updates.isDefault = true;
+      } else if (input.isDefault === false) {
+        updates.isDefault = false;
+      }
+
+      // Execute the update
+      await db.update(userExchanges)
+        .set(updates)
+        .where(eq(userExchanges.id, existing.id));
+
+      return { success: true };
     }),
 
 });
