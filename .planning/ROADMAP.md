@@ -13,7 +13,7 @@ v7.0 transforms warmup from brute-force backfill into a smart, observable proces
 Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 34: Ticker Key Migration** - Remove userId from ticker keys and pub/sub channels to complete exchange-scoped key alignment
-- [ ] **Phase 35: Smart Warmup Engine** - Scan cached candle data first, build a schedule of what is missing, execute only the gaps, and publish real-time progress stats
+- [x] **Phase 35: Smart Warmup Engine** - Scan cached candle data first, build a schedule of what is missing, execute only the gaps, and publish real-time progress stats
 - [ ] **Phase 36: Binance WebSocket Adapter** - Implement IExchangeAdapter for Binance with WebSocket streaming, symbol normalization, and factory wiring
 - [ ] **Phase 37: Admin UI -- Connect, Exchange Setup & Warmup Progress** - Network page Connect button with lock-check, Exchange Setup Modal for user_exchanges, and warmup progress subscription
 - [ ] **Phase 38: Binance Test Harness & Handoff** - Validate Binance REST warmup and WebSocket streaming end-to-end, then prepare Kaia handoff
@@ -44,8 +44,8 @@ Plans:
   4. Warmup progress stats (percent complete, ETA, symbols remaining, failures) are continuously updated at `exchange:<exchange_id>:warm-up-schedule:stats` in Redis as warmup progresses, reflecting real-time status
 **Plans:** 2 plans
 Plans:
-- [ ] 35-01-PLAN.md -- Candle Status Scanner + Warmup Schedule Builder (types, scanner, schedule builder, Redis keys)
-- [ ] 35-02-PLAN.md -- SmartWarmupService executor with progress stats + handleStart() integration
+- [x] 35-01-PLAN.md -- Candle Status Scanner + Warmup Schedule Builder (types, scanner, schedule builder, Redis keys)
+- [x] 35-02-PLAN.md -- SmartWarmupService executor with progress stats + handleStart() integration
 
 ### Phase 36: Binance WebSocket Adapter
 **Goal**: BinanceAdapter streams real-time candle data via WebSocket, handles Binance message formats, and integrates into the existing exchange adapter pipeline
@@ -88,11 +88,11 @@ Phases execute in numeric order: 34 -> 35 -> 36 -> 37 -> 38
 | Phase | Plans Complete | Status | Completed |
 |-------|---------------|--------|-----------|
 | 34. Ticker Key Migration | 2/2 | Complete | 2026-02-13 |
-| 35. Smart Warmup Engine | 0/2 | Planning complete | - |
+| 35. Smart Warmup Engine | 2/2 | Complete | 2026-02-13 |
 | 36. Binance WebSocket Adapter | 0/TBD | Not started | - |
 | 37. Admin UI -- Connect, Exchange Setup & Warmup Progress | 0/TBD | Not started | - |
 | 38. Binance Test Harness & Handoff | 0/TBD | Not started | - |
 
 ---
 *Roadmap created: 2026-02-13*
-*Last updated: 2026-02-13 -- Phase 35 planned (2 plans)*
+*Last updated: 2026-02-13 -- Phase 35 complete (smart warmup engine)*
