@@ -11,10 +11,10 @@ See: .planning/PROJECT.md (updated 2026-02-13)
 
 **Milestone:** v7.0 Smart Warmup & Binance Adapter
 **Phase:** 34 of 38 (Ticker Key Migration)
-**Plan:** --
-**Status:** Roadmap created, ready to plan Phase 34
+**Plan:** 1 of 2 complete
+**Status:** Plan 34-01 complete, ready for Plan 34-02
 
-**Last activity:** 2026-02-13 -- Roadmap created (5 phases, 22 requirements mapped)
+**Last activity:** 2026-02-13 -- Completed 34-01 (impact assessment + cache layer migration)
 
 ## Milestones
 
@@ -63,7 +63,7 @@ Decisions are logged in PROJECT.md Key Decisions table.
 Recent decisions affecting current work:
 
 - exchangeName bug fix: control-channel.service.ts line 428 was hardcoding "coinbase" -- fixed to use DB value
-- Ticker keys still user-scoped (to be migrated in Phase 34)
+- Ticker keys migrated to exchange-scoped in cache package (Plan 34-01); consumer call sites pending (Plan 34-02)
 - BinanceRestClient exists (REST) but BinanceAdapter WebSocket does not exist yet
 - Exchange Candle Status Scan approach: check largest to smallest timeframe per symbol
 - Smart warmup scans cached data first, only fetches what is missing (not multi-exchange simultaneous)
@@ -81,8 +81,8 @@ None.
 ### Last Session
 
 **Date:** 2026-02-13
-**Activity:** Created v7.0 roadmap -- 5 phases, 22 requirements, phases 34-38
-**Stopped At:** Roadmap creation complete, ready to plan Phase 34
+**Activity:** Completed Plan 34-01 (impact assessment + cache layer migration to exchange-scoped ticker keys)
+**Stopped At:** Completed 34-01-PLAN.md, ready for 34-02-PLAN.md (consumer call site updates)
 
 ### Resume Context
 
@@ -99,4 +99,4 @@ Key context:
 
 ---
 *State initialized: 2026-01-18*
-*Last updated: 2026-02-13 -- v7.0 roadmap created*
+*Last updated: 2026-02-13 -- Plan 34-01 complete*
