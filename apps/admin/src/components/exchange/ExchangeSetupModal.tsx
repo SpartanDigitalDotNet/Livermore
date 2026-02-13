@@ -57,7 +57,7 @@ export function ExchangeSetupModal({ open, onComplete, userName, editExchange, p
   const { data: envCheckData, isError: envCheckError } = useQuery(
     trpc.exchangeSymbol.checkEnvVars.queryOptions(
       { envVars: envVarsToCheck },
-      { enabled: envVarsToCheck.length === 2, retry: 1 }
+      { enabled: open && envVarsToCheck.length === 2, retry: 1 }
     )
   );
 
@@ -92,9 +92,9 @@ export function ExchangeSetupModal({ open, onComplete, userName, editExchange, p
   // Auto-populate env var names when exchange is selected (create mode only)
   useEffect(() => {
     if (selectedExchange && !editExchange) {
-      const prefix = selectedExchange.displayName.replace(/\s+/g, '');
-      setApiKeyEnvVar(`${prefix}_ApiKeyId`);
-      setApiSecretEnvVar(`${prefix}_ApiSecret`);
+      const prefix = selectedExchange.name.toUpperCase();
+      setApiKeyEnvVar(`${prefix}_CLIENTID`);
+      setApiSecretEnvVar(`${prefix}_SECRET`);
     }
   }, [selectedExchange, editExchange]);
 
@@ -149,6 +149,8 @@ export function ExchangeSetupModal({ open, onComplete, userName, editExchange, p
   };
 
   const envResults = envCheckData?.results ?? {};
+  const envVarsVerified = envCheckData?.results?.[apiKeyEnvVar] === true &&
+                          envCheckData?.results?.[apiSecretEnvVar] === true;
 
   const isEditMode = !!editExchange;
   const isDismissable = isEditMode || !!preselectedExchange;
@@ -265,7 +267,7 @@ export function ExchangeSetupModal({ open, onComplete, userName, editExchange, p
                 <Input
                   value={apiKeyEnvVar}
                   onChange={(e) => setApiKeyEnvVar(e.target.value)}
-                  placeholder="e.g. Coinbase_ApiKeyId"
+                  placeholder="e.g. COINBASE_CLIENTID"
                 />
                 <EnvStatus found={envResults[apiKeyEnvVar]} checking={envVarsToCheck.length === 2 && !envCheckData && !envCheckError} />
               </div>
@@ -280,7 +282,7 @@ export function ExchangeSetupModal({ open, onComplete, userName, editExchange, p
                 <Input
                   value={apiSecretEnvVar}
                   onChange={(e) => setApiSecretEnvVar(e.target.value)}
-                  placeholder="e.g. Coinbase_ApiSecret"
+                  placeholder="e.g. COINBASE_SECRET"
                 />
                 <EnvStatus found={envResults[apiSecretEnvVar]} checking={envVarsToCheck.length === 2 && !envCheckData && !envCheckError} />
               </div>
@@ -300,13 +302,30 @@ export function ExchangeSetupModal({ open, onComplete, userName, editExchange, p
               </div>
             )}
 
-            <p className="text-xs text-gray-500">
-              Ensure these environment variables are set on the server running the API.
-            </p>
+            {envVarsVerified ? (
+              <p className="flex items-center gap-1 text-xs text-green-600">
+                <CheckCircle className="h-3 w-3" />
+                Environment variables verified on server.
+              </p>
+            ) : envCheckError ? (
+              <p className="flex items-center gap-1 text-xs text-red-600">
+                <XCircle className="h-3 w-3" />
+                Failed to verify environment variables. Check server connection.
+              </p>
+            ) : envCheckData && !envVarsVerified ? (
+              <p className="flex items-center gap-1 text-xs text-red-600">
+                <XCircle className="h-3 w-3" />
+                One or more environment variables not found on server.
+              </p>
+            ) : (
+              <p className="text-xs text-gray-500">
+                Ensure these environment variables are set on the server running the API.
+              </p>
+            )}
 
             <Button
               onClick={handleSave}
-              disabled={saving || !apiKeyEnvVar || !apiSecretEnvVar}
+              disabled={saving || !apiKeyEnvVar || !apiSecretEnvVar || !envVarsVerified}
               className="w-full"
             >
               {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
