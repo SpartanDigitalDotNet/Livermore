@@ -12,7 +12,7 @@ v7.0 transforms warmup from brute-force backfill into a smart, observable proces
 
 Decimal phases appear between their surrounding integers in numeric order.
 
-- [ ] **Phase 34: Ticker Key Migration** - Remove userId from ticker keys and pub/sub channels to complete exchange-scoped key alignment
+- [x] **Phase 34: Ticker Key Migration** - Remove userId from ticker keys and pub/sub channels to complete exchange-scoped key alignment
 - [ ] **Phase 35: Smart Warmup Engine** - Scan cached candle data first, build a schedule of what is missing, execute only the gaps, and publish real-time progress stats
 - [ ] **Phase 36: Binance WebSocket Adapter** - Implement IExchangeAdapter for Binance with WebSocket streaming, symbol normalization, and factory wiring
 - [ ] **Phase 37: Admin UI -- Connect, Exchange Setup & Warmup Progress** - Network page Connect button with lock-check, Exchange Setup Modal for user_exchanges, and warmup progress subscription
@@ -30,8 +30,8 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. Ticker pub/sub channels use the new exchange-scoped pattern, and real-time price updates flow from the WebSocket ticker handler through pub/sub to any subscriber without interruption
 **Plans:** 2 plans
 Plans:
-- [ ] 34-01-PLAN.md -- Impact assessment + cache layer migration (tickerKey, tickerChannel, TickerCacheStrategy)
-- [ ] 34-02-PLAN.md -- Update all consumer code + final verification audit
+- [x] 34-01-PLAN.md -- Impact assessment + cache layer migration (tickerKey, tickerChannel, TickerCacheStrategy)
+- [x] 34-02-PLAN.md -- Update all consumer code + final verification audit
 
 ### Phase 35: Smart Warmup Engine
 **Goal**: Warmup only fetches candle data that is actually missing, skipping symbol/timeframe pairs that already have sufficient cached data, with real-time progress visible in Redis
@@ -84,7 +84,7 @@ Phases execute in numeric order: 34 -> 35 -> 36 -> 37 -> 38
 
 | Phase | Plans Complete | Status | Completed |
 |-------|---------------|--------|-----------|
-| 34. Ticker Key Migration | 0/2 | Planned | - |
+| 34. Ticker Key Migration | 2/2 | Complete | 2026-02-13 |
 | 35. Smart Warmup Engine | 0/TBD | Not started | - |
 | 36. Binance WebSocket Adapter | 0/TBD | Not started | - |
 | 37. Admin UI -- Connect, Exchange Setup & Warmup Progress | 0/TBD | Not started | - |
@@ -92,4 +92,4 @@ Phases execute in numeric order: 34 -> 35 -> 36 -> 37 -> 38
 
 ---
 *Roadmap created: 2026-02-13*
-*Last updated: 2026-02-13*
+*Last updated: 2026-02-13 -- Phase 34 complete*

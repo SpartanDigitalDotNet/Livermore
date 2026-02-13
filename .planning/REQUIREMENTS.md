@@ -18,9 +18,9 @@ Requirements for v7.0 release. Each maps to roadmap phases.
 
 ### Ticker Key Migration
 
-- [ ] **TICK-01**: Impact assessment documents all services that read/write ticker keys and pub/sub channels affected by removing user_id
-- [ ] **TICK-02**: Ticker key pattern changed from `ticker:{userId}:{exchangeId}:{symbol}` to `ticker:{exchangeId}:{symbol}` (exchange-scoped, consistent with candle/indicator keys)
-- [ ] **TICK-03**: Ticker pub/sub channel updated to match new exchange-scoped key pattern
+- [x] **TICK-01**: Impact assessment documents all services that read/write ticker keys and pub/sub channels affected by removing user_id
+- [x] **TICK-02**: Ticker key pattern changed from `ticker:{userId}:{exchangeId}:{symbol}` to `ticker:{exchangeId}:{symbol}` (exchange-scoped, consistent with candle/indicator keys)
+- [x] **TICK-03**: Ticker pub/sub channel updated to match new exchange-scoped key pattern
 
 ### Binance Adapter
 
@@ -85,9 +85,9 @@ Requirements for v7.0 release. Each maps to roadmap phases.
 | WARM-04 | Phase 35 | Pending |
 | WARM-05 | Phase 35 | Pending |
 | WARM-06 | Phase 37 | Pending |
-| TICK-01 | Phase 34 | Pending |
-| TICK-02 | Phase 34 | Pending |
-| TICK-03 | Phase 34 | Pending |
+| TICK-01 | Phase 34 | Done |
+| TICK-02 | Phase 34 | Done |
+| TICK-03 | Phase 34 | Done |
 | BIN-01 | Phase 36 | Pending |
 | BIN-02 | Phase 36 | Pending |
 | BIN-04 | Phase 36 | Pending |
