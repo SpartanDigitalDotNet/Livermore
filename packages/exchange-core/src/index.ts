@@ -17,3 +17,6 @@ export type { BackfillConfig } from './backfill';
 export { BoundaryRestService, detectBoundaries, isTimeframeBoundary, DEFAULT_BOUNDARY_CONFIG } from './reconciliation';
 export { detectGaps, detectGapsForSymbol, getTimestampsOnly } from './reconciliation';
 export type { BoundaryRestConfig, TimeframeBoundary, GapInfo } from './reconciliation';
+
+// Smart warmup (Phase 35)
+export * from './warmup';
