@@ -1,9 +1,10 @@
 import { z } from 'zod';
 import { router, protectedProcedure } from '@livermore/trpc-config';
 import { getDbClient, exchanges } from '@livermore/database';
-import { getRedisClient, instanceStatusKey, networkActivityStreamKey } from '@livermore/cache';
+import { getRedisClient, instanceStatusKey, networkActivityStreamKey, warmupStatsKey } from '@livermore/cache';
 import { eq, asc } from 'drizzle-orm';
 import type { InstanceStatus } from '@livermore/schemas';
+import type { WarmupStats } from '@livermore/exchange-core';
 
 /**
  * Parse a Redis Stream entry's flat field-value array into an object.
@@ -215,6 +216,37 @@ export const networkRouter = router({
         return { online: true as const, status };
       } catch {
         return { online: false as const, status: null };
+      }
+    }),
+
+  /**
+   * GET /network.getWarmupStats
+   *
+   * Returns real-time warmup progress stats for a single exchange.
+   * Used by Admin UI WarmupProgressPanel to display percent complete, ETA, current symbol, failures.
+   *
+   * Returns null when no warmup is active or stats have expired.
+   */
+  getWarmupStats: protectedProcedure
+    .input(
+      z.object({
+        exchangeId: z.number(),
+      })
+    )
+    .query(async ({ input }) => {
+      try {
+        const redis = getRedisClient();
+        const data = await redis.get(warmupStatsKey(input.exchangeId));
+
+        if (!data) {
+          return { stats: null };
+        }
+
+        const stats = JSON.parse(data) as WarmupStats;
+        return { stats };
+      } catch {
+        // Redis unavailable or parse failure -- return null
+        return { stats: null };
       }
     }),
 });
