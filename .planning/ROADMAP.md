@@ -58,8 +58,8 @@ Plans:
   4. The adapter handles Binance WebSocket specifics: ping/pong heartbeat, automatic reconnection on disconnect, and subscription management for multiple symbol streams
 **Plans:** 2 plans
 Plans:
-- [ ] 36-01-PLAN.md -- BinanceAdapter core implementation (WebSocket streaming, kline/ticker handling, cache integration)
-- [ ] 36-02-PLAN.md -- ExchangeAdapterFactory wiring for binance/binance_us
+- [x] 36-01-PLAN.md -- BinanceAdapter core implementation (WebSocket streaming, kline/ticker handling, cache integration)
+- [x] 36-02-PLAN.md -- ExchangeAdapterFactory wiring for binance/binance_us
 
 ### Phase 37: Admin UI -- Connect, Exchange Setup & Warmup Progress
 **Goal**: Admins can connect an exchange from the Network page, manage exchange credentials, and monitor warmup progress in real time
@@ -92,10 +92,10 @@ Phases execute in numeric order: 34 -> 35 -> 36 -> 37 -> 38
 |-------|---------------|--------|-----------|
 | 34. Ticker Key Migration | 2/2 | Complete | 2026-02-13 |
 | 35. Smart Warmup Engine | 2/2 | Complete | 2026-02-13 |
-| 36. Binance WebSocket Adapter | 0/2 | Planned | - |
+| 36. Binance WebSocket Adapter | 2/2 | Complete | 2026-02-13 |
 | 37. Admin UI -- Connect, Exchange Setup & Warmup Progress | 0/TBD | Not started | - |
 | 38. Binance Test Harness & Handoff | 0/TBD | Not started | - |
 
 ---
 *Roadmap created: 2026-02-13*
-*Last updated: 2026-02-13 -- Phase 36 planned (Binance WebSocket Adapter)*
+*Last updated: 2026-02-13 -- Phase 36 complete (Binance WebSocket Adapter)*

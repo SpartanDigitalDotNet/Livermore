@@ -88,10 +88,10 @@ Requirements for v7.0 release. Each maps to roadmap phases.
 | TICK-01 | Phase 34 | Done |
 | TICK-02 | Phase 34 | Done |
 | TICK-03 | Phase 34 | Done |
-| BIN-01 | Phase 36 | Pending |
-| BIN-02 | Phase 36 | Pending |
-| BIN-04 | Phase 36 | Pending |
-| BIN-05 | Phase 36 | Pending |
+| BIN-01 | Phase 36 | Done |
+| BIN-02 | Phase 36 | Done |
+| BIN-04 | Phase 36 | Done |
+| BIN-05 | Phase 36 | Done |
 | ADM-01 | Phase 37 | Pending |
 | ADM-02 | Phase 37 | Pending |
 | ADM-03 | Phase 37 | Pending |
