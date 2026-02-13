@@ -1,83 +1,62 @@
-# Requirements: Livermore v6.0 Perseus Network
+# Requirements: Livermore v7.0 Smart Warmup & Binance Adapter
 
-**Defined:** 2026-02-10
+**Defined:** 2026-02-13
 **Core Value:** Data accuracy and timely alerts
 
 ## v1 Requirements
 
-Requirements for v6.0 release. Each maps to roadmap phases.
+Requirements for v7.0 release. Each maps to roadmap phases.
 
-### Instance Registration
+### Smart Warmup
 
-- [x] **REG-01**: Exchange-scoped status key `exchange:{exchange_id}:status` replaces prototype `exchange:status`
-- [x] **REG-02**: Full identity payload: exchangeId, exchangeName, connectionState, connectedAt, lastHeartbeat, symbolCount, adminEmail, adminDisplayName, ipAddress, hostname, lastError
-- [x] **REG-03**: Connection state machine with 6 states: `idle → starting → warming → active → stopping → stopped`
-- [x] **REG-04**: State transitions maintained at each lifecycle phase (server start, start command, warmup, websocket connected, stop command, shutdown)
-- [x] **REG-05**: Public IP detection via external service (ipify.org) at startup with timeout and fallback
-- [x] **REG-06**: Hostname detection via `os.hostname()` stored in status payload
+- [ ] **WARM-01**: Before backfilling, an Exchange Candle Status Scan checks each symbol from largest to smallest timeframe (1d, 4h, 1h, 15m, 5m, 1m) to identify which symbol/timeframe pairs already have sufficient cached data
+- [ ] **WARM-02**: Scan results are compiled into an Exchange Warmup Schedule listing which symbols need which timeframes fetched (skipping pairs with enough cached candles)
+- [ ] **WARM-03**: Warmup schedule is persisted to Redis at `exchange:<exchange_id>:warm-up-schedule:symbols` so other services can read it
+- [ ] **WARM-04**: Warmup execution follows the schedule, only fetching missing symbol/timeframe pairs instead of brute-force backfilling everything
+- [ ] **WARM-05**: Warmup progress stats (ETA, percent complete, symbols remaining, failures) are written to `exchange:<exchange_id>:warm-up-schedule:stats` in Redis and updated as warmup progresses
+- [ ] **WARM-06**: Admin UI subscribes to warmup stats for the lifetime of the warmup process, displaying real-time progress (percent, ETA, current symbol, failures)
 
-### Heartbeat and Health
+### Ticker Key Migration
 
-- [x] **HB-01**: Heartbeat refreshes status key TTL periodically using `SET ... EX`
-- [x] **HB-02**: Configurable heartbeat interval (default 15s) with TTL at 3x interval (default 45s)
-- [x] **HB-03**: Each heartbeat updates `lastHeartbeat` ISO timestamp in status payload
-- [x] **HB-04**: Graceful shutdown transitions to `stopping` state, logs shutdown event, lets key expire or deletes immediately
+- [ ] **TICK-01**: Impact assessment documents all services that read/write ticker keys and pub/sub channels affected by removing user_id
+- [ ] **TICK-02**: Ticker key pattern changed from `ticker:{userId}:{exchangeId}:{symbol}` to `ticker:{exchangeId}:{symbol}` (exchange-scoped, consistent with candle/indicator keys)
+- [ ] **TICK-03**: Ticker pub/sub channel updated to match new exchange-scoped key pattern
 
-### One-Instance-Per-Exchange
+### Binance Adapter
 
-- [x] **LOCK-01**: Before registering, check if `exchange:{exchange_id}:status` key exists with valid TTL
-- [x] **LOCK-02**: Atomic registration via `SET NX EX` (set-if-not-exists with TTL) to prevent race conditions
-- [x] **LOCK-03**: Stale lock detection — expired key (TTL gone) means exchange is available
-- [x] **LOCK-04**: Conflict error message includes hostname, IP, and connectedAt of the instance holding the lock
+- [ ] **BIN-01**: BinanceAdapter implements IExchangeAdapter interface with WebSocket streaming for real-time candle data
+- [ ] **BIN-02**: BinanceAdapter supports both binance.com and binance.us using wsUrl/restUrl from the exchanges table (only URL difference)
+- [ ] **BIN-03**: Symbol normalization converts between Binance format (BTCUSDT) and project format (BTC-USD) in both directions
+- [ ] **BIN-04**: ExchangeAdapterFactory creates BinanceAdapter when exchange name is 'binance' or 'binance_us' (no longer commented out)
+- [ ] **BIN-05**: BinanceAdapter handles Binance WebSocket message format, heartbeat/ping-pong, and automatic reconnection
 
-### Network Activity Log
+### Admin Connect & Exchange Setup
 
-- [x] **LOG-01**: Redis Stream per exchange (`logs:network:{exchange_name}`) for event storage
-- [x] **LOG-02**: State transition events logged: timestamp, event, fromState, toState, exchangeId, exchangeName, hostname, ip, adminEmail
-- [x] **LOG-03**: Error events logged: timestamp, event, error message, exchangeId, exchangeName, hostname, ip, state
-- [x] **LOG-04**: 90-day retention via inline trimming on every XADD (MAXLEN or MINID)
-- [x] **LOG-05**: Structured log entry schema with consistent field names across all event types
-- [x] **LOG-06**: Heartbeat refreshes are NOT logged to the stream — only state transitions and errors
+- [ ] **ADM-01**: Admin Network page shows a "Connect" button for exchanges that are offline or idle
+- [ ] **ADM-02**: Connect button checks if exchange is already running on another machine and shows a warning modal with lock holder info (hostname, IP, connected since) before proceeding
+- [ ] **ADM-03**: Exchange Setup Modal allows creating and updating user_exchanges records (API key env var names, display name)
+- [ ] **ADM-04**: Exchange Setup Modal correctly handles is_active/is_default orchestration (only one default exchange per user, toggling default updates previous default)
 
-### Admin UI Network View
+### Test Harness
 
-- [x] **UI-01**: "Network" page accessible from Admin header navigation
-- [x] **UI-02**: Instance card per exchange showing: exchange name, connection state (color-coded badge), hostname, IP, admin name, symbol count, last heartbeat, connected since
-- [x] **UI-03**: Dead instance detection — when key is expired/missing, show card as "Offline" with last-known info from most recent stream entry
-- [x] **UI-04**: Scrollable activity feed showing state transitions and errors from Redis Streams (reverse chronological)
-- [x] **UI-05**: Polling-based refresh at 5s interval (matches existing control panel pattern)
+- [ ] **TST-01**: Subscription Test Harness performs BTC 1d warmup to validate REST candle fetching works for an exchange
+- [ ] **TST-02**: Subscription Test Harness runs a 2-second WebSocket subscription test to validate live streaming data is received
+- [ ] **TST-03**: Binance.us warmup tested end-to-end with real exchange data confirming candles cache correctly
+- [ ] **TST-04**: Handoff documentation prepared for Kaia to configure and run the Binance exchange on her machine
 
-### tRPC Endpoints
-
-- [x] **RPC-01**: `network.getInstances` returns all exchange instance statuses (read from known exchange IDs in DB, not SCAN/KEYS)
-- [x] **RPC-02**: `network.getActivityLog` returns recent events from stream via XREVRANGE with COUNT for pagination
-- [x] **RPC-03**: `network.getExchangeStatus` returns status for a single exchange by ID
-
-### Bug Fixes
-
-- [x] **FIX-01**: Fix heartbeat not updating — periodic timer refreshes lastHeartbeat timestamp and key TTL
-- [x] **FIX-02**: Fix error not populating — handle null status in error path, persist lastError to status key
-- [x] **FIX-03**: Fix connectionState stuck on idle — TTL on status key ensures dead instances don't show as idle forever
-
-### Differentiators
-
-- [x] **DIFF-01**: Instance uptime display ("Running for 4h 23m") calculated from connectedAt
-- [x] **DIFF-02**: Heartbeat latency indicator with color degradation (green < 10s, yellow < 30s, red > 30s)
-- [x] **DIFF-04**: Discord notifications for instance state changes (leverages existing Discord service)
-
-## v2 Requirements (Deferred to v6.1+)
+## v2 Requirements (Deferred)
 
 ### Standby and Failover
 
 - **STBY-01**: Passive/standby instance registration (subscribe as backup for an exchange)
-- **STBY-02**: Graceful handoff protocol (notify → takeover → confirm → shutdown)
+- **STBY-02**: Graceful handoff protocol (notify, takeover, confirm, shutdown)
 - **STBY-03**: Automatic standby promotion when primary heartbeat expires
 
 ### Remote Administration
 
-- **RMOT-01**: Remote Admin control — send commands to another instance's API via Redis
+- **RMOT-01**: Remote Admin control -- send commands to another instance's API via Redis
 - **RMOT-02**: Ngrok tunnel for remote Admin UI access, URL published to Redis
-- **RMOT-03**: Authorization schema for remote operations (request/grant/revoke permissions)
+- **RMOT-03**: Authorization schema for remote operations
 
 ### Enhanced Monitoring
 
@@ -89,58 +68,45 @@ Requirements for v6.0 release. Each maps to roadmap phases.
 
 | Feature | Reason |
 |---------|--------|
-| Keyspace notifications for death detection | Unreliable in Redis Cluster — events are node-specific, not broadcast |
-| Separate health-check service | TTL-based heartbeat is self-contained; instance is its own health reporter |
-| Instance-to-instance communication | All coordination through shared Redis; instances are unaware of each other |
-| Automatic restart on crash | OS-level responsibility (pm2, systemd), not application-level |
-| Multi-stream consumer groups | XREADGROUP overkill for read-only audit log; simple XREVRANGE sufficient |
-| Prometheus/metrics integration | Overkill for 2-3 instances; defer until instance count grows |
-| CCXT or external service discovery | Redis-native coordination is simpler and already in the stack |
+| Multi-exchange simultaneous warmup | Warmup runs for one exchange at a time on one instance |
+| Binance futures/margin API | Spot trading only, consistent with Coinbase scope |
+| CCXT library | Performance overhead unnecessary, direct API integration preferred |
+| Aggregated candle building from trades | Binance provides native kline WebSocket streams |
+| Automatic exchange failover | Foundation first, failover deferred to standby/failover milestone |
+| REST-only Binance mode | WebSocket streaming is required for real-time data |
 
 ## Traceability
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| REG-01 | Phase 30 | Done |
-| REG-02 | Phase 30 | Done |
-| REG-03 | Phase 30 | Done |
-| REG-04 | Phase 30 | Done |
-| REG-05 | Phase 30 | Done |
-| REG-06 | Phase 30 | Done |
-| HB-01 | Phase 30 | Done |
-| HB-02 | Phase 30 | Done |
-| HB-03 | Phase 30 | Done |
-| HB-04 | Phase 30 | Done |
-| LOCK-01 | Phase 30 | Done |
-| LOCK-02 | Phase 30 | Done |
-| LOCK-03 | Phase 30 | Done |
-| LOCK-04 | Phase 30 | Done |
-| LOG-01 | Phase 31 | Done |
-| LOG-02 | Phase 31 | Done |
-| LOG-03 | Phase 31 | Done |
-| LOG-04 | Phase 31 | Done |
-| LOG-05 | Phase 31 | Done |
-| LOG-06 | Phase 31 | Done |
-| UI-01 | Phase 33 | Done |
-| UI-02 | Phase 33 | Done |
-| UI-03 | Phase 33 | Done |
-| UI-04 | Phase 33 | Done |
-| UI-05 | Phase 33 | Done |
-| RPC-01 | Phase 32 | Done |
-| RPC-02 | Phase 32 | Done |
-| RPC-03 | Phase 32 | Done |
-| FIX-01 | Phase 30 | Done |
-| FIX-02 | Phase 30 | Done |
-| FIX-03 | Phase 30 | Done |
-| DIFF-01 | Phase 33 | Done |
-| DIFF-02 | Phase 33 | Done |
-| DIFF-04 | Phase 33 | Done |
+| WARM-01 | — | Pending |
+| WARM-02 | — | Pending |
+| WARM-03 | — | Pending |
+| WARM-04 | — | Pending |
+| WARM-05 | — | Pending |
+| WARM-06 | — | Pending |
+| TICK-01 | — | Pending |
+| TICK-02 | — | Pending |
+| TICK-03 | — | Pending |
+| BIN-01 | — | Pending |
+| BIN-02 | — | Pending |
+| BIN-03 | — | Pending |
+| BIN-04 | — | Pending |
+| BIN-05 | — | Pending |
+| ADM-01 | — | Pending |
+| ADM-02 | — | Pending |
+| ADM-03 | — | Pending |
+| ADM-04 | — | Pending |
+| TST-01 | — | Pending |
+| TST-02 | — | Pending |
+| TST-03 | — | Pending |
+| TST-04 | — | Pending |
 
 **Coverage:**
-- v1 requirements: 34 total
-- Mapped to phases: 34
-- Unmapped: 0
+- v1 requirements: 22 total
+- Mapped to phases: 0
+- Unmapped: 22 (pending roadmap creation)
 
 ---
-*Requirements defined: 2026-02-10*
-*Last updated: 2026-02-10 -- ALL REQUIREMENTS COMPLETE (34/34 done)*
+*Requirements defined: 2026-02-13*
+*Last updated: 2026-02-13 after initial definition*
