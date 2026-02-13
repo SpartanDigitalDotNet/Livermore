@@ -54,10 +54,10 @@ export function ExchangeSetupModal({ open, onComplete, userName, editExchange, p
 
   // Check env vars when both inputs have values
   const envVarsToCheck = [apiKeyEnvVar, apiSecretEnvVar].filter(Boolean);
-  const { data: envCheckData } = useQuery(
+  const { data: envCheckData, isError: envCheckError } = useQuery(
     trpc.exchangeSymbol.checkEnvVars.queryOptions(
       { envVars: envVarsToCheck },
-      { enabled: envVarsToCheck.length === 2 }
+      { enabled: envVarsToCheck.length === 2, retry: 1 }
     )
   );
 
@@ -219,7 +219,7 @@ export function ExchangeSetupModal({ open, onComplete, userName, editExchange, p
         ) : selectedExchange ? (
           /* Step 2: Env var configuration (create or edit mode) */
           <div className="space-y-4">
-            {!isEditMode && (
+            {!isEditMode && !preselectedExchange && (
               <Button
                 variant="ghost"
                 size="sm"
@@ -267,7 +267,7 @@ export function ExchangeSetupModal({ open, onComplete, userName, editExchange, p
                   onChange={(e) => setApiKeyEnvVar(e.target.value)}
                   placeholder="e.g. Coinbase_ApiKeyId"
                 />
-                <EnvStatus found={envResults[apiKeyEnvVar]} checking={envVarsToCheck.length === 2 && !envCheckData} />
+                <EnvStatus found={envResults[apiKeyEnvVar]} checking={envVarsToCheck.length === 2 && !envCheckData && !envCheckError} />
               </div>
             </div>
 
@@ -282,7 +282,7 @@ export function ExchangeSetupModal({ open, onComplete, userName, editExchange, p
                   onChange={(e) => setApiSecretEnvVar(e.target.value)}
                   placeholder="e.g. Coinbase_ApiSecret"
                 />
-                <EnvStatus found={envResults[apiSecretEnvVar]} checking={envVarsToCheck.length === 2 && !envCheckData} />
+                <EnvStatus found={envResults[apiSecretEnvVar]} checking={envVarsToCheck.length === 2 && !envCheckData && !envCheckError} />
               </div>
             </div>
 

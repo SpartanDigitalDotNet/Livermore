@@ -17,8 +17,8 @@ export function createRestClient(
       return new CoinbaseRestClient(apiKeyId, privateKeyPem);
     }
     case 'binance':
-    case 'binanceus': {
-      const baseUrl = exchangeName === 'binanceus'
+    case 'binance_us': {
+      const baseUrl = exchangeName === 'binance_us'
         ? 'https://api.binance.us'
         : 'https://api.binance.com';
       return new BinanceRestClient({ baseUrl });
