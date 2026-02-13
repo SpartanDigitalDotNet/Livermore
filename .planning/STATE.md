@@ -11,10 +11,10 @@ See: .planning/PROJECT.md (updated 2026-02-13)
 
 **Milestone:** v7.0 Smart Warmup & Binance Adapter
 **Phase:** 36 of 38 (Binance WebSocket Adapter)
-**Plan:** 0 of 2 complete
-**Status:** Phase 36 planned -- 2 plans in 2 waves, ready to execute
+**Plan:** 1 of 2 complete
+**Status:** Phase 36 in progress -- Plan 01 (BinanceAdapter WebSocket) complete
 
-**Last activity:** 2026-02-13 -- Planned Phase 36 (Binance WebSocket Adapter)
+**Last activity:** 2026-02-13 -- Completed Plan 36-01 (BinanceAdapter WebSocket Streaming)
 
 ## Milestones
 
@@ -65,7 +65,9 @@ Recent decisions affecting current work:
 - exchangeName bug fix: control-channel.service.ts line 428 was hardcoding "coinbase" -- fixed to use DB value
 - Ticker keys fully migrated to exchange-scoped: cache layer (34-01) and all 5 consumer call sites (34-02) complete
 - Removed unused userId param from getCurrentPrice() in position-sync.service.ts during ticker migration
-- BinanceRestClient exists (REST) but BinanceAdapter WebSocket does not exist yet
+- BinanceAdapter WebSocket class created with kline x-field close detection and miniTicker streaming
+- Used /ws bare endpoint with SUBSCRIBE method frames for dynamic stream management (no reconnect needed for subscription changes)
+- wsUrl injected from options (not hardcoded) so same BinanceAdapter works for binance.com and binance.us
 - Exchange Candle Status Scan approach: check largest to smallest timeframe per symbol
 - Smart warmup scans cached data first, only fetches what is missing (not multi-exchange simultaneous)
 - SCAN_TIMEFRAME_ORDER: 1d -> 1m (largest to smallest per WARM-01)
@@ -88,8 +90,8 @@ None.
 ### Last Session
 
 **Date:** 2026-02-13
-**Activity:** Completed Plan 35-02 (SmartWarmupService executor & handleStart integration)
-**Stopped At:** Completed 35-02-PLAN.md, Phase 35 fully complete
+**Activity:** Completed Plan 36-01 (BinanceAdapter WebSocket Streaming)
+**Stopped At:** Completed 36-01-PLAN.md, moving to Plan 36-02
 
 ### Resume Context
 
@@ -106,4 +108,4 @@ Key context:
 
 ---
 *State initialized: 2026-01-18*
-*Last updated: 2026-02-13 -- Phase 35 complete (smart warmup engine)*
+*Last updated: 2026-02-13 -- Plan 36-01 complete (BinanceAdapter WebSocket Streaming)*
