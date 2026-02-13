@@ -34,3 +34,20 @@ export const MIN_CANDLE_THRESHOLD = 60;
 
 /** Default candle target count for backfill */
 export const DEFAULT_CANDLE_TARGET = 100;
+
+/** Real-time warmup progress stats, persisted to Redis */
+export interface WarmupStats {
+  exchangeId: number;
+  status: 'scanning' | 'executing' | 'complete' | 'error';
+  startedAt: number;            // Unix timestamp ms
+  updatedAt: number;            // Unix timestamp ms
+  totalPairs: number;           // total pairs in schedule
+  completedPairs: number;       // pairs finished fetching
+  skippedPairs: number;         // pairs that had sufficient data (not in schedule)
+  failedPairs: number;          // pairs that failed to fetch
+  percentComplete: number;      // 0-100
+  etaMs: number | null;         // estimated ms remaining, null if can't calculate
+  currentSymbol: string | null; // symbol currently being fetched
+  currentTimeframe: string | null; // timeframe currently being fetched
+  failures: Array<{ symbol: string; timeframe: string; error: string }>;
+}
