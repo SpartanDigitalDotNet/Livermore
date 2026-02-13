@@ -11,10 +11,10 @@ See: .planning/PROJECT.md (updated 2026-02-13)
 
 **Milestone:** v7.0 Smart Warmup & Binance Adapter
 **Phase:** 37 of 38 (Admin UI - Connect/Setup/Warmup)
-**Plan:** 2 of 3 complete
-**Status:** Phase 37 IN PROGRESS -- updateExchange mutation and ExchangeSetupModal edit mode complete
+**Plan:** 3 of 3 complete
+**Status:** Phase 37 COMPLETE -- WarmupProgressPanel with real-time stats display complete
 
-**Last activity:** 2026-02-13 -- Completed Plan 37-02 (Update Exchange Config & Edit Mode)
+**Last activity:** 2026-02-13 -- Completed Plan 37-03 (Warmup Progress Display)
 
 ## Milestones
 
@@ -83,6 +83,7 @@ Recent decisions affecting current work:
 - [Phase 37-02]: is_default orchestration pattern: unset all other defaults before setting new default (prevents multiple defaults per user)
 - [Phase 37-02]: ExchangeSetupModal supports both create (existing flow) and edit mode (pre-populated, calls updateExchange)
 - [Phase 37-02]: Edit mode skips exchange selection step and is dismissable (vs non-dismissable create mode)
+- [Phase 37-03]: Use conditional refetchInterval based on warmup status (2s active, 30s complete)
 
 ### Pending Todos
 
@@ -97,8 +98,8 @@ None.
 ### Last Session
 
 **Date:** 2026-02-13
-**Activity:** Completed Plan 37-02 (Update Exchange Config & Edit Mode)
-**Stopped At:** Completed 37-02-PLAN.md -- updateExchange mutation and ExchangeSetupModal edit mode complete
+**Activity:** Completed Plan 37-03 (Warmup Progress Display)
+**Stopped At:** Completed 37-03-PLAN.md -- WarmupProgressPanel with real-time stats display
 
 ### Resume Context
 
@@ -115,4 +116,4 @@ Key context:
 
 ---
 *State initialized: 2026-01-18*
-*Last updated: 2026-02-13 -- Phase 37-01 complete (Connect Button with Lock Check)*
+*Last updated: 2026-02-13 -- Phase 37 complete (Admin UI - Connect/Setup/Warmup)*
