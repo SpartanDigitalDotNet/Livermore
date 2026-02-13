@@ -15,7 +15,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 34: Ticker Key Migration** - Remove userId from ticker keys and pub/sub channels to complete exchange-scoped key alignment
 - [x] **Phase 35: Smart Warmup Engine** - Scan cached candle data first, build a schedule of what is missing, execute only the gaps, and publish real-time progress stats
 - [ ] **Phase 36: Binance WebSocket Adapter** - Implement IExchangeAdapter for Binance with WebSocket streaming, symbol normalization, and factory wiring
-- [ ] **Phase 37: Admin UI -- Connect, Exchange Setup & Warmup Progress** - Network page Connect button with lock-check, Exchange Setup Modal for user_exchanges, and warmup progress subscription
+- [x] **Phase 37: Admin UI -- Connect, Exchange Setup & Warmup Progress** - Network page Connect button with lock-check, Exchange Setup Modal for user_exchanges, and warmup progress subscription
 - [ ] **Phase 38: Binance Test Harness & Handoff** - Validate Binance REST warmup and WebSocket streaming end-to-end, then prepare Kaia handoff
 
 ## Phase Details
@@ -72,9 +72,9 @@ Plans:
   4. During warmup, the Admin UI subscribes to warmup progress stats and displays real-time percent complete, ETA, current symbol being warmed, and any failures -- the subscription is active only for the lifetime of the warmup process
 **Plans:** 3 plans
 Plans:
-- [ ] 37-01-PLAN.md -- Connect button + lock-check warning modal (ADM-01, ADM-02)
-- [ ] 37-02-PLAN.md -- Exchange Setup Modal update + is_default orchestration (ADM-03, ADM-04)
-- [ ] 37-03-PLAN.md -- Warmup progress panel with real-time stats (WARM-06)
+- [x] 37-01-PLAN.md -- Connect button + lock-check warning modal (ADM-01, ADM-02)
+- [x] 37-02-PLAN.md -- Exchange Setup Modal update + is_default orchestration (ADM-03, ADM-04)
+- [x] 37-03-PLAN.md -- Warmup progress panel with real-time stats (WARM-06)
 
 ### Phase 38: Binance Test Harness & Handoff
 **Goal**: Binance exchange integration is validated end-to-end with real exchange data and Kaia has everything needed to configure and run her Binance instance
@@ -97,9 +97,9 @@ Phases execute in numeric order: 34 -> 35 -> 36 -> 37 -> 38
 | 34. Ticker Key Migration | 2/2 | Complete | 2026-02-13 |
 | 35. Smart Warmup Engine | 2/2 | Complete | 2026-02-13 |
 | 36. Binance WebSocket Adapter | 2/2 | Complete | 2026-02-13 |
-| 37. Admin UI -- Connect, Exchange Setup & Warmup Progress | 0/3 | Not started | - |
+| 37. Admin UI -- Connect, Exchange Setup & Warmup Progress | 3/3 | Complete | 2026-02-13 |
 | 38. Binance Test Harness & Handoff | 0/TBD | Not started | - |
 
 ---
 *Roadmap created: 2026-02-13*
-*Last updated: 2026-02-13 -- Phase 36 complete (Binance WebSocket Adapter)*
+*Last updated: 2026-02-13 -- Phase 37 complete (Admin UI -- Connect, Exchange Setup & Warmup Progress)*
