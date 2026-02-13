@@ -230,10 +230,10 @@ export class CoinbaseWebSocketService {
         };
 
         // Cache ticker in Redis
-        await this.tickerCache.setTicker(this.TEST_USER_ID, this.TEST_EXCHANGE_ID, ticker);
+        await this.tickerCache.setTicker(this.TEST_EXCHANGE_ID, ticker);
 
         // Publish update via Redis pub/sub
-        await this.tickerCache.publishUpdate(this.TEST_USER_ID, this.TEST_EXCHANGE_ID, ticker);
+        await this.tickerCache.publishUpdate(this.TEST_EXCHANGE_ID, ticker);
 
         logger.debug({ ticker }, 'Processed ticker update');
       }

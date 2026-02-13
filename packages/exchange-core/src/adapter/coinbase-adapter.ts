@@ -571,10 +571,10 @@ export class CoinbaseAdapter extends BaseExchangeAdapter {
 
         try {
           // Cache ticker in Redis (with 60s TTL)
-          await this.tickerCache.setTicker(this.userId, this.exchangeIdNum, ticker);
+          await this.tickerCache.setTicker(this.exchangeIdNum, ticker);
 
           // Publish update via Redis pub/sub (AlertEvaluationService subscribes to this)
-          await this.tickerCache.publishUpdate(this.userId, this.exchangeIdNum, ticker);
+          await this.tickerCache.publishUpdate(this.exchangeIdNum, ticker);
 
         } catch (error) {
           logger.error({ error, symbol: ticker.symbol }, 'Failed to cache/publish ticker');

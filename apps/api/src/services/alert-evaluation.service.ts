@@ -137,7 +137,7 @@ export class AlertEvaluationService {
 
     // Subscribe to ticker channels for all symbols (for price tracking)
     for (const symbol of this.symbols) {
-      channels.push(tickerChannel(1, this.exchangeId, symbol));
+      channels.push(tickerChannel(this.exchangeId, symbol));
     }
 
     // Subscribe to indicator channels for all symbol/timeframe combos
