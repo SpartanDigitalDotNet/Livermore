@@ -1,6 +1,7 @@
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Server, Clock, User, Hash, Wifi, WifiOff } from 'lucide-react';
+import { ConnectButton } from './ConnectButton';
 
 interface InstanceCardProps {
   instance: {
@@ -103,10 +104,22 @@ function formatUptime(connectedAt: string | null): string {
  *
  * Displays exchange instance status with connection state badge,
  * heartbeat latency indicator, uptime, hostname, IP, admin, and symbol count.
+ *
+ * Shows ConnectButton for offline, idle, or stopped exchanges.
+ *
+ * Requirements:
+ * - ADM-01: Display connect button for connectable exchanges
  */
 export function InstanceCard({ instance }: InstanceCardProps) {
-  const { online, displayName, status } = instance;
+  const { online, displayName, status, exchangeId, exchangeName } = instance;
   const badge = getStateBadge(online, status?.connectionState);
+
+  // Determine if exchange is connectable
+  // Show button when: offline, OR (online AND (idle OR stopped))
+  const isConnectable =
+    !online ||
+    status?.connectionState === 'idle' ||
+    status?.connectionState === 'stopped';
 
   return (
     <Card>
@@ -170,6 +183,16 @@ export function InstanceCard({ instance }: InstanceCardProps) {
           <p className="text-gray-400 text-sm">No active connection</p>
         )}
       </CardContent>
+
+      {/* Connect Button Footer */}
+      {isConnectable && (
+        <div className="px-6 pb-4 pt-3 border-t mt-2">
+          <ConnectButton
+            exchangeId={exchangeId}
+            exchangeName={exchangeName}
+          />
+        </div>
+      )}
     </Card>
   );
 }
