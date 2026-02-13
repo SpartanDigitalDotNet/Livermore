@@ -11,10 +11,10 @@ See: .planning/PROJECT.md (updated 2026-02-13)
 
 **Milestone:** v7.0 Smart Warmup & Binance Adapter
 **Phase:** 36 of 38 (Binance WebSocket Adapter)
-**Plan:** 1 of 2 complete
-**Status:** Phase 36 in progress -- Plan 01 (BinanceAdapter WebSocket) complete
+**Plan:** 2 of 2 complete
+**Status:** Phase 36 COMPLETE -- BinanceAdapter + Factory wire-up done
 
-**Last activity:** 2026-02-13 -- Completed Plan 36-01 (BinanceAdapter WebSocket Streaming)
+**Last activity:** 2026-02-13 -- Completed Plan 36-02 (Binance Exchange Factory Wire-up)
 
 ## Milestones
 
@@ -76,6 +76,8 @@ Recent decisions affecting current work:
 - SmartWarmupService replaces StartupBackfillService for startup only; ad-hoc backfill unchanged
 - Warmup stats persisted without TTL so Admin UI can read after warmup completes
 - Batch size 5 with 1s delay matching existing rate limiting pattern
+- BinanceRestClient created in factory (not adapter) to keep exchange-core free from binance-client dependency
+- Factory wsUrl/restUrl sourced from exchanges DB table -- binance.com vs binance.us is data-driven
 
 ### Pending Todos
 
@@ -90,8 +92,8 @@ None.
 ### Last Session
 
 **Date:** 2026-02-13
-**Activity:** Completed Plan 36-01 (BinanceAdapter WebSocket Streaming)
-**Stopped At:** Completed 36-01-PLAN.md, moving to Plan 36-02
+**Activity:** Completed Plan 36-02 (Binance Exchange Factory Wire-up) -- Phase 36 complete
+**Stopped At:** Completed 36-02-PLAN.md -- Phase 36 fully done, ready for Phase 37
 
 ### Resume Context
 
@@ -108,4 +110,4 @@ Key context:
 
 ---
 *State initialized: 2026-01-18*
-*Last updated: 2026-02-13 -- Plan 36-01 complete (BinanceAdapter WebSocket Streaming)*
+*Last updated: 2026-02-13 -- Phase 36 complete (Binance WebSocket Adapter)*
