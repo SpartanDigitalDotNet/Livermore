@@ -448,7 +448,7 @@ export class ControlChannelService {
       if (this.services.monitoredSymbols.length === 0) {
         setProgress({ phase: 'indicators', phaseLabel: 'Loading Tier 1 symbols', percent: 5 });
 
-        // Resolve user's default exchange from user_exchanges
+        // Resolve the requested exchange from user_exchanges
         const [userExchange] = await this.services.db
           .select({
             exchangeId: userExchanges.exchangeId,
@@ -462,7 +462,7 @@ export class ControlChannelService {
             and(
               eq(users.identityProvider, 'clerk'),
               eq(users.identitySub, this.identitySub),
-              eq(userExchanges.isDefault, true),
+              eq(userExchanges.exchangeName, exchangeName),
               eq(userExchanges.isActive, true)
             )
           )
@@ -471,9 +471,6 @@ export class ControlChannelService {
         if (!userExchange?.exchangeId) {
           throw new Error('No exchange configured. Set up your exchange in Admin first.');
         }
-
-        // Use the actual exchange name from the database (not the hardcoded default)
-        exchangeName = userExchange.exchangeName;
 
         // Create exchange-specific REST client and store on registry
         const restClient = createRestClient(
