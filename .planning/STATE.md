@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-02-13)
 ## Current Position
 
 **Milestone:** v7.0 Smart Warmup & Binance Adapter
-**Phase:** 34 of 38 (Ticker Key Migration)
-**Plan:** 2 of 2 complete
-**Status:** Phase 34 complete, ready for Phase 35
+**Phase:** 35 of 38 (Smart Warmup Engine)
+**Plan:** 1 of 2 complete
+**Status:** In progress - Plan 35-01 complete (scanner & schedule builder)
 
-**Last activity:** 2026-02-13 -- Completed 34-02 (consumer call site updates, phase 34 complete)
+**Last activity:** 2026-02-13 -- Completed 35-01 (candle status scanner & warmup schedule builder)
 
 ## Milestones
 
@@ -68,6 +68,9 @@ Recent decisions affecting current work:
 - BinanceRestClient exists (REST) but BinanceAdapter WebSocket does not exist yet
 - Exchange Candle Status Scan approach: check largest to smallest timeframe per symbol
 - Smart warmup scans cached data first, only fetches what is missing (not multi-exchange simultaneous)
+- SCAN_TIMEFRAME_ORDER: 1d -> 1m (largest to smallest per WARM-01)
+- MIN_CANDLE_THRESHOLD: 60 candles determines sufficient vs insufficient pairs
+- Schedule persisted as JSON to exchange:<id>:warm-up-schedule:symbols for external observability
 
 ### Pending Todos
 
@@ -82,8 +85,8 @@ None.
 ### Last Session
 
 **Date:** 2026-02-13
-**Activity:** Completed Plan 34-02 (consumer call site updates) -- Phase 34 Ticker Key Migration fully complete
-**Stopped At:** Completed 34-02-PLAN.md, Phase 34 complete, ready for Phase 35 (Smart Warmup Engine)
+**Activity:** Completed Plan 35-01 (candle status scanner & warmup schedule builder)
+**Stopped At:** Completed 35-01-PLAN.md, created CandleStatusScanner and WarmupScheduleBuilder
 
 ### Resume Context
 
@@ -100,4 +103,4 @@ Key context:
 
 ---
 *State initialized: 2026-01-18*
-*Last updated: 2026-02-13 -- Phase 34 complete (Plans 34-01, 34-02)*
+*Last updated: 2026-02-13 -- Phase 35 Plan 01 complete (scanner & schedule builder)*
