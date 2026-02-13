@@ -85,7 +85,10 @@ Plans:
   2. The same test harness runs a 2-second WebSocket subscription test, confirming live streaming data is received and parsed into valid candle events
   3. Binance.us is tested end-to-end with real exchange data -- warmup completes, candles are cached at the correct exchange-scoped Redis keys, and WebSocket streaming delivers live updates
   4. Handoff documentation is prepared for Kaia covering: environment variable setup, exchange database configuration, first-run steps, and how to verify the Binance instance is healthy via the Admin Network page
-**Plans**: TBD
+**Plans:** 2 plans
+Plans:
+- [ ] 38-01-PLAN.md -- Subscription Test Harness script (REST warmup + WebSocket streaming tests)
+- [ ] 38-02-PLAN.md -- Binance.us E2E test execution + Kaia handoff documentation
 
 ## Progress
 
@@ -98,8 +101,8 @@ Phases execute in numeric order: 34 -> 35 -> 36 -> 37 -> 38
 | 35. Smart Warmup Engine | 2/2 | Complete | 2026-02-13 |
 | 36. Binance WebSocket Adapter | 2/2 | Complete | 2026-02-13 |
 | 37. Admin UI -- Connect, Exchange Setup & Warmup Progress | 3/3 | Complete | 2026-02-13 |
-| 38. Binance Test Harness & Handoff | 0/TBD | Not started | - |
+| 38. Binance Test Harness & Handoff | 0/2 | Not started | - |
 
 ---
 *Roadmap created: 2026-02-13*
-*Last updated: 2026-02-13 -- Phase 37 complete (Admin UI -- Connect, Exchange Setup & Warmup Progress)*
+*Last updated: 2026-02-13 -- Phase 38 plans created (Binance Test Harness & Handoff)*
