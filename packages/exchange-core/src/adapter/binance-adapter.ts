@@ -369,6 +369,9 @@ export class BinanceAdapter extends BaseExchangeAdapter {
    * 3. Error message (has `error` field) -> log error
    */
   private handleMessage(data: WebSocket.Data): void {
+    // Don't process messages after intentional disconnect
+    if (this.isIntentionalClose) return;
+
     this.resetWatchdog();
 
     try {

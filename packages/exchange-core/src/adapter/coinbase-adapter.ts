@@ -714,6 +714,9 @@ export class CoinbaseAdapter extends BaseExchangeAdapter {
    * Routes messages to appropriate handlers based on channel type
    */
   private handleMessage(data: WebSocket.Data): void {
+    // Don't process messages after intentional disconnect
+    if (this.isIntentionalClose) return;
+
     // Reset watchdog on every message (including heartbeats)
     this.resetWatchdog();
 

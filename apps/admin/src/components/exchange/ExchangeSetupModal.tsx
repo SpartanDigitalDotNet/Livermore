@@ -112,42 +112,39 @@ export function ExchangeSetupModal({
     }
   }, [selectedExchange, editExchange]);
 
-  // Track whether the user manually clicked Verify (vs auto-verify on mount)
-  const [manualVerify, setManualVerify] = useState(false);
-
   // When env var fields change, clear all verification state
   useEffect(() => {
     setEnvResults({});
     setEnvChecked(false);
     setEnvCheckError(false);
-    setManualVerify(false);
     setTestResult('idle');
     setTestError(null);
     setTestLatency(null);
   }, [apiKeyEnvVar, apiSecretEnvVar]);
 
-  // Auto-verify on first load when env vars are populated
+  // Auto-verify on first load when env vars are populated (new setup only, not edit/connect)
   const [autoVerifyDone, setAutoVerifyDone] = useState(false);
   useEffect(() => {
-    if (open && apiKeyEnvVar && apiSecretEnvVar && !autoVerifyDone) {
+    if (open && apiKeyEnvVar && apiSecretEnvVar && !autoVerifyDone && !editExchange) {
       setAutoVerifyDone(true);
       verifyEnvVars(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, apiKeyEnvVar, apiSecretEnvVar]);
 
-  // Reset auto-verify flag when modal closes
+  // Reset flags when modal closes
   useEffect(() => {
-    if (!open) setAutoVerifyDone(false);
+    if (!open) {
+      setAutoVerifyDone(false);
+    }
   }, [open]);
 
   /**
    * Verify env vars exist on the server. Imperative call — no caching.
    * @param isManual - true when user clicks Verify button, false for auto-verify
    */
-  async function verifyEnvVars(isManual = true) {
+  async function verifyEnvVars(_isManual = true) {
     if (!apiKeyEnvVar || !apiSecretEnvVar) return;
-    if (isManual) setManualVerify(true);
     setEnvChecking(true);
     setEnvCheckError(false);
     setEnvChecked(false);
@@ -164,10 +161,18 @@ export function ExchangeSetupModal({
     }
   }
 
+  // Env vars are pre-verified when loaded from an existing DB record
+  // (unless the user changed them, in which case they need re-verification)
+  const envVarsMatchDb =
+    !!editExchange &&
+    apiKeyEnvVar === editExchange.apiKeyEnvVar &&
+    apiSecretEnvVar === editExchange.apiSecretEnvVar;
+
   const envVarsVerified =
-    envChecked &&
-    envResults[apiKeyEnvVar] === true &&
-    envResults[apiSecretEnvVar] === true;
+    envVarsMatchDb ||
+    (envChecked &&
+      envResults[apiKeyEnvVar] === true &&
+      envResults[apiSecretEnvVar] === true);
 
   const handleSelectExchange = (exchange: ExchangeInfo) => {
     if (exchange.isBusy) return;
@@ -378,7 +383,7 @@ export function ExchangeSetupModal({
                   onChange={(e) => setApiKeyEnvVar(e.target.value)}
                   placeholder="e.g. COINBASE_CLIENTID"
                 />
-                <EnvStatus found={envChecked ? envResults[apiKeyEnvVar] : undefined} loading={envChecking} />
+                <EnvStatus found={envVarsMatchDb ? true : envChecked ? envResults[apiKeyEnvVar] : undefined} loading={envChecking} />
               </div>
             </div>
 
@@ -393,7 +398,7 @@ export function ExchangeSetupModal({
                   onChange={(e) => setApiSecretEnvVar(e.target.value)}
                   placeholder="e.g. COINBASE_SECRET"
                 />
-                <EnvStatus found={envChecked ? envResults[apiSecretEnvVar] : undefined} loading={envChecking} />
+                <EnvStatus found={envVarsMatchDb ? true : envChecked ? envResults[apiSecretEnvVar] : undefined} loading={envChecking} />
               </div>
             </div>
 
@@ -412,17 +417,22 @@ export function ExchangeSetupModal({
             )}
 
             {/* Env var verification status + Verify button */}
-            {envVarsVerified ? (
+            {envVarsMatchDb ? (
+              <p className="flex items-center gap-1 text-xs text-green-600">
+                <CheckCircle className="h-3 w-3" />
+                Credentials loaded from configuration.
+              </p>
+            ) : envVarsVerified ? (
               <p className="flex items-center gap-1 text-xs text-green-600">
                 <CheckCircle className="h-3 w-3" />
                 Environment variables verified on server.
               </p>
-            ) : envCheckError && manualVerify ? (
+            ) : envCheckError ? (
               <p className="flex items-center gap-1 text-xs text-red-600">
                 <XCircle className="h-3 w-3" />
                 Failed to verify environment variables. Check server connection.
               </p>
-            ) : envChecked && !envVarsVerified && manualVerify ? (
+            ) : envChecked && !envVarsVerified ? (
               <p className="flex items-center gap-1 text-xs text-red-600">
                 <XCircle className="h-3 w-3" />
                 One or more environment variables not found on server.
