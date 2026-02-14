@@ -78,7 +78,8 @@ export function AlertToastHandler() {
       const deltaStr = lastAlert.signalDelta?.toFixed(1) ?? '-';
       const momentum = getMomentumState(lastAlert.triggerValue, lastAlert.signalDelta);
 
-      toast(`${lastAlert.symbol} Alert`, {
+      const tfStr = lastAlert.timeframe ? ` ${lastAlert.timeframe}` : '';
+      toast(`${lastAlert.symbol}${tfStr} Alert`, {
         description: `${momentum} @ $${priceStr} (MACD-V: ${valueStr}, Δ: ${deltaStr})`,
         duration: TOAST_DURATION_MS,
         style: getToastStyle(lastAlert.triggerValue, lastAlert.signalDelta),

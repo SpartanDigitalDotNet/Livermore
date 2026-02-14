@@ -193,6 +193,7 @@ export const exchangeSymbolRouter = router({
       const userExList = await db
         .select({
           exchangeName: userExchanges.exchangeName,
+          displayName: userExchanges.displayName,
           isDefault: userExchanges.isDefault,
           apiKeyEnvVar: userExchanges.apiKeyEnvVar,
           apiSecretEnvVar: userExchanges.apiSecretEnvVar,
@@ -208,8 +209,11 @@ export const exchangeSymbolRouter = router({
       return {
         statuses: userExList.map((ue) => ({
           exchangeName: ue.exchangeName,
+          displayName: ue.displayName,
           isDefault: ue.isDefault,
-          hasCredentials: hasEnvVar(ue.apiKeyEnvVar) && hasEnvVar(ue.apiSecretEnvVar),
+          apiKeyEnvVar: ue.apiKeyEnvVar,
+          apiSecretEnvVar: ue.apiSecretEnvVar,
+          hasCredentials: !!(ue.apiKeyEnvVar && ue.apiSecretEnvVar),
         })),
       };
     }),
@@ -437,6 +441,59 @@ export const exchangeSymbolRouter = router({
         .where(eq(userExchanges.id, existing.id));
 
       return { success: true };
+    }),
+
+  /**
+   * Test connectivity to an exchange's REST API.
+   * Uses a public ping/time endpoint — no credentials required.
+   */
+  testConnection: protectedProcedure
+    .input(z.object({ exchangeName: z.string().min(1) }))
+    .mutation(async ({ input }) => {
+      const db = getDbClient();
+
+      const [exchange] = await db
+        .select({ restUrl: exchanges.restUrl })
+        .from(exchanges)
+        .where(and(eq(exchanges.name, input.exchangeName), eq(exchanges.isActive, true)))
+        .limit(1);
+
+      if (!exchange?.restUrl) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Exchange REST URL not configured' });
+      }
+
+      const pingPaths: Record<string, string> = {
+        binance: '/api/v3/ping',
+        binance_us: '/api/v3/ping',
+        coinbase: '/api/v3/brokerage/market/products/BTC-USD',
+        kraken: '/0/public/Time',
+        kucoin: '/api/v1/timestamp',
+        mexc: '/api/v3/ping',
+      };
+
+      const pingPath = pingPaths[input.exchangeName] ?? '/';
+      const url = `${exchange.restUrl}${pingPath}`;
+
+      try {
+        const start = Date.now();
+        const response = await fetch(url, {
+          method: 'GET',
+          signal: AbortSignal.timeout(10000),
+        });
+        const latencyMs = Date.now() - start;
+
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status} ${response.statusText}`);
+        }
+
+        return { success: true, latencyMs };
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Connection failed';
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: `Test connection failed: ${message}`,
+        });
+      }
     }),
 
 });

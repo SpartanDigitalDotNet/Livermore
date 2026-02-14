@@ -443,6 +443,9 @@ export class ControlChannelService {
       updateRuntimeState({ startup: progress });
     };
 
+    let adminEmail: string = this.identitySub;
+    let adminDisplayName: string | null = null;
+
     try {
       // If symbols not yet loaded (idle startup), load Tier 1 from user's exchange
       if (this.services.monitoredSymbols.length === 0) {
@@ -455,6 +458,8 @@ export class ControlChannelService {
             exchangeName: userExchanges.exchangeName,
             apiKeyEnvVar: userExchanges.apiKeyEnvVar,
             apiSecretEnvVar: userExchanges.apiSecretEnvVar,
+            adminEmail: users.email,
+            adminDisplayName: users.displayName,
           })
           .from(userExchanges)
           .innerJoin(users, eq(users.id, userExchanges.userId))
@@ -471,6 +476,9 @@ export class ControlChannelService {
         if (!userExchange?.exchangeId) {
           throw new Error('No exchange configured. Set up your exchange in Admin first.');
         }
+
+        adminEmail = userExchange.adminEmail ?? this.identitySub;
+        adminDisplayName = userExchange.adminDisplayName ?? null;
 
         // Create exchange-specific REST client and store on registry
         const restClient = createRestClient(
@@ -521,7 +529,7 @@ export class ControlChannelService {
         exchangeId: this.services.exchangeId!,
         exchangeName: exchangeName,
         hostname: hostname(),
-        adminEmail: this.identitySub,
+        adminEmail,
       });
       this.services.activityLogger = activityLogger;
       this.services.stateMachine = new StateMachineService(registry, activityLogger);
@@ -536,29 +544,35 @@ export class ControlChannelService {
         throw new Error('Failed to register instance');
       }
 
+      // Set admin info and symbol count immediately after registration
+      registry.setAdminInfo(adminEmail, adminDisplayName ?? adminEmail);
+      registry.setSymbolCount(this.services.monitoredSymbols.length);
+
       await this.services.stateMachine.transition('starting');
 
-      // Smart warmup: scan cached data, build schedule, fetch only what's missing (Phase 35)
-      setProgress({ phase: 'indicators', phaseLabel: 'Scanning cached candle data', percent: 10 });
-      const warmupTimeframes: Timeframe[] = ['1d', '4h', '1h', '15m', '5m', '1m'];
+      // Smart warmup: assess cache trust, scan, build schedule, fetch, verify gaps (Phase 35)
+      setProgress({ phase: 'indicators', phaseLabel: 'Assessing cache trust', percent: 10 });
       if (!this.services.restClient) {
         throw new Error('No REST client available. Exchange setup may be incomplete.');
       }
       if (!this.services.exchangeId) {
         throw new Error('No exchange ID resolved. Exchange setup may be incomplete.');
       }
+      // Sentinel symbol is the #1 ranked symbol (first in monitoredSymbols, ordered by globalRank)
+      const sentinelSymbol = this.services.monitoredSymbols[0];
       const smartWarmup = new SmartWarmupService({
         redis: this.services.redis,
         exchangeId: this.services.exchangeId,
         restClient: this.services.restClient,
       });
-      const warmupSchedule = await smartWarmup.warmup(this.services.monitoredSymbols, warmupTimeframes);
+      const warmupSchedule = await smartWarmup.warmup(this.services.monitoredSymbols, sentinelSymbol);
       logger.info({
         event: 'smart_warmup_complete',
         totalPairs: warmupSchedule.totalPairs,
         skipped: warmupSchedule.sufficientPairs,
         fetched: warmupSchedule.needsFetching,
-      }, `Smart warmup complete: ${warmupSchedule.sufficientPairs} skipped, ${warmupSchedule.needsFetching} fetched`);
+        mode: warmupSchedule.mode,
+      }, `Smart warmup complete [${warmupSchedule.mode}]: ${warmupSchedule.sufficientPairs} skipped, ${warmupSchedule.needsFetching} fetched`);
 
       // Phase 30: Transition to warming after backfill
       await this.services.stateMachine.transition('warming');
@@ -609,9 +623,8 @@ export class ControlChannelService {
       this.isIdle = false;
       this.isPaused = false;
 
-      // Phase 30: Transition to active and update symbol count
+      // Phase 30: Transition to active
       await this.services.stateMachine.transition('active');
-      this.services.instanceRegistry.setSymbolCount(this.services.monitoredSymbols.length);
 
       // Complete!
       setProgress({ phase: 'complete', phaseLabel: 'Connected', percent: 100 });

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { CheckCircle, XCircle, AlertTriangle, Loader2, ArrowLeft } from 'lucide-react';
+import { CheckCircle, XCircle, AlertTriangle, Loader2, ArrowLeft, Zap, RefreshCw } from 'lucide-react';
 import { trpc, trpcClient, queryClient } from '../../lib/trpc';
 import {
   Dialog,
@@ -19,6 +19,7 @@ import { Label } from '@/components/ui/label';
 interface ExchangeSetupModalProps {
   open: boolean;
   onComplete: () => void;
+  onCancel?: () => void;
   userName: string | null;
   editExchange?: {
     exchangeName: string;
@@ -27,8 +28,10 @@ interface ExchangeSetupModalProps {
     apiSecretEnvVar: string;
     isDefault: boolean;
   } | null;
-  /** Pre-select an exchange by name, skipping the selection step (used by ConnectButton) */
+  /** Pre-select an exchange by name, skipping the selection step */
   preselectedExchange?: string;
+  /** When true, opened from ConnectButton — uses connect-mode language */
+  connectMode?: boolean;
 }
 
 interface ExchangeInfo {
@@ -39,7 +42,15 @@ interface ExchangeInfo {
   isBusy: boolean;
 }
 
-export function ExchangeSetupModal({ open, onComplete, userName, editExchange, preselectedExchange }: ExchangeSetupModalProps) {
+export function ExchangeSetupModal({
+  open,
+  onComplete,
+  onCancel,
+  userName,
+  editExchange,
+  preselectedExchange,
+  connectMode,
+}: ExchangeSetupModalProps) {
   const [selectedExchange, setSelectedExchange] = useState<ExchangeInfo | null>(null);
   const [apiKeyEnvVar, setApiKeyEnvVar] = useState('');
   const [apiSecretEnvVar, setApiSecretEnvVar] = useState('');
@@ -47,24 +58,25 @@ export function ExchangeSetupModal({ open, onComplete, userName, editExchange, p
   const [isDefaultChecked, setIsDefaultChecked] = useState(false);
   const [saving, setSaving] = useState(false);
 
+  // Env var verification — imperative (user clicks "Verify")
+  const [envResults, setEnvResults] = useState<Record<string, boolean>>({});
+  const [envChecking, setEnvChecking] = useState(false);
+  const [envCheckError, setEnvCheckError] = useState(false);
+  const [envChecked, setEnvChecked] = useState(false);
+
+  // Test connection
+  const [testResult, setTestResult] = useState<'idle' | 'testing' | 'passed' | 'failed'>('idle');
+  const [testError, setTestError] = useState<string | null>(null);
+  const [testLatency, setTestLatency] = useState<number | null>(null);
+
   // Fetch exchanges with availability
   const { data: statusData, isLoading: statusLoading } = useQuery(
     trpc.exchangeSymbol.exchangeStatuses.queryOptions()
   );
 
-  // Check env vars when both inputs have values
-  const envVarsToCheck = [apiKeyEnvVar, apiSecretEnvVar].filter(Boolean);
-  const { data: envCheckData, isError: envCheckError } = useQuery(
-    trpc.exchangeSymbol.checkEnvVars.queryOptions(
-      { envVars: envVarsToCheck },
-      { enabled: open && envVarsToCheck.length === 2, retry: 1 }
-    )
-  );
-
-  // Edit mode: pre-populate fields from editExchange prop
+  // Edit mode / existing record: pre-populate fields
   useEffect(() => {
     if (editExchange) {
-      // Set synthetic exchange info for header display
       setSelectedExchange({
         id: 0,
         name: editExchange.exchangeName,
@@ -75,7 +87,8 @@ export function ExchangeSetupModal({ open, onComplete, userName, editExchange, p
       setApiKeyEnvVar(editExchange.apiKeyEnvVar);
       setApiSecretEnvVar(editExchange.apiSecretEnvVar);
       setDisplayNameValue(editExchange.displayName);
-      setIsDefaultChecked(false); // Switch only shown if not already default
+      // In connectMode, always make the connecting exchange the default
+      setIsDefaultChecked(connectMode ? true : false);
     }
   }, [editExchange]);
 
@@ -90,6 +103,7 @@ export function ExchangeSetupModal({ open, onComplete, userName, editExchange, p
   }, [preselectedExchange, editExchange, statusData]);
 
   // Auto-populate env var names when exchange is selected (create mode only)
+  // Uses naming convention: {EXCHANGE_NAME}_CLIENTID / {EXCHANGE_NAME}_SECRET
   useEffect(() => {
     if (selectedExchange && !editExchange) {
       const prefix = selectedExchange.name.toUpperCase();
@@ -97,6 +111,63 @@ export function ExchangeSetupModal({ open, onComplete, userName, editExchange, p
       setApiSecretEnvVar(`${prefix}_SECRET`);
     }
   }, [selectedExchange, editExchange]);
+
+  // Track whether the user manually clicked Verify (vs auto-verify on mount)
+  const [manualVerify, setManualVerify] = useState(false);
+
+  // When env var fields change, clear all verification state
+  useEffect(() => {
+    setEnvResults({});
+    setEnvChecked(false);
+    setEnvCheckError(false);
+    setManualVerify(false);
+    setTestResult('idle');
+    setTestError(null);
+    setTestLatency(null);
+  }, [apiKeyEnvVar, apiSecretEnvVar]);
+
+  // Auto-verify on first load when env vars are populated
+  const [autoVerifyDone, setAutoVerifyDone] = useState(false);
+  useEffect(() => {
+    if (open && apiKeyEnvVar && apiSecretEnvVar && !autoVerifyDone) {
+      setAutoVerifyDone(true);
+      verifyEnvVars(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, apiKeyEnvVar, apiSecretEnvVar]);
+
+  // Reset auto-verify flag when modal closes
+  useEffect(() => {
+    if (!open) setAutoVerifyDone(false);
+  }, [open]);
+
+  /**
+   * Verify env vars exist on the server. Imperative call — no caching.
+   * @param isManual - true when user clicks Verify button, false for auto-verify
+   */
+  async function verifyEnvVars(isManual = true) {
+    if (!apiKeyEnvVar || !apiSecretEnvVar) return;
+    if (isManual) setManualVerify(true);
+    setEnvChecking(true);
+    setEnvCheckError(false);
+    setEnvChecked(false);
+    try {
+      const result = await trpcClient.exchangeSymbol.checkEnvVars.query({
+        envVars: [apiKeyEnvVar, apiSecretEnvVar],
+      });
+      setEnvResults(result.results);
+      setEnvChecked(true);
+    } catch {
+      setEnvCheckError(true);
+    } finally {
+      setEnvChecking(false);
+    }
+  }
+
+  const envVarsVerified =
+    envChecked &&
+    envResults[apiKeyEnvVar] === true &&
+    envResults[apiSecretEnvVar] === true;
 
   const handleSelectExchange = (exchange: ExchangeInfo) => {
     if (exchange.isBusy) return;
@@ -109,6 +180,29 @@ export function ExchangeSetupModal({ open, onComplete, userName, editExchange, p
     setApiSecretEnvVar('');
     setDisplayNameValue('');
     setIsDefaultChecked(false);
+    setEnvResults({});
+    setEnvChecked(false);
+    setEnvCheckError(false);
+    setTestResult('idle');
+    setTestError(null);
+    setTestLatency(null);
+  };
+
+  const handleTestConnection = async () => {
+    if (!selectedExchange) return;
+    setTestResult('testing');
+    setTestError(null);
+    setTestLatency(null);
+    try {
+      const result = await trpcClient.exchangeSymbol.testConnection.mutate({
+        exchangeName: selectedExchange.name,
+      });
+      setTestResult('passed');
+      setTestLatency(result.latencyMs);
+    } catch (err) {
+      setTestResult('failed');
+      setTestError(err instanceof Error ? err.message : 'Connection test failed');
+    }
   };
 
   const handleSave = async () => {
@@ -116,17 +210,23 @@ export function ExchangeSetupModal({ open, onComplete, userName, editExchange, p
     setSaving(true);
     try {
       if (editExchange) {
-        // Edit mode: call updateExchange
-        await trpcClient.exchangeSymbol.updateExchange.mutate({
-          exchangeName: editExchange.exchangeName,
-          apiKeyEnvVar,
-          apiSecretEnvVar,
-          displayName: displayNameValue || undefined,
-          isDefault: isDefaultChecked ? true : undefined,
-        });
-        toast.success('Exchange updated successfully!');
+        const changed =
+          apiKeyEnvVar !== editExchange.apiKeyEnvVar ||
+          apiSecretEnvVar !== editExchange.apiSecretEnvVar ||
+          (displayNameValue && displayNameValue !== editExchange.displayName) ||
+          isDefaultChecked;
+
+        if (changed) {
+          await trpcClient.exchangeSymbol.updateExchange.mutate({
+            exchangeName: editExchange.exchangeName,
+            apiKeyEnvVar,
+            apiSecretEnvVar,
+            displayName: displayNameValue || undefined,
+            isDefault: isDefaultChecked ? true : undefined,
+          });
+        }
+        toast.success(connectMode ? 'Exchange verified!' : 'Exchange updated successfully!');
       } else {
-        // Create mode: call setupExchange
         await trpcClient.exchangeSymbol.setupExchange.mutate({
           exchangeName: selectedExchange.name,
           apiKeyEnvVar,
@@ -148,41 +248,59 @@ export function ExchangeSetupModal({ open, onComplete, userName, editExchange, p
     }
   };
 
-  const envResults = envCheckData?.results ?? {};
-  const envVarsVerified = envCheckData?.results?.[apiKeyEnvVar] === true &&
-                          envCheckData?.results?.[apiSecretEnvVar] === true;
-
   const isEditMode = !!editExchange;
-  const isDismissable = isEditMode || !!preselectedExchange;
+  const isDismissable = isEditMode || !!preselectedExchange || !!connectMode;
+
+  let saveButtonText: string;
+  if (connectMode) {
+    saveButtonText = isEditMode ? 'Connect' : 'Save & Connect';
+  } else {
+    saveButtonText = isEditMode ? 'Update Exchange' : 'Save Exchange';
+  }
+
+  const canSave =
+    !saving && !!apiKeyEnvVar && !!apiSecretEnvVar && envVarsVerified && testResult === 'passed';
 
   return (
-    <Dialog open={open} onOpenChange={isDismissable ? onComplete : undefined}>
+    <Dialog open={open} onOpenChange={isDismissable ? (onCancel ?? onComplete) : undefined}>
       <DialogContent
         className="sm:max-w-md"
         onPointerDownOutside={(e) => !isDismissable && e.preventDefault()}
         onEscapeKeyDown={(e) => !isDismissable && e.preventDefault()}
         onInteractOutside={(e) => !isDismissable && e.preventDefault()}
-        // Hide the default close button via CSS override if not dismissable
         style={!isDismissable ? { ['--dialog-close-display' as string]: 'none' } : {}}
       >
-        {/* Hide the built-in close button in create mode */}
-        {!isDismissable && <style>{`.absolute.right-4.top-4 { display: none !important; }`}</style>}
+        {!isDismissable && (
+          <style>{`.absolute.right-4.top-4 { display: none !important; }`}</style>
+        )}
 
         <DialogHeader>
           <DialogTitle>
-            {isEditMode ? 'Edit Exchange' : selectedExchange ? 'Configure Exchange' : 'Welcome!'}
+            {connectMode
+              ? isEditMode
+                ? `Connect to ${editExchange.displayName}`
+                : 'Set Up Exchange'
+              : isEditMode
+                ? 'Edit Exchange'
+                : selectedExchange
+                  ? 'Configure Exchange'
+                  : 'Welcome!'}
           </DialogTitle>
           <DialogDescription>
-            {isEditMode
-              ? `Update credentials for ${editExchange.exchangeName}`
-              : selectedExchange
-                ? `Set up API credentials for ${selectedExchange.displayName}`
-                : `${userName ? `Hi ${userName}! ` : ''}Your exchange is not yet set up. Select one to get started.`}
+            {connectMode
+              ? isEditMode
+                ? 'Verify credentials and test connection before connecting.'
+                : `Configure API credentials for ${selectedExchange?.displayName ?? preselectedExchange}.`
+              : isEditMode
+                ? `Update credentials for ${editExchange.exchangeName}`
+                : selectedExchange
+                  ? `Set up API credentials for ${selectedExchange.displayName}`
+                  : `${userName ? `Hi ${userName}! ` : ''}Your exchange is not yet set up. Select one to get started.`}
           </DialogDescription>
         </DialogHeader>
 
         {!selectedExchange && !isEditMode ? (
-          /* Step 1: Exchange selection (skipped in edit mode) */
+          /* Step 1: Exchange selection */
           <div className="space-y-2">
             {statusLoading ? (
               <div className="flex items-center justify-center py-8">
@@ -205,9 +323,7 @@ export function ExchangeSetupModal({ open, onComplete, userName, editExchange, p
                   }`}
                 >
                   <div className="flex items-center justify-between">
-                    <span className="font-medium text-gray-900">
-                      {ex.displayName}
-                    </span>
+                    <span className="font-medium text-gray-900">{ex.displayName}</span>
                     {ex.isBusy ? (
                       <Badge variant="secondary">In Use</Badge>
                     ) : (
@@ -219,15 +335,10 @@ export function ExchangeSetupModal({ open, onComplete, userName, editExchange, p
             )}
           </div>
         ) : selectedExchange ? (
-          /* Step 2: Env var configuration (create or edit mode) */
+          /* Step 2: Env var configuration + verification + test connection */
           <div className="space-y-4">
-            {!isEditMode && !preselectedExchange && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleBack}
-                className="mb-1 -ml-2"
-              >
+            {!isEditMode && !preselectedExchange && !connectMode && (
+              <Button variant="ghost" size="sm" onClick={handleBack} className="mb-1 -ml-2">
                 <ArrowLeft className="mr-1 h-4 w-4" />
                 Back
               </Button>
@@ -237,14 +348,12 @@ export function ExchangeSetupModal({ open, onComplete, userName, editExchange, p
             {selectedExchange.geoRestrictions?.note && (
               <div className="flex items-start gap-2 rounded-md border border-yellow-300 bg-yellow-50 p-3">
                 <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-yellow-600" />
-                <p className="text-sm text-yellow-800">
-                  {selectedExchange.geoRestrictions.note}
-                </p>
+                <p className="text-sm text-yellow-800">{selectedExchange.geoRestrictions.note}</p>
               </div>
             )}
 
-            {/* Display Name (edit mode only) */}
-            {isEditMode && (
+            {/* Display Name (edit mode only, not connect mode) */}
+            {isEditMode && !connectMode && (
               <div className="space-y-1">
                 <label className="text-sm font-medium text-gray-700">
                   Display Name (Optional)
@@ -269,7 +378,7 @@ export function ExchangeSetupModal({ open, onComplete, userName, editExchange, p
                   onChange={(e) => setApiKeyEnvVar(e.target.value)}
                   placeholder="e.g. COINBASE_CLIENTID"
                 />
-                <EnvStatus found={envResults[apiKeyEnvVar]} checking={envVarsToCheck.length === 2 && !envCheckData && !envCheckError} />
+                <EnvStatus found={envChecked ? envResults[apiKeyEnvVar] : undefined} loading={envChecking} />
               </div>
             </div>
 
@@ -284,12 +393,12 @@ export function ExchangeSetupModal({ open, onComplete, userName, editExchange, p
                   onChange={(e) => setApiSecretEnvVar(e.target.value)}
                   placeholder="e.g. COINBASE_SECRET"
                 />
-                <EnvStatus found={envResults[apiSecretEnvVar]} checking={envVarsToCheck.length === 2 && !envCheckData && !envCheckError} />
+                <EnvStatus found={envChecked ? envResults[apiSecretEnvVar] : undefined} loading={envChecking} />
               </div>
             </div>
 
-            {/* Set as Default switch (edit mode only, if not already default) */}
-            {isEditMode && editExchange && !editExchange.isDefault && (
+            {/* Set as Default switch (edit mode only, not connect mode, if not already default) */}
+            {isEditMode && !connectMode && editExchange && !editExchange.isDefault && (
               <div className="flex items-center space-x-2">
                 <Switch
                   id="is-default"
@@ -302,34 +411,89 @@ export function ExchangeSetupModal({ open, onComplete, userName, editExchange, p
               </div>
             )}
 
+            {/* Env var verification status + Verify button */}
             {envVarsVerified ? (
               <p className="flex items-center gap-1 text-xs text-green-600">
                 <CheckCircle className="h-3 w-3" />
                 Environment variables verified on server.
               </p>
-            ) : envCheckError ? (
+            ) : envCheckError && manualVerify ? (
               <p className="flex items-center gap-1 text-xs text-red-600">
                 <XCircle className="h-3 w-3" />
                 Failed to verify environment variables. Check server connection.
               </p>
-            ) : envCheckData && !envVarsVerified ? (
+            ) : envChecked && !envVarsVerified && manualVerify ? (
               <p className="flex items-center gap-1 text-xs text-red-600">
                 <XCircle className="h-3 w-3" />
                 One or more environment variables not found on server.
               </p>
+            ) : envChecking ? (
+              <p className="flex items-center gap-1 text-xs text-gray-500">
+                <Loader2 className="h-3 w-3 animate-spin" />
+                Verifying environment variables...
+              </p>
             ) : (
               <p className="text-xs text-gray-500">
-                Ensure these environment variables are set on the server running the API.
+                Click Verify to check these environment variables on the server.
               </p>
             )}
 
+            {/* Verify Environment Variables button */}
+            {!envVarsVerified && (
+              <Button
+                variant="outline"
+                onClick={() => verifyEnvVars(true)}
+                disabled={envChecking || !apiKeyEnvVar || !apiSecretEnvVar}
+                className="w-full"
+              >
+                {envChecking ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <RefreshCw className="mr-2 h-4 w-4" />
+                )}
+                {envChecking ? 'Checking...' : 'Verify Environment Variables'}
+              </Button>
+            )}
+
+            {/* Test Connection button — enabled only after env vars verified */}
             <Button
-              onClick={handleSave}
-              disabled={saving || !apiKeyEnvVar || !apiSecretEnvVar || !envVarsVerified}
+              variant="outline"
+              onClick={handleTestConnection}
+              disabled={!envVarsVerified || testResult === 'testing'}
               className="w-full"
             >
+              {testResult === 'testing' && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {testResult === 'passed' && <CheckCircle className="mr-2 h-4 w-4 text-green-500" />}
+              {testResult === 'failed' && <XCircle className="mr-2 h-4 w-4 text-red-500" />}
+              {testResult === 'idle' && <Zap className="mr-2 h-4 w-4" />}
+              {testResult === 'testing'
+                ? 'Testing...'
+                : testResult === 'passed'
+                  ? 'Connection Verified'
+                  : testResult === 'failed'
+                    ? 'Test Failed — Retry'
+                    : 'Test Exchange Connection'}
+            </Button>
+
+            {/* Test result feedback */}
+            {testResult === 'passed' && (
+              <p className="flex items-center gap-1 text-xs text-green-600">
+                <CheckCircle className="h-3 w-3" />
+                Connected to {selectedExchange.displayName} API
+                {testLatency != null && ` (${testLatency}ms)`}.
+              </p>
+            )}
+            {testResult === 'failed' && testError && (
+              <p className="flex items-center gap-1 text-xs text-red-600">
+                <XCircle className="h-3 w-3" />
+                {testError}
+              </p>
+            )}
+
+            {/* Save / Connect button — requires env vars verified + test passed */}
+            <Button onClick={handleSave} disabled={!canSave} className="w-full">
               {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              {isEditMode ? 'Update Exchange' : 'Save Exchange'}
+              {saveButtonText}
             </Button>
           </div>
         ) : null}
@@ -338,8 +502,8 @@ export function ExchangeSetupModal({ open, onComplete, userName, editExchange, p
   );
 }
 
-function EnvStatus({ found, checking }: { found: boolean | undefined; checking: boolean }) {
-  if (checking) {
+function EnvStatus({ found, loading }: { found: boolean | undefined; loading: boolean }) {
+  if (loading) {
     return <Loader2 className="h-4 w-4 shrink-0 animate-spin text-gray-400" />;
   }
   if (found === undefined) {

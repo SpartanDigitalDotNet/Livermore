@@ -15,17 +15,18 @@ interface ConnectButtonProps {
 /**
  * ConnectButton Component
  *
- * Renders a "Connect" button that:
- * 1. Checks if user has a user_exchanges record for this exchange
- * 2. If not, opens ExchangeSetupModal to create one first
- * 3. Checks for existing locks before connecting
- * 4. If locked on another machine, shows warning modal
- * 5. Otherwise, starts the exchange
+ * Renders a "Connect" button that ALWAYS opens the ExchangeSetupModal
+ * as a pre-flight verification wizard before connecting.
+ *
+ * Flow:
+ * 1. Click Connect → fetch user's exchange record (if any)
+ * 2. Open ExchangeSetupModal (always) — verifies env vars + tests connection
+ * 3. After modal completes → check lock status → start exchange
  *
  * Requirements:
  * - ADM-01: Display connect button for offline/idle exchanges
  * - ADM-02: Check lock status before connecting, warn if locked
- * - ADM-03: Route through Exchange Setup Modal if no user_exchange record
+ * - ADM-03: Always show setup/verify modal before connecting
  */
 export function ConnectButton({
   exchangeId,
@@ -35,6 +36,13 @@ export function ConnectButton({
   const [loading, setLoading] = useState(false);
   const [showWarning, setShowWarning] = useState(false);
   const [showSetup, setShowSetup] = useState(false);
+  const [existingExchange, setExistingExchange] = useState<{
+    exchangeName: string;
+    displayName: string;
+    apiKeyEnvVar: string;
+    apiSecretEnvVar: string;
+    isDefault: boolean;
+  } | null>(null);
   const [lockInfo, setLockInfo] = useState<{
     hostname: string;
     ipAddress: string | null;
@@ -42,26 +50,31 @@ export function ConnectButton({
   } | null>(null);
 
   /**
-   * Check if user has a user_exchanges record, then check lock, then connect.
+   * Always open the setup/verify modal.
+   * If user already has a record, pass existing data for pre-population.
    */
   const handleClick = async () => {
     setLoading(true);
     try {
-      // Step 1: Check if user has this exchange configured
       const userStatus = await trpcClient.exchangeSymbol.userStatus.query();
-      const hasRecord = userStatus.statuses.some(
+      const existing = userStatus.statuses.find(
         (s) => s.exchangeName === exchangeName
       );
 
-      if (!hasRecord) {
-        // No user_exchange record — show setup modal first
-        setShowSetup(true);
-        setLoading(false);
-        return;
+      if (existing) {
+        setExistingExchange({
+          exchangeName: existing.exchangeName,
+          displayName: existing.displayName ?? exchangeName,
+          apiKeyEnvVar: existing.apiKeyEnvVar,
+          apiSecretEnvVar: existing.apiSecretEnvVar,
+          isDefault: existing.isDefault,
+        });
+      } else {
+        setExistingExchange(null);
       }
 
-      // Step 2: Check current lock status
-      await checkLockAndConnect();
+      setShowSetup(true);
+      setLoading(false);
     } catch (err) {
       toast.error(
         err instanceof Error ? err.message : 'Failed to check exchange status'
@@ -81,7 +94,6 @@ export function ConnectButton({
 
       const { online, status } = statusResult;
 
-      // If online and not idle/stopped, show warning modal
       if (
         online &&
         status &&
@@ -98,7 +110,6 @@ export function ConnectButton({
         return;
       }
 
-      // Otherwise connect directly
       await handleConnect();
     } catch (err) {
       toast.error(
@@ -120,8 +131,10 @@ export function ConnectButton({
 
       toast.success(`Connecting to ${exchangeName}...`);
 
-      // Invalidate network queries to trigger immediate refetch
-      await queryClient.invalidateQueries({ queryKey: [['network']] });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: [['network']] }),
+        queryClient.invalidateQueries({ queryKey: [['exchangeSymbol']] }),
+      ]);
     } catch (err) {
       toast.error(
         err instanceof Error ? err.message : 'Failed to start exchange'
@@ -140,7 +153,7 @@ export function ConnectButton({
   };
 
   /**
-   * Exchange setup completed — now proceed with lock check and connect.
+   * Setup/verification modal completed — proceed with lock check and connect.
    */
   const handleSetupComplete = async () => {
     setShowSetup(false);
@@ -183,8 +196,11 @@ export function ConnectButton({
       <ExchangeSetupModal
         open={showSetup}
         onComplete={handleSetupComplete}
+        onCancel={() => setShowSetup(false)}
         userName={null}
         preselectedExchange={exchangeName}
+        editExchange={existingExchange}
+        connectMode
       />
     </>
   );

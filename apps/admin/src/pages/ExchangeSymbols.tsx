@@ -123,8 +123,8 @@ export function ExchangeSymbols() {
   );
   const selectedStatus = selectedExchange ? statusMap.get(selectedExchange.name) : undefined;
 
-  // Loading state before we know which exchange to show
-  if (selectedExchangeId === null) {
+  // Loading state before we have exchange data resolved
+  if (selectedExchangeId === null || !exchangeData) {
     return (
       <div className="flex items-center justify-center p-12 text-gray-500">
         Loading exchange configuration...

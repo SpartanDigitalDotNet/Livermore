@@ -25,16 +25,20 @@ function getStatusBadge(
   status: string
 ): { variant: 'default' | 'secondary' | 'destructive' | 'outline' | 'success' | 'warning'; label: string } {
   switch (status) {
+    case 'assessing':
+      return { variant: 'outline', label: 'Assessing Cache' };
+    case 'dumping':
+      return { variant: 'warning', label: 'Clearing Cache' };
     case 'scanning':
       return { variant: 'outline', label: 'Scanning' };
-    case 'executing':
-      return { variant: 'warning', label: 'Executing' };
+    case 'fetching':
+      return { variant: 'warning', label: 'Fetching' };
     case 'complete':
       return { variant: 'success', label: 'Complete' };
     case 'error':
       return { variant: 'destructive', label: 'Error' };
     default:
-      return { variant: 'secondary', label: 'Unknown' };
+      return { variant: 'secondary', label: status.charAt(0).toUpperCase() + status.slice(1) };
   }
 }
 
@@ -61,17 +65,16 @@ export function WarmupProgressPanel({ exchangeId }: WarmupProgressPanelProps) {
     refetchInterval: (query) => {
       const stats = query.state.data?.stats;
       if (!stats) return false;
-      const isActive = stats.status === 'scanning' || stats.status === 'executing';
+      const isActive = stats.status === 'assessing' || stats.status === 'dumping' || stats.status === 'scanning' || stats.status === 'fetching';
       return isActive ? 2000 : 30000;
     },
   });
 
-  // If no stats exist, don't render anything
-  if (!data?.stats) {
-    return null;
-  }
-
+  // If no stats, or warmup already complete/error, don't render
+  if (!data?.stats) return null;
   const stats = data.stats;
+  if (stats.status === 'complete' || stats.status === 'error') return null;
+
   const statusBadge = getStatusBadge(stats.status);
 
   return (
