@@ -134,7 +134,7 @@ export function ActivityFeed({ entries, exchanges = [], isLoading }: ActivityFee
                 onCheckedChange={setShowUTC}
                 className="scale-75"
               />
-              <Label htmlFor="utc-toggle" className="text-xs text-gray-500 cursor-pointer">
+              <Label htmlFor="utc-toggle" className="text-xs text-gray-500 cursor-pointer dark:text-gray-400">
                 UTC
               </Label>
             </div>
@@ -144,10 +144,10 @@ export function ActivityFeed({ entries, exchanges = [], isLoading }: ActivityFee
       <CardContent>
         {isLoading ? (
           <div className="flex items-center justify-center py-8">
-            <div className="h-8 w-8 animate-spin rounded-full border-4 border-gray-200 border-t-gray-600" />
+            <div className="h-8 w-8 animate-spin rounded-full border-4 border-gray-200 border-t-gray-600 dark:border-gray-700 dark:border-t-gray-400" />
           </div>
         ) : filteredEntries.length === 0 ? (
-          <p className="text-gray-500 text-sm">
+          <p className="text-gray-500 text-sm dark:text-gray-400">
             {entries.length === 0 ? 'No recent activity' : 'No matching activity'}
           </p>
         ) : (
@@ -156,7 +156,7 @@ export function ActivityFeed({ entries, exchanges = [], isLoading }: ActivityFee
               {filteredEntries.map((entry) => (
                 <div
                   key={entry.id}
-                  className="flex items-start gap-3 border rounded-lg p-3"
+                  className="flex items-start gap-3 border rounded-lg p-3 dark:border-gray-800"
                 >
                   {/* Icon */}
                   {entry.event === 'error' ? (
@@ -169,27 +169,27 @@ export function ActivityFeed({ entries, exchanges = [], isLoading }: ActivityFee
                   <div className="flex-1 min-w-0">
                     {entry.event === 'state_transition' ? (
                       <>
-                        <div className="text-sm font-medium text-gray-900">
+                        <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
                           {entry.exchangeName}:{' '}
-                          <span className="text-gray-500">{entry.fromState}</span>
-                          <span className="mx-1 text-gray-400">&rarr;</span>
-                          <span className="text-gray-700">{entry.toState}</span>
+                          <span className="text-gray-500 dark:text-gray-400">{entry.fromState}</span>
+                          <span className="mx-1 text-gray-400 dark:text-gray-500">&rarr;</span>
+                          <span className="text-gray-700 dark:text-gray-300">{entry.toState}</span>
                         </div>
-                        <div className="text-xs text-gray-500 truncate">
+                        <div className="text-xs text-gray-500 truncate dark:text-gray-400">
                           {entry.adminEmail || entry.hostname}
                         </div>
                       </>
                     ) : entry.event === 'error' ? (
                       <>
-                        <div className="text-sm font-medium text-red-700">
+                        <div className="text-sm font-medium text-red-700 dark:text-red-400">
                           {entry.exchangeName}: {entry.error}
                         </div>
-                        <div className="text-xs text-gray-500 truncate">
+                        <div className="text-xs text-gray-500 truncate dark:text-gray-400">
                           {entry.hostname}
                         </div>
                       </>
                     ) : (
-                      <div className="text-sm text-gray-700">
+                      <div className="text-sm text-gray-700 dark:text-gray-300">
                         {entry.exchangeName}: {entry.event}
                       </div>
                     )}
@@ -199,10 +199,10 @@ export function ActivityFeed({ entries, exchanges = [], isLoading }: ActivityFee
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <div className="text-right shrink-0">
-                        <div className="text-xs text-gray-400 whitespace-nowrap">
+                        <div className="text-xs text-gray-400 whitespace-nowrap dark:text-gray-500">
                           {formatRelativeTime(entry.id)}
                         </div>
-                        <div className="text-xs text-gray-400 whitespace-nowrap">
+                        <div className="text-xs text-gray-400 whitespace-nowrap dark:text-gray-500">
                           {showUTC ? formatUTCTime(entry.id) : formatLocalTime(entry.id)}
                         </div>
                       </div>

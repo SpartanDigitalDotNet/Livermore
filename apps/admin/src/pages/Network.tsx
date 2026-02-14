@@ -43,7 +43,7 @@ export function Network() {
           <CardTitle>Network</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="rounded-md bg-red-50 p-4 text-red-700">
+          <div className="rounded-md bg-red-50 p-4 text-red-700 dark:bg-red-950/50 dark:text-red-400">
             Error loading network status: {instancesError.message}
           </div>
         </CardContent>
@@ -59,7 +59,7 @@ export function Network() {
         </CardHeader>
         <CardContent>
           <div className="flex items-center justify-center py-8">
-            <div className="h-8 w-8 animate-spin rounded-full border-4 border-gray-200 border-t-gray-600" />
+            <div className="h-8 w-8 animate-spin rounded-full border-4 border-gray-200 border-t-gray-600 dark:border-gray-700 dark:border-t-gray-400" />
           </div>
         </CardContent>
       </Card>
@@ -70,10 +70,10 @@ export function Network() {
     <div className="space-y-6">
       {/* Summary header */}
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold text-gray-900">
+        <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
           Perseus Network
         </h2>
-        <span className="text-sm text-gray-500">
+        <span className="text-sm text-gray-500 dark:text-gray-400">
           {instanceData?.instances.filter((i) => i.online).length ?? 0} of{' '}
           {instanceData?.instances.length ?? 0} online
         </span>

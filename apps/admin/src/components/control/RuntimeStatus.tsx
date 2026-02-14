@@ -60,7 +60,7 @@ export function RuntimeStatus({ status, isLoading }: RuntimeStatusProps) {
         </CardHeader>
         <CardContent>
           <div className="flex items-center justify-center py-8">
-            <div className="h-8 w-8 animate-spin rounded-full border-4 border-gray-200 border-t-gray-600" />
+            <div className="h-8 w-8 animate-spin rounded-full border-4 border-gray-200 border-t-gray-600 dark:border-gray-700 dark:border-t-gray-400" />
           </div>
         </CardContent>
       </Card>
@@ -136,7 +136,7 @@ export function RuntimeStatus({ status, isLoading }: RuntimeStatusProps) {
 
         {/* Mode */}
         <div>
-          <span className="text-sm text-gray-500">Mode: </span>
+          <span className="text-sm text-gray-500 dark:text-gray-400">Mode: </span>
           <Badge variant="outline">{status.mode}</Badge>
         </div>
 
@@ -148,10 +148,10 @@ export function RuntimeStatus({ status, isLoading }: RuntimeStatusProps) {
               <span className="text-sm font-medium">{status.startup.phaseLabel}</span>
             </div>
             <Progress value={status.startup.percent} className="h-2" />
-            <div className="flex justify-between text-xs text-gray-500">
+            <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400">
               <span>
                 {status.startup.currentItem && (
-                  <span className="text-gray-700">{status.startup.currentItem}</span>
+                  <span className="text-gray-700 dark:text-gray-300">{status.startup.currentItem}</span>
                 )}
                 {status.startup.current && status.startup.total && (
                   <span className="ml-2">({status.startup.current}/{status.startup.total})</span>

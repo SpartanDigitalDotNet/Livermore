@@ -138,7 +138,7 @@ export function ExchangeSymbols() {
   // Loading state before we have exchange data resolved
   if (selectedExchangeId === null || !exchangeData) {
     return (
-      <div className="flex items-center justify-center p-12 text-gray-500">
+      <div className="flex items-center justify-center p-12 text-gray-500 dark:text-gray-400">
         Loading exchange configuration...
       </div>
     );
@@ -149,15 +149,15 @@ export function ExchangeSymbols() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-lg font-semibold">Exchange Symbols</h2>
-          <p className="text-sm text-gray-500">
+          <h2 className="text-lg font-semibold dark:text-gray-100">Exchange Symbols</h2>
+          <p className="text-sm text-gray-500 dark:text-gray-400">
             {selectedExchange
               ? `${exchangeLabel[selectedExchange.name] ?? selectedExchange.displayName} — ${selectedExchange.activeCount} active of ${selectedExchange.symbolCount} symbols`
               : 'Select an exchange'}
           </p>
         </div>
         {exchangeData?.lastRefresh && (
-          <span className="text-xs text-gray-400">
+          <span className="text-xs text-gray-400 dark:text-gray-500 dark:text-gray-500">
             Last refreshed {formatTimeAgo(exchangeData.lastRefresh)}
           </span>
         )}
@@ -168,9 +168,10 @@ export function ExchangeSymbols() {
         {exchangeList.map((ex) => (
           <Button
             key={ex.id}
-            variant={selectedExchangeId === ex.id ? 'default' : 'outline'}
+            variant="outline"
             size="sm"
             onClick={() => handleExchangeChange(ex.id)}
+            className={selectedExchangeId === ex.id ? 'dark:bg-white/10 dark:border-white/20' : ''}
           >
             {(() => {
               const Icon = exchangeIconMap[ex.name];
@@ -208,7 +209,7 @@ export function ExchangeSymbols() {
                 <Badge className="bg-yellow-600 text-white text-xs">{geo.note ?? 'Geo-restricted'}</Badge>
               )}
             </div>
-            <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm text-gray-600">
+            <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm text-gray-600 dark:text-gray-400">
               {fees && (
                 <span>Fees: {formatFee(fees.base_maker)} maker / {formatFee(fees.base_taker)} taker</span>
               )}
@@ -220,20 +221,20 @@ export function ExchangeSymbols() {
         );
       })()}
 
-      <p className="text-sm text-gray-500">
+      <p className="text-sm text-gray-500 dark:text-gray-400">
         Symbols ranked by global market cap via{' '}
-        <a href="https://www.coingecko.com/" target="_blank" rel="noopener noreferrer" className="underline hover:text-gray-300">CoinGecko</a>.
+        <a href="https://www.coingecko.com/" target="_blank" rel="noopener noreferrer" className="underline hover:text-gray-300 dark:hover:text-gray-200">CoinGecko</a>.
       </p>
 
       {/* Table */}
       <Card className="overflow-hidden">
         <CardContent className="p-0">
           {isLoading ? (
-            <div className="flex items-center justify-center p-12 text-gray-500">
+            <div className="flex items-center justify-center p-12 text-gray-500 dark:text-gray-400">
               Loading...
             </div>
           ) : symbols.length === 0 ? (
-            <div className="flex items-center justify-center p-12 text-gray-500">
+            <div className="flex items-center justify-center p-12 text-gray-500 dark:text-gray-400">
               No symbols for this exchange. Run the seed script to populate.
             </div>
           ) : (
@@ -251,7 +252,7 @@ export function ExchangeSymbols() {
               <TableBody>
                 {symbols.map((s) => (
                   <TableRow key={s.id}>
-                    <TableCell className="font-mono text-sm text-gray-500">
+                    <TableCell className="font-mono text-sm text-gray-500 dark:text-gray-400">
                       {s.globalRank ?? '-'}
                     </TableCell>
                     <TableCell>
@@ -264,7 +265,7 @@ export function ExchangeSymbols() {
                         />
                         <span>
                           <span className="font-medium">{s.displayName ?? s.baseCurrency}</span>
-                          <span className="ml-1.5 text-xs text-gray-400">({s.baseCurrency})</span>
+                          <span className="ml-1.5 text-xs text-gray-400 dark:text-gray-500">({s.baseCurrency})</span>
                         </span>
                       </span>
                     </TableCell>
@@ -293,7 +294,7 @@ export function ExchangeSymbols() {
       {/* Pagination */}
       {totalPages > 1 && (
         <div className="flex items-center justify-between">
-          <span className="text-sm text-gray-500">
+          <span className="text-sm text-gray-500 dark:text-gray-400">
             Page {page} of {totalPages}
           </span>
           <div className="flex gap-2">

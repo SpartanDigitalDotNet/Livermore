@@ -145,7 +145,7 @@ export function InstanceCard({ instance }: InstanceCardProps) {
               return Icon ? (
                 <Icon size={24} variant="branded" />
               ) : (
-                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-gray-200 text-xs font-bold text-gray-600">
+                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-gray-200 text-xs font-bold text-gray-600 dark:bg-gray-700 dark:text-gray-300">
                   {displayName.charAt(0)}
                 </span>
               );
@@ -168,23 +168,23 @@ export function InstanceCard({ instance }: InstanceCardProps) {
             <div className="grid grid-cols-2 gap-2 text-sm">
               {/* Row 1: Hostname and IP */}
               <div className="flex items-center gap-1.5">
-                <Server className="h-3.5 w-3.5 text-gray-400" />
-                <span className="text-gray-700 truncate">{status.hostname}</span>
+                <Server className="h-3.5 w-3.5 text-gray-400 dark:text-gray-500" />
+                <span className="text-gray-700 truncate dark:text-gray-300">{status.hostname}</span>
               </div>
-              <div className="text-gray-500 truncate">
+              <div className="text-gray-500 truncate dark:text-gray-400">
                 {status.ipAddress ?? 'N/A'}
               </div>
 
               {/* Row 2: Admin and Symbol count */}
               <div className="flex items-center gap-1.5">
-                <User className="h-3.5 w-3.5 text-gray-400" />
-                <span className="text-gray-700 truncate">
+                <User className="h-3.5 w-3.5 text-gray-400 dark:text-gray-500" />
+                <span className="text-gray-700 truncate dark:text-gray-300">
                   {status.adminDisplayName ?? status.adminEmail ?? 'N/A'}
                 </span>
               </div>
               <div className="flex items-center gap-1.5">
-                <Hash className="h-3.5 w-3.5 text-gray-400" />
-                <span className="text-gray-700">{status.symbolCount} symbols</span>
+                <Hash className="h-3.5 w-3.5 text-gray-400 dark:text-gray-500" />
+                <span className="text-gray-700 dark:text-gray-300">{status.symbolCount} symbols</span>
               </div>
 
               {/* Row 3: Heartbeat and Uptime */}
@@ -200,8 +200,8 @@ export function InstanceCard({ instance }: InstanceCardProps) {
                 })()}
               </div>
               <div className="flex items-center gap-1.5">
-                <Clock className="h-3.5 w-3.5 text-gray-400" />
-                <span className="text-gray-700">
+                <Clock className="h-3.5 w-3.5 text-gray-400 dark:text-gray-500" />
+                <span className="text-gray-700 dark:text-gray-300">
                   Running for {formatUptime(status.connectedAt)}
                 </span>
               </div>
@@ -215,7 +215,7 @@ export function InstanceCard({ instance }: InstanceCardProps) {
             )}
           </>
         ) : (
-          <p className="text-gray-400 text-sm">No active connection</p>
+          <p className="text-gray-400 text-sm dark:text-gray-500">No active connection</p>
         )}
       </CardContent>
 

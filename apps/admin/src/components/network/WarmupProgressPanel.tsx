@@ -78,7 +78,7 @@ export function WarmupProgressPanel({ exchangeId }: WarmupProgressPanelProps) {
   const statusBadge = getStatusBadge(stats.status);
 
   return (
-    <div className="rounded-md border p-3 bg-blue-50/50">
+    <div className="rounded-md border p-3 bg-blue-50/50 dark:bg-blue-950/30 dark:border-gray-700">
       {/* Header: Title + Status Badge */}
       <div className="flex items-center justify-between mb-2">
         <h4 className="text-sm font-medium">Warmup Progress</h4>
@@ -91,14 +91,14 @@ export function WarmupProgressPanel({ exchangeId }: WarmupProgressPanelProps) {
       </div>
 
       {/* Percent + ETA */}
-      <div className="text-sm text-gray-600 mb-1">
+      <div className="text-sm text-gray-600 dark:text-gray-400 mb-1">
         {stats.percentComplete}%
         {stats.etaMs !== null && ` • ${formatEta(stats.etaMs)}`}
       </div>
 
       {/* Current Symbol */}
       {stats.currentSymbol && (
-        <div className="text-sm text-gray-700 mb-2 flex items-center gap-1.5">
+        <div className="text-sm text-gray-700 dark:text-gray-300 mb-2 flex items-center gap-1.5">
           Currently warming:
           <img
             src={`https://assets.coincap.io/assets/icons/${stats.currentSymbol.split(/[-/]/)[0].toLowerCase()}@2x.png`}
@@ -111,7 +111,7 @@ export function WarmupProgressPanel({ exchangeId }: WarmupProgressPanelProps) {
       )}
 
       {/* Summary Line */}
-      <div className="text-xs text-gray-600">
+      <div className="text-xs text-gray-600 dark:text-gray-400">
         Loading history for <span className="font-medium">{stats.totalSymbols || '—'}</span> symbols
         {stats.failedPairs > 0 && <>{' • '}<span className="font-medium text-red-600">{stats.failedPairs} failed</span></>}
       </div>

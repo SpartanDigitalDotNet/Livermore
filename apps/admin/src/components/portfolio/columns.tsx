@@ -26,12 +26,12 @@ function formatPrice(price: number | null): string {
  * Format MACD-V value with color coding.
  */
 function formatMacdV(value: number | null): { text: string; color: string } {
-  if (value === null) return { text: '-', color: 'text-gray-400' };
+  if (value === null) return { text: '-', color: 'text-gray-400 dark:text-gray-500' };
   const text = value.toFixed(1);
-  if (value > 50) return { text, color: 'text-green-600 font-medium' };
-  if (value > 0) return { text, color: 'text-green-500' };
-  if (value > -50) return { text, color: 'text-red-500' };
-  return { text, color: 'text-red-600 font-medium' };
+  if (value > 50) return { text, color: 'text-green-600 font-medium dark:text-green-400' };
+  if (value > 0) return { text, color: 'text-green-500 dark:text-green-400' };
+  if (value > -50) return { text, color: 'text-red-500 dark:text-red-400' };
+  return { text, color: 'text-red-600 font-medium dark:text-red-400' };
 }
 
 /**
@@ -40,19 +40,19 @@ function formatMacdV(value: number | null): { text: string; color: string } {
 function getSignalStyle(signal: string): string {
   switch (signal) {
     case 'STRONG BUY':
-      return 'bg-green-100 text-green-800';
+      return 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400';
     case 'Bullish':
-      return 'bg-green-50 text-green-700';
+      return 'bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-400';
     case 'STRONG SELL':
-      return 'bg-red-100 text-red-800';
+      return 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400';
     case 'Bearish':
-      return 'bg-red-50 text-red-700';
+      return 'bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-400';
     case 'Reversal Up?':
-      return 'bg-yellow-100 text-yellow-800';
+      return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400';
     case 'Reversal Down?':
-      return 'bg-orange-100 text-orange-800';
+      return 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400';
     default:
-      return 'bg-gray-100 text-gray-700';
+      return 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300';
   }
 }
 
@@ -115,10 +115,10 @@ export const columns = [
       const liq = info.getValue();
       const color =
         liq === 'high'
-          ? 'text-green-600'
+          ? 'text-green-600 dark:text-green-400'
           : liq === 'medium'
-            ? 'text-yellow-600'
-            : 'text-red-600';
+            ? 'text-yellow-600 dark:text-yellow-400'
+            : 'text-red-600 dark:text-red-400';
       return <span className={`capitalize ${color}`}>{liq}</span>;
     },
   }),

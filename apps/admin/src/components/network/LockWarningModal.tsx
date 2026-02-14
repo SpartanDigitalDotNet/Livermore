@@ -65,22 +65,22 @@ export function LockWarningModal({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="rounded-md bg-amber-50 border border-amber-200 p-4 space-y-2">
+        <div className="rounded-md bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 p-4 space-y-2">
           <div className="grid grid-cols-[120px_1fr] gap-2 text-sm">
-            <span className="font-medium text-amber-900">Hostname:</span>
-            <span className="text-amber-800">{hostname}</span>
+            <span className="font-medium text-amber-900 dark:text-amber-300">Hostname:</span>
+            <span className="text-amber-800 dark:text-amber-400">{hostname}</span>
 
-            <span className="font-medium text-amber-900">IP Address:</span>
-            <span className="text-amber-800">{ipAddress ?? 'Unknown'}</span>
+            <span className="font-medium text-amber-900 dark:text-amber-300">IP Address:</span>
+            <span className="text-amber-800 dark:text-amber-400">{ipAddress ?? 'Unknown'}</span>
 
-            <span className="font-medium text-amber-900">Connected since:</span>
-            <span className="text-amber-800">
+            <span className="font-medium text-amber-900 dark:text-amber-300">Connected since:</span>
+            <span className="text-amber-800 dark:text-amber-400">
               {formatConnectedAt(connectedAt)}
             </span>
           </div>
         </div>
 
-        <p className="text-sm text-gray-700">
+        <p className="text-sm text-gray-700 dark:text-gray-300">
           <span className="font-medium">Warning:</span> Connecting from here
           will take over the exchange. The other instance will lose its
           connection.

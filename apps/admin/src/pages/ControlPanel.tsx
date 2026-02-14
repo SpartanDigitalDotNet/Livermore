@@ -194,7 +194,7 @@ export function ControlPanel() {
           <CardTitle>Control Panel</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="rounded-md bg-red-50 p-4 text-red-700">
+          <div className="rounded-md bg-red-50 p-4 text-red-700 dark:bg-red-950/50 dark:text-red-400">
             Error loading status: {statusError.message}
           </div>
         </CardContent>

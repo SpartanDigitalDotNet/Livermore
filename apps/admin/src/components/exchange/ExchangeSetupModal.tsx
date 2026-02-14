@@ -312,7 +312,7 @@ export function ExchangeSetupModal({
                 <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
               </div>
             ) : statusData?.exchanges.length === 0 ? (
-              <p className="py-4 text-center text-sm text-gray-500">
+              <p className="py-4 text-center text-sm text-gray-500 dark:text-gray-400">
                 No active exchanges available. Contact your administrator.
               </p>
             ) : (
@@ -323,12 +323,12 @@ export function ExchangeSetupModal({
                   onClick={() => handleSelectExchange(ex as ExchangeInfo)}
                   className={`w-full rounded-lg border p-3 text-left transition-colors ${
                     ex.isBusy
-                      ? 'cursor-not-allowed border-gray-200 bg-gray-50 opacity-60'
-                      : 'border-gray-200 hover:border-blue-300 hover:bg-blue-50'
+                      ? 'cursor-not-allowed border-gray-200 bg-gray-50 opacity-60 dark:border-gray-700 dark:bg-gray-800'
+                      : 'border-gray-200 hover:border-blue-300 hover:bg-blue-50 dark:border-gray-700 dark:hover:border-blue-600 dark:hover:bg-blue-950/30'
                   }`}
                 >
                   <div className="flex items-center justify-between">
-                    <span className="font-medium text-gray-900">{ex.displayName}</span>
+                    <span className="font-medium text-gray-900 dark:text-gray-100">{ex.displayName}</span>
                     {ex.isBusy ? (
                       <Badge variant="secondary">In Use</Badge>
                     ) : (
@@ -351,16 +351,16 @@ export function ExchangeSetupModal({
 
             {/* Geo-restriction warning */}
             {selectedExchange.geoRestrictions?.note && (
-              <div className="flex items-start gap-2 rounded-md border border-yellow-300 bg-yellow-50 p-3">
-                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-yellow-600" />
-                <p className="text-sm text-yellow-800">{selectedExchange.geoRestrictions.note}</p>
+              <div className="flex items-start gap-2 rounded-md border border-yellow-300 bg-yellow-50 p-3 dark:border-yellow-700 dark:bg-yellow-950/30">
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-yellow-600 dark:text-yellow-500" />
+                <p className="text-sm text-yellow-800 dark:text-yellow-300">{selectedExchange.geoRestrictions.note}</p>
               </div>
             )}
 
             {/* Display Name (edit mode only, not connect mode) */}
             {isEditMode && !connectMode && (
               <div className="space-y-1">
-                <label className="text-sm font-medium text-gray-700">
+                <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
                   Display Name (Optional)
                 </label>
                 <Input
@@ -374,7 +374,7 @@ export function ExchangeSetupModal({
 
             {/* API Key env var */}
             <div className="space-y-1">
-              <label className="text-sm font-medium text-gray-700">
+              <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
                 API Key Environment Variable
               </label>
               <div className="flex items-center gap-2">
@@ -389,7 +389,7 @@ export function ExchangeSetupModal({
 
             {/* API Secret env var */}
             <div className="space-y-1">
-              <label className="text-sm font-medium text-gray-700">
+              <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
                 API Secret Environment Variable
               </label>
               <div className="flex items-center gap-2">
@@ -410,7 +410,7 @@ export function ExchangeSetupModal({
                   checked={isDefaultChecked}
                   onCheckedChange={setIsDefaultChecked}
                 />
-                <Label htmlFor="is-default" className="text-sm font-medium text-gray-700">
+                <Label htmlFor="is-default" className="text-sm font-medium text-gray-700 dark:text-gray-300">
                   Set as Default Exchange
                 </Label>
               </div>
@@ -438,12 +438,12 @@ export function ExchangeSetupModal({
                 One or more environment variables not found on server.
               </p>
             ) : envChecking ? (
-              <p className="flex items-center gap-1 text-xs text-gray-500">
+              <p className="flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400">
                 <Loader2 className="h-3 w-3 animate-spin" />
                 Verifying environment variables...
               </p>
             ) : (
-              <p className="text-xs text-gray-500">
+              <p className="text-xs text-gray-500 dark:text-gray-400">
                 Click Verify to check these environment variables on the server.
               </p>
             )}

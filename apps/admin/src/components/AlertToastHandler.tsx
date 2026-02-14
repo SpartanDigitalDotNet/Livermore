@@ -29,7 +29,8 @@ function getMomentumState(macdV: number | null, signalDelta: number | null): str
 
 /**
  * Get toast style based on MACD-V and signalDelta.
- * Returns a colored left border matching the MACD-V zone colors.
+ * In dark mode, returns a colored glass tint (semi-transparent bg + border glow).
+ * In light mode, returns a colored left border.
  *
  * signalDelta = macdV - signal (EMA of macdV, 9)
  * - Positive: macdV > signal = bullish momentum / recovering
@@ -38,28 +39,44 @@ function getMomentumState(macdV: number | null, signalDelta: number | null): str
 function getToastStyle(macdV: number | null, signalDelta: number | null): React.CSSProperties {
   if (macdV === null) return {};
 
+  const isDark = document.documentElement.classList.contains('dark');
   const isRecovering = signalDelta !== null && signalDelta > 0;
   const absMacdV = Math.abs(macdV);
 
+  let color: string;  // hex color
+  let rgb: string;    // r g b for rgba()
+
   // Extreme zones (±150+)
   if (absMacdV >= 150) {
-    if (macdV < 0 && isRecovering) return { borderLeft: '4px solid #a855f7' }; // purple-500
-    return { borderLeft: '4px solid #ef4444' }; // red-500
+    if (macdV < 0 && isRecovering) { color = '#e040fb'; rgb = '224 64 251'; }   // neon purple
+    else { color = '#ef4444'; rgb = '239 68 68'; }                                // red
   }
-
   // Positive side
-  if (macdV > 0) {
-    if (macdV <= 50) return { borderLeft: '4px solid #64748b' };  // slate-500 (chop)
-    if (macdV <= 75) return { borderLeft: '4px solid #06b6d4' };  // cyan-500 (early rally)
-    if (macdV <= 125) return { borderLeft: '4px solid #84cc16' }; // lime-500 (strong rally)
-    if (macdV <= 140) return { borderLeft: '4px solid #eab308' }; // yellow-500 (extended)
-    return { borderLeft: '4px solid #f97316' };                    // orange-500 (near exhaustion)
+  else if (macdV > 0) {
+    if (macdV <= 50) { color = '#64748b'; rgb = '100 116 139'; }       // slate (chop)
+    else if (macdV <= 75) { color = '#06b6d4'; rgb = '6 182 212'; }    // cyan (early rally)
+    else if (macdV <= 125) { color = '#84cc16'; rgb = '132 204 22'; }  // lime (strong rally)
+    else if (macdV <= 140) { color = '#eab308'; rgb = '234 179 8'; }   // yellow (extended)
+    else { color = '#f97316'; rgb = '249 115 22'; }                     // orange (near exhaustion)
+  }
+  // Negative side
+  else if (macdV >= -50) { color = '#64748b'; rgb = '100 116 139'; }   // slate (chop)
+  else if (isRecovering) { color = '#14b8a6'; rgb = '20 184 166'; }    // teal (potential Long)
+  else { color = '#64748b'; rgb = '100 116 139'; }                      // slate (still falling)
+
+  if (isDark) {
+    return {
+      background: `rgba(${rgb} / 0.12)`,
+      backdropFilter: 'blur(16px)',
+      WebkitBackdropFilter: 'blur(16px)',
+      borderColor: `rgba(${rgb} / 0.25)`,
+      borderWidth: '1px',
+      borderStyle: 'solid',
+      boxShadow: `0 0 20px rgba(${rgb} / 0.1), inset 0 1px 0 rgba(255 255 255 / 0.05)`,
+    };
   }
 
-  // Negative side
-  if (macdV >= -50) return { borderLeft: '4px solid #64748b' };   // slate-500 (chop)
-  if (isRecovering) return { borderLeft: '4px solid #14b8a6' };   // teal-500 (potential Long)
-  return { borderLeft: '4px solid #64748b' };                      // slate-500 (still falling)
+  return { borderLeft: `4px solid ${color}` };
 }
 
 export function AlertToastHandler() {
