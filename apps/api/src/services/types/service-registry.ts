@@ -35,8 +35,8 @@ export interface RuntimeConfig {
  * - Config holds credentials for operations requiring API access
  */
 export interface ServiceRegistry {
-  /** Exchange adapter - WebSocket connection for real-time data (Phase 29: via factory) */
-  coinbaseAdapter: IExchangeAdapter;
+  /** Exchange adapter - WebSocket connection for real-time data (created via AdapterFactory) */
+  exchangeAdapter: IExchangeAdapter;
 
   /** IndicatorCalculationService - Calculates MACD-V from cached candles */
   indicatorService: IndicatorCalculationService;

@@ -419,7 +419,7 @@ async function start() {
     redis,
     userId: 1,  // TODO: Get from authenticated user context
   });
-  const coinbaseAdapter = await adapterFactory.create(activeExchangeId ?? 1);
+  const exchangeAdapter = await adapterFactory.create(activeExchangeId ?? 1);
 
   const alertService = new AlertEvaluationService(activeExchangeId ?? 1, activeExchangeName ?? 'unknown');
 
@@ -446,9 +446,9 @@ async function start() {
     logger.info('BoundaryRestService started (subscribed to 5m candle:close events)');
 
     // Step 4: Start Coinbase Adapter
-    await coinbaseAdapter.connect();
-    coinbaseAdapter.subscribe(monitoredSymbols, '5m');
-    logger.info('Coinbase Adapter started (5m candles)');
+    await exchangeAdapter.connect();
+    exchangeAdapter.subscribe(monitoredSymbols, '5m');
+    logger.info('Exchange adapter started (5m candles)');
 
     // Start Alert Evaluation Service
     await alertService.start(monitoredSymbols, SUPPORTED_TIMEFRAMES);
@@ -492,7 +492,7 @@ async function start() {
 
   // Build ServiceRegistry for ControlChannelService command handlers
   const serviceRegistry: ServiceRegistry = {
-    coinbaseAdapter,
+    exchangeAdapter,
     indicatorService,
     alertService,
     boundaryRestService,
@@ -560,7 +560,7 @@ async function start() {
 
     // Stop services in reverse order
     await alertService.stop();
-    coinbaseAdapter.disconnect();
+    exchangeAdapter.disconnect();
     await boundaryRestService.stop();
     await indicatorService.stop();
 

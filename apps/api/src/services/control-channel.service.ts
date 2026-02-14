@@ -345,9 +345,9 @@ export class ControlChannelService {
     await this.services.alertService.stop();
     logger.debug('AlertService stopped');
 
-    // 2. CoinbaseAdapter - produces candle events (disconnect WebSocket)
-    this.services.coinbaseAdapter.disconnect();
-    logger.debug('CoinbaseAdapter disconnected');
+    // 2. Exchange adapter - produces candle events (disconnect WebSocket)
+    this.services.exchangeAdapter.disconnect();
+    logger.debug('Exchange adapter disconnected');
 
     // 3. BoundaryRestService - produces candle events from REST
     await this.services.boundaryRestService.stop();
@@ -387,10 +387,10 @@ export class ControlChannelService {
     await this.services.indicatorService.start(this.services.indicatorConfigs);
     logger.debug('IndicatorService started');
 
-    // 2. CoinbaseAdapter - connect WebSocket and subscribe
-    await this.services.coinbaseAdapter.connect();
-    this.services.coinbaseAdapter.subscribe(this.services.monitoredSymbols, '5m');
-    logger.debug('CoinbaseAdapter connected and subscribed');
+    // 2. Exchange adapter - connect WebSocket and subscribe
+    await this.services.exchangeAdapter.connect();
+    this.services.exchangeAdapter.subscribe(this.services.monitoredSymbols, '5m');
+    logger.debug('Exchange adapter connected and subscribed');
 
     // 3. BoundaryRestService - start listening for boundary events
     await this.services.boundaryRestService.start(this.services.monitoredSymbols);
@@ -601,11 +601,17 @@ export class ControlChannelService {
       }
       logger.debug({ warmupCount }, 'Indicator warmup complete');
 
-      // 3. CoinbaseAdapter - connect WebSocket and subscribe
+      // 3. Exchange adapter - connect WebSocket and subscribe
       setProgress({ phase: 'websocket', phaseLabel: 'Connecting to exchange', percent: 65 });
-      await this.services.coinbaseAdapter.connect();
-      this.services.coinbaseAdapter.subscribe(this.services.monitoredSymbols, '5m');
-      logger.debug('CoinbaseAdapter connected and subscribed');
+
+      // Create the correct adapter for this exchange via factory
+      if (this.services.adapterFactory) {
+        this.services.exchangeAdapter = await this.services.adapterFactory.create(this.services.exchangeId!);
+      }
+
+      await this.services.exchangeAdapter.connect();
+      this.services.exchangeAdapter.subscribe(this.services.monitoredSymbols, '5m');
+      logger.debug('Exchange adapter connected and subscribed');
 
       // 4. BoundaryRestService - start listening for boundary events
       setProgress({ phase: 'boundary', phaseLabel: 'Starting boundary service', percent: 80 });
@@ -687,9 +693,9 @@ export class ControlChannelService {
     await this.services.alertService.stop();
     logger.debug('AlertService stopped');
 
-    // 2. CoinbaseAdapter - produces candle events (disconnect WebSocket)
-    this.services.coinbaseAdapter.disconnect();
-    logger.debug('CoinbaseAdapter disconnected');
+    // 2. Exchange adapter - produces candle events (disconnect WebSocket)
+    this.services.exchangeAdapter.disconnect();
+    logger.debug('Exchange adapter disconnected');
 
     // 3. BoundaryRestService - produces candle events from REST
     await this.services.boundaryRestService.stop();
@@ -1045,7 +1051,7 @@ export class ControlChannelService {
       }
 
       // 5d. Resubscribe WebSocket with updated symbol list
-      this.services.coinbaseAdapter.subscribe(this.services.monitoredSymbols, '5m');
+      this.services.exchangeAdapter.subscribe(this.services.monitoredSymbols, '5m');
     }
 
     logger.info(
@@ -1141,8 +1147,7 @@ export class ControlChannelService {
       );
 
       // Resubscribe WebSocket without removed symbol
-      // (CoinbaseAdapter handles unsubscribe internally when new list doesn't include symbol)
-      this.services.coinbaseAdapter.subscribe(this.services.monitoredSymbols, '5m');
+      this.services.exchangeAdapter.subscribe(this.services.monitoredSymbols, '5m');
     }
 
     logger.info(
@@ -1262,7 +1267,7 @@ export class ControlChannelService {
       }
 
       // Resubscribe WebSocket with all symbols
-      this.services.coinbaseAdapter.subscribe(this.services.monitoredSymbols, '5m');
+      this.services.exchangeAdapter.subscribe(this.services.monitoredSymbols, '5m');
     } else {
       // Paused - just record without backfill
       for (const symbol of toAdd) {
