@@ -150,7 +150,9 @@ Step-by-step instructions to get your Binance instance running:
 10. **Monitor warmup progress**
     - Watch the WarmupProgressPanel at the bottom of the instance card
     - Shows real-time progress: symbols scanned, candles cached, completion percentage
-    - Warmup typically completes in 30-60 seconds for Binance
+    - **Warm restart** (bounce within ~20 min): Near-instant — cached candles are still fresh, zero REST calls needed
+    - **Cold start** (first run or cache expired): ~20-25 min for 57 symbols × 6 timeframes via REST API
+    - The trust assessor checks the sentinel symbol's 5m candle freshness (20-min threshold) to decide
 
 11. **Verify active status**
     - Card header should show green "active" status

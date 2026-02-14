@@ -36,6 +36,7 @@ export class InstanceRegistryService {
   private readonly host: string;
   private readonly instanceId: string;
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
+  private registered = false;
   private currentStatus: InstanceStatus;
 
   constructor(options: RegistryOptions) {
@@ -104,6 +105,7 @@ export class InstanceRegistryService {
 
     if (result === 'OK') {
       // Registration succeeded -- we own this exchange
+      this.registered = true;
       logger.info(
         { exchangeId: this.exchangeId, exchangeName: this.exchangeName, hostname: this.host, instanceId: this.instanceId },
         'Instance registered'
@@ -146,6 +148,7 @@ export class InstanceRegistryService {
           'XX'
         );
 
+        this.registered = true;
         logger.info(
           { exchangeId: this.exchangeId, hostname: this.host },
           'Instance re-registered (same host restart)'
@@ -172,6 +175,7 @@ export class InstanceRegistryService {
     );
 
     if (retryResult === 'OK') {
+      this.registered = true;
       logger.info(
         { exchangeId: this.exchangeId, hostname: this.host },
         'Instance registered (after stale key expired)'
@@ -263,6 +267,14 @@ export class InstanceRegistryService {
    */
   async updateStatus(updates: Partial<InstanceStatus>): Promise<void> {
     Object.assign(this.currentStatus, updates);
+
+    // Guard: don't write to Redis if register() was never called.
+    // Prevents ghost keys (e.g. exchange:0:status) when the placeholder
+    // registry records an error before a real exchange is configured.
+    if (!this.registered) {
+      return;
+    }
+
     await this.redis.set(
       instanceStatusKey(this.exchangeId),
       JSON.stringify(this.currentStatus),
