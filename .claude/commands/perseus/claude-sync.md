@@ -21,6 +21,10 @@ Identity is determined by reading the host→name mapping from `claude:shared`
 (the `architecture.hosts` object), matched against the machine's hostname.
 This avoids hardcoding — either Claude can register new machines by updating
 the shared hosts map.
+
+Inbox uses Redis consumer groups for read/unread tracking. On sync, only NEW
+messages are shown (via XREADGROUP), then ACKed to mark as read. Use `inbox`
+mode to review full message history with [NEW]/[READ] markers.
 </objective>
 
 <critical_rules>
@@ -28,8 +32,9 @@ the shared hosts map.
 - ALWAYS use `NODE_ENV=development` when running scripts.
 - ALWAYS write scripts to `tmp/` and clean up after.
 - NEVER modify `claude:shared` during sync — only read. Use learn mode to add entries.
-- After reading inbox messages, do NOT delete them — leave them for the user to review.
+- After displaying inbox messages, ACK them to mark as read. Messages stay in the stream permanently.
 - If keys don't exist yet, that's fine — report "first boot" and offer to seed initial data.
+- Consumer group `readers` is created idempotently on every sync (MKSTREAM + ignore BUSYGROUP).
 </critical_rules>
 
 <context>
@@ -68,7 +73,7 @@ Per-Claude session state. Overwritten each session.
 }
 ```
 
-### claude:{name}:inbox (Redis Stream)
+### claude:{name}:inbox (Redis Stream with Consumer Group)
 Messages from the other Claude. Each entry has fields:
 - `from` — sender name (mike|kaia)
 - `type` — message type (task|heads-up|api-contract|question|conflict-alert)
@@ -76,6 +81,10 @@ Messages from the other Claude. Each entry has fields:
 - `body` — full markdown message
 - `priority` — normal|urgent
 - `gsdPhase` — optional GSD phase reference
+
+Consumer group: `readers` (created on first sync per inbox)
+Consumer name: identity (mike or kaia)
+Read tracking: XREADGROUP returns only unread messages, XACK marks as read
 </context>
 
 <process>
@@ -110,19 +119,116 @@ const state = await redis.get(`claude:${identity}:state`);
 ```
 Display last session time, current work, recent changes, instance observations.
 
-### Step 4: Read inbox
+### Step 4: Read inbox (consumer group)
 ```typescript
-const messages = await redis.xrange(`claude:${identity}:inbox`, '-', '+');
+const inboxKey = `claude:${identity}:inbox`;
+
+// Create consumer group idempotently
+try {
+  await redis.xgroup('CREATE', inboxKey, 'readers', '0', 'MKSTREAM');
+} catch (e: any) {
+  if (!e.message?.includes('BUSYGROUP')) throw e;
+  // Group already exists — fine
+}
+
+// Read only NEW (undelivered) messages
+const results = await redis.xreadgroup(
+  'GROUP', 'readers', identity,
+  'COUNT', 100, 'STREAMS', inboxKey, '>'
+);
+
+// results is null if no new messages, or [[key, [[id, fields], ...]]]
+const newMessages = results?.[0]?.[1] ?? [];
+
+if (newMessages.length === 0) {
+  console.log('No new messages.');
+} else {
+  console.log(`${newMessages.length} new message(s):`);
+  const messageIds: string[] = [];
+  for (const [id, fields] of newMessages) {
+    messageIds.push(id);
+    // Parse fields array into object
+    const msg: Record<string, string> = {};
+    for (let i = 0; i < fields.length; i += 2) {
+      msg[fields[i]] = fields[i + 1];
+    }
+    const urgent = msg.priority === 'urgent' ? ' [URGENT]' : '';
+    console.log(`\n--- [NEW] ${id}${urgent} ---`);
+    console.log(`From: ${msg.from} | Type: ${msg.type} | Sent: ${msg.sentAt}`);
+    console.log(`Subject: ${msg.subject}`);
+    console.log(`Body:\n${msg.body}`);
+  }
+
+  // ACK all displayed messages to mark as read
+  if (messageIds.length > 0) {
+    await redis.xack(inboxKey, 'readers', ...messageIds);
+  }
+}
 ```
-Display all unread messages with type, from, subject, and body.
-Highlight urgent messages.
 
 ### Step 5: Summary
 Print a concise boot report:
 - Identity (name, hostname)
 - Shared knowledge: X gotchas loaded
 - Own state: last session, current work
-- Inbox: N messages (N urgent)
+- Inbox: N new messages (N urgent)
+
+## Mode: inbox — Review all messages with read/unread status
+
+Show full message history with `[NEW]` or `[READ]` markers.
+Optional argument: `unread` to show only unread messages.
+
+```
+/perseus:claude-sync inbox        — all messages with read/unread markers
+/perseus:claude-sync inbox unread  — only unread messages
+```
+
+```typescript
+const inboxKey = `claude:${identity}:inbox`;
+
+// Create consumer group idempotently
+try {
+  await redis.xgroup('CREATE', inboxKey, 'readers', '0', 'MKSTREAM');
+} catch (e: any) {
+  if (!e.message?.includes('BUSYGROUP')) throw e;
+}
+
+// Get pending (unread) message IDs
+const pendingInfo = await redis.xpending(inboxKey, 'readers');
+// pendingInfo = [count, minId, maxId, [[consumer, count], ...]]
+const pendingCount = pendingInfo[0] as number;
+
+// Get detailed pending entries to build the unread set
+const pendingSet = new Set<string>();
+if (pendingCount > 0) {
+  const pendingDetails = await redis.xpending(
+    inboxKey, 'readers', '-', '+', pendingCount
+  );
+  for (const entry of pendingDetails) {
+    pendingSet.add(entry[0]); // message ID
+  }
+}
+
+// Get full message history
+const allMessages = await redis.xrange(inboxKey, '-', '+');
+
+for (const [id, fields] of allMessages) {
+  const isUnread = pendingSet.has(id);
+  const marker = isUnread ? '[NEW]' : '[READ]';
+
+  // If "unread" filter specified, skip read messages
+  if (filterUnread && !isUnread) continue;
+
+  const msg = parseFields(fields);
+  console.log(`\n--- ${marker} ${id} ---`);
+  console.log(`From: ${msg.from} | Type: ${msg.type} | Sent: ${msg.sentAt}`);
+  console.log(`Subject: ${msg.subject}`);
+  console.log(`Body:\n${msg.body}`);
+}
+```
+
+Note: `inbox` mode does NOT ACK messages — it's read-only browsing.
+Only the default sync mode ACKs messages.
 
 ## Mode: learn — Add to shared knowledge
 Add a gotcha or environment note to `claude:shared`.
@@ -154,6 +260,9 @@ Always delete tmp/ scripts after execution.
 - [ ] Identity determined from hostname
 - [ ] Shared knowledge loaded and summarized
 - [ ] Own state loaded (or "first boot" if missing)
-- [ ] Inbox messages displayed (or "no messages")
+- [ ] Inbox: only NEW messages shown on default sync (via XREADGROUP)
+- [ ] Inbox: messages ACKed after display (via XACK)
+- [ ] Inbox mode: full history shown with [NEW]/[READ] markers
+- [ ] Consumer group created idempotently (no errors on re-sync)
 - [ ] Temporary scripts cleaned up
 </success_criteria>
