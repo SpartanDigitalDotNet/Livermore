@@ -105,11 +105,8 @@ export function WarmupProgressPanel({ exchangeId }: WarmupProgressPanelProps) {
 
       {/* Summary Line */}
       <div className="text-xs text-gray-600">
-        Completed: <span className="font-medium">{stats.completedPairs}/{stats.totalPairs}</span> pairs
-        {' • '}
-        Skipped: <span className="font-medium">{stats.skippedPairs}</span>
-        {' • '}
-        Failed: <span className="font-medium">{stats.failedPairs}</span>
+        Loading history for <span className="font-medium">{stats.totalSymbols || '—'}</span> symbols
+        {stats.failedPairs > 0 && <>{' • '}<span className="font-medium text-red-600">{stats.failedPairs} failed</span></>}
       </div>
 
       {/* Failures Section (collapsible) */}

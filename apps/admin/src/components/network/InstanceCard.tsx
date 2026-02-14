@@ -1,8 +1,21 @@
+import type { ComponentType } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Server, Clock, User, Hash, Wifi, WifiOff } from 'lucide-react';
+import { ExchangeBinance, ExchangeCoinbase, ExchangeKraken, ExchangeKucoin } from '@web3icons/react';
 import { ConnectButton } from './ConnectButton';
 import { WarmupProgressPanel } from './WarmupProgressPanel';
+
+/** Map exchange names to static web3icon components (null = letter fallback) */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const exchangeIconMap: Record<string, ComponentType<any> | null> = {
+  coinbase: ExchangeCoinbase,
+  binance: ExchangeBinance,
+  binance_us: ExchangeBinance,
+  kraken: ExchangeKraken,
+  kucoin: ExchangeKucoin,
+  mexc: null,
+};
 
 interface InstanceCardProps {
   instance: {
@@ -126,7 +139,19 @@ export function InstanceCard({ instance }: InstanceCardProps) {
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center justify-between">
-          <span className="text-base">{displayName}</span>
+          <span className="flex items-center gap-2 text-base">
+            {(() => {
+              const Icon = exchangeIconMap[exchangeName];
+              return Icon ? (
+                <Icon size={24} variant="branded" />
+              ) : (
+                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-gray-200 text-xs font-bold text-gray-600">
+                  {displayName.charAt(0)}
+                </span>
+              );
+            })()}
+            {displayName}
+          </span>
           <Badge variant={badge.variant} className={badge.className}>
             {online ? (
               <Wifi className="h-3 w-3 mr-1" />

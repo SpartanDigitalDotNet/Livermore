@@ -49,6 +49,7 @@ export class SmartWarmupService {
       mode: null,
       startedAt: Date.now(),
       updatedAt: Date.now(),
+      totalSymbols: 0,
       totalPairs: 0,
       completedPairs: 0,
       skippedPairs: 0,
@@ -144,6 +145,7 @@ export class SmartWarmupService {
 
     // Phase 5: EXECUTE
     this.stats.status = 'fetching';
+    this.stats.totalSymbols = symbols.length;
     this.stats.totalPairs = schedule.needsFetching;
     this.stats.skippedPairs = schedule.sufficientPairs;
     await this.publishStats();

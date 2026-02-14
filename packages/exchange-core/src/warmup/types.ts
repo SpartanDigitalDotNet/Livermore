@@ -105,6 +105,7 @@ export interface WarmupStats {
   mode: 'full_refresh' | 'targeted' | null;
   startedAt: number;
   updatedAt: number;
+  totalSymbols: number;
   totalPairs: number;
   completedPairs: number;
   skippedPairs: number;

@@ -171,7 +171,17 @@ export function SignalsTable({ data, highlightedIds }: SignalsTableProps) {
                 <TableCell className="font-mono text-sm">
                   {new Date(signal.triggeredAt).toLocaleString()}
                 </TableCell>
-                <TableCell className="font-medium">{signal.symbol}</TableCell>
+                <TableCell className="font-medium">
+                  <span className="flex items-center gap-2">
+                    <img
+                      src={`https://cdn.jsdelivr.net/gh/spothq/cryptocurrency-icons@master/svg/color/${signal.symbol.split(/[-/]/)[0].toLowerCase()}.svg`}
+                      alt=""
+                      className="h-5 w-5"
+                      onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                    />
+                    {signal.symbol}
+                  </span>
+                </TableCell>
                 <TableCell>
                   <span
                     className={`inline-flex rounded-full px-2 py-1 text-xs font-medium ${color}`}

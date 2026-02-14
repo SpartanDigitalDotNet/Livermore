@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import type { ComponentType } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { trpc } from '@/lib/trpc';
 import { Card, CardContent } from '@/components/ui/card';
@@ -12,6 +13,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { ExchangeBinance, ExchangeCoinbase, ExchangeKraken, ExchangeKucoin } from '@web3icons/react';
 
 const exchangeLabel: Record<string, string> = {
   coinbase: 'Coinbase',
@@ -20,6 +22,16 @@ const exchangeLabel: Record<string, string> = {
   kraken: 'Kraken',
   kucoin: 'KuCoin',
   mexc: 'MEXC',
+};
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const exchangeIconMap: Record<string, ComponentType<any> | null> = {
+  coinbase: ExchangeCoinbase,
+  binance: ExchangeBinance,
+  binance_us: ExchangeBinance,
+  kraken: ExchangeKraken,
+  kucoin: ExchangeKucoin,
+  mexc: null,
 };
 
 function formatMarketCap(value: string | null): string {
@@ -160,6 +172,10 @@ export function ExchangeSymbols() {
             size="sm"
             onClick={() => handleExchangeChange(ex.id)}
           >
+            {(() => {
+              const Icon = exchangeIconMap[ex.name];
+              return Icon ? <Icon size={16} variant="branded" /> : null;
+            })()}
             {exchangeLabel[ex.name] ?? ex.displayName}
             {ex.symbolCount > 0 && (
               <span className="ml-1 opacity-60">({ex.symbolCount})</span>
@@ -239,8 +255,18 @@ export function ExchangeSymbols() {
                       {s.globalRank ?? '-'}
                     </TableCell>
                     <TableCell>
-                      <span className="font-medium">{s.displayName ?? s.baseCurrency}</span>
-                      <span className="ml-1.5 text-xs text-gray-400">({s.baseCurrency})</span>
+                      <span className="flex items-center gap-2">
+                        <img
+                          src={`https://cdn.jsdelivr.net/gh/spothq/cryptocurrency-icons@master/svg/color/${s.baseCurrency.toLowerCase()}.svg`}
+                          alt=""
+                          className="h-5 w-5"
+                          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                        />
+                        <span>
+                          <span className="font-medium">{s.displayName ?? s.baseCurrency}</span>
+                          <span className="ml-1.5 text-xs text-gray-400">({s.baseCurrency})</span>
+                        </span>
+                      </span>
                     </TableCell>
                     <TableCell>
                       <span className="font-mono text-xs">{s.symbol}</span>
