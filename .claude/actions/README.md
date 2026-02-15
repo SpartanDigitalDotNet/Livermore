@@ -13,3 +13,4 @@ NODE_ENV=development npx tsx .claude/actions/{category}/{script}.ts [args]
 | Directory | Purpose |
 |-----------|---------|
 | `claude-net/` | Inter-Claude network operations (inbox, messaging, state sync) |
+| `queries/` | Database and Redis queries (alerts, candles, indicators) |
