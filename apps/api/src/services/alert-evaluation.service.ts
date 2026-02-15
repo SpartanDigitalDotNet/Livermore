@@ -416,7 +416,11 @@ export class AlertEvaluationService {
     histogram: number,
     indicator: CachedIndicatorValue
   ): Promise<void> {
-    const price = this.currentPrices.get(symbol) || 0;
+    let price = this.currentPrices.get(symbol) || 0;
+    if (price === 0) {
+      const latestCandle = await this.candleCache.getLatestCandle(1, this.exchangeId, symbol, timeframe);
+      if (latestCandle) price = latestCandle.close;
+    }
 
     logger.info(
       { symbol, timeframe, level, direction, macdV: currentMacdV, price },
@@ -521,7 +525,11 @@ export class AlertEvaluationService {
     bufferValue: number,
     indicator: CachedIndicatorValue
   ): Promise<void> {
-    const price = this.currentPrices.get(symbol) || 0;
+    let price = this.currentPrices.get(symbol) || 0;
+    if (price === 0) {
+      const latestCandle = await this.candleCache.getLatestCandle(1, this.exchangeId, symbol, timeframe);
+      if (latestCandle) price = latestCandle.close;
+    }
     const bufferPct = zone === 'oversold' ? this.OVERSOLD_BUFFER_PCT : this.OVERBOUGHT_BUFFER_PCT;
 
     logger.info(

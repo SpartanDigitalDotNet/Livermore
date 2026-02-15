@@ -38,3 +38,7 @@ Natural language questions mapped to action scripts. When the user asks a questi
 | Binance network logs / Binance state transitions | `NODE_ENV=development npx tsx .claude/actions/queries/network-logs.ts --exchange binance` |
 | Coinbase network logs | `NODE_ENV=development npx tsx .claude/actions/queries/network-logs.ts --exchange coinbase` |
 | Any network errors? / Show network errors | `NODE_ENV=development npx tsx .claude/actions/queries/network-logs.ts --errors` |
+| Pipeline check / Is data flowing? / Health check | `NODE_ENV=development npx tsx .claude/actions/queries/pipeline-check.ts` |
+| Binance.US pipeline check / Is Binance.US data flowing? | `NODE_ENV=development npx tsx .claude/actions/queries/pipeline-check.ts --exchange 3` |
+| Coinbase pipeline check / Is Coinbase data flowing? | `NODE_ENV=development npx tsx .claude/actions/queries/pipeline-check.ts --exchange 1` |
+| Deep pipeline check (longer wait) | `NODE_ENV=development npx tsx .claude/actions/queries/pipeline-check.ts --exchange 3 --wait 60` |
