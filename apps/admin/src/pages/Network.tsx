@@ -26,6 +26,7 @@ export function Network() {
   } = useQuery({
     ...trpc.network.getInstances.queryOptions(),
     refetchInterval: 5000,
+    retry: 2,
   });
 
   const {

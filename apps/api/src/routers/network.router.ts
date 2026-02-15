@@ -3,7 +3,7 @@ import { router, protectedProcedure } from '@livermore/trpc-config';
 import { getDbClient, exchanges } from '@livermore/database';
 import { getRedisClient, instanceStatusKey, networkActivityStreamKey, warmupStatsKey } from '@livermore/cache';
 import { eq, asc } from 'drizzle-orm';
-import type { InstanceStatus } from '@livermore/schemas';
+import { InstanceStatusSchema, type InstanceStatus } from '@livermore/schemas';
 import type { WarmupStats } from '@livermore/exchange-core';
 
 /**
@@ -72,7 +72,10 @@ export const networkRouter = router({
       for (const r of results) {
         if (r.data) {
           try {
-            statusMap.set(r.id, JSON.parse(r.data) as InstanceStatus);
+            const parsed = InstanceStatusSchema.safeParse(JSON.parse(r.data));
+            if (parsed.success) {
+              statusMap.set(r.id, parsed.data);
+            }
           } catch {
             // Parse failure -- treat as offline
           }

@@ -87,7 +87,7 @@ export function WarmupProgressPanel({ exchangeId }: WarmupProgressPanelProps) {
 
       {/* Progress Bar */}
       <div className="mb-2">
-        <Progress value={stats.percentComplete} className="h-2" />
+        <Progress value={stats.percentComplete} className="h-2 bg-gray-700 [&>div]:bg-blue-500" />
       </div>
 
       {/* Percent + ETA */}
@@ -101,7 +101,7 @@ export function WarmupProgressPanel({ exchangeId }: WarmupProgressPanelProps) {
         <div className="text-sm text-gray-700 dark:text-gray-300 mb-2 flex items-center gap-1.5">
           Currently warming:
           <img
-            src={`https://assets.coincap.io/assets/icons/${stats.currentSymbol.split(/[-/]/)[0].toLowerCase()}@2x.png`}
+            src={`https://cdn.jsdelivr.net/gh/spothq/cryptocurrency-icons@master/svg/color/${stats.currentSymbol.split(/[-/]/)[0].toLowerCase()}.svg`}
             alt=""
             className="h-4 w-4"
             onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
