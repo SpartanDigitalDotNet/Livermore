@@ -77,6 +77,8 @@ function formatPrice(price: number): string {
  * Sends formatted messages to Discord via webhook.
  * Supports embeds, rate limiting, and retry logic.
  */
+const MAX_QUEUE_SIZE = 500;
+
 export class DiscordNotificationService {
   private webhookUrl: string | null = null;
   private rateLimitRemaining = 5;
@@ -388,6 +390,10 @@ export class DiscordNotificationService {
   private async send(payload: any): Promise<void> {
     const msgId = Math.random().toString(36).substring(7);
     logger.debug({ msgId, queueLength: this.queue.length }, 'Discord send() called');
+    if (this.queue.length >= MAX_QUEUE_SIZE) {
+      logger.warn({ queueLength: this.queue.length }, 'Discord queue full, dropping message');
+      return;
+    }
     return new Promise((resolve, reject) => {
       this.queue.push({ payload: { ...payload, __msgId: msgId }, resolve, reject });
       this.processQueue();
@@ -503,6 +509,10 @@ export class DiscordNotificationService {
     const msgId = Math.random().toString(36).substring(7);
     const title = payload.embeds?.[0]?.title || 'unknown';
     logger.info({ msgId, queueLength: this.queue.length, title }, 'Discord: sendWithImage queuing message');
+    if (this.queue.length >= MAX_QUEUE_SIZE) {
+      logger.warn({ queueLength: this.queue.length }, 'Discord queue full, dropping message');
+      return;
+    }
     return new Promise((resolve, reject) => {
       this.queue.push({
         payload: { __image: { buffer: imageBuffer, filename }, __msgId: msgId, ...payload },
