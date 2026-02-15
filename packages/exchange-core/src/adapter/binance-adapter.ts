@@ -387,7 +387,7 @@ export class BinanceAdapter extends BaseExchangeAdapter {
         return;
       }
 
-      // Combined stream message
+      // Combined stream format (used by /stream?streams= endpoint)
       if ('stream' in msg && 'data' in msg) {
         const combined = msg as BinanceCombinedMessage;
         const streamName = combined.stream;
@@ -405,6 +405,22 @@ export class BinanceAdapter extends BaseExchangeAdapter {
         }
 
         logger.warn({ stream: streamName }, 'Unknown Binance stream type');
+        return;
+      }
+
+      // Raw stream format (used by /ws endpoint with SUBSCRIBE method)
+      if ('e' in msg) {
+        if (msg.e === 'kline') {
+          this.handleKlineMessage(msg as BinanceKlineEvent);
+          return;
+        }
+
+        if (msg.e === '24hrMiniTicker') {
+          this.handleMiniTickerMessage(msg as BinanceMiniTickerEvent);
+          return;
+        }
+
+        logger.warn({ eventType: msg.e }, 'Unknown Binance raw event type');
         return;
       }
 
