@@ -42,3 +42,8 @@ Natural language questions mapped to action scripts. When the user asks a questi
 | Binance.US pipeline check / Is Binance.US data flowing? | `NODE_ENV=development npx tsx .claude/actions/queries/pipeline-check.ts --exchange 3` |
 | Coinbase pipeline check / Is Coinbase data flowing? | `NODE_ENV=development npx tsx .claude/actions/queries/pipeline-check.ts --exchange 1` |
 | Deep pipeline check (longer wait) | `NODE_ENV=development npx tsx .claude/actions/queries/pipeline-check.ts --exchange 3 --wait 60` |
+| Cross-exchange arb signals / Arbitrage opportunities from alerts | `NODE_ENV=development npx tsx .claude/actions/queries/arb-signals.ts --since today` |
+| Arb signals for MORPHO / MORPHO cross-exchange timing | `NODE_ENV=development npx tsx .claude/actions/queries/arb-signals.ts --symbol MORPHO --since today` |
+| Which exchange leads? / Alert timing between exchanges | `NODE_ENV=development npx tsx .claude/actions/queries/arb-signals.ts --since 24h` |
+| Level-only arb signals (no reversals) | `NODE_ENV=development npx tsx .claude/actions/queries/arb-signals.ts --type level --since today` |
+| Arb signals with at least 5 min lead | `NODE_ENV=development npx tsx .claude/actions/queries/arb-signals.ts --min-delta 5 --since today` |
