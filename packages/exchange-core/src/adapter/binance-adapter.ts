@@ -181,6 +181,27 @@ export class BinanceAdapter extends BaseExchangeAdapter {
   /** Backfill threshold - only backfill if gap is greater than this (5 minutes) */
   private readonly BACKFILL_THRESHOLD_MS = 5 * 60 * 1000;
 
+  /** Whether connected via /stream?streams= (combined format) vs /ws (raw format) */
+  private usingCombinedEndpoint = false;
+
+  /** Proactive reconnect timer to preempt Binance 24-hour hard disconnect */
+  private reconnectTimer: NodeJS.Timeout | null = null;
+
+  /** Proactive reconnect interval - reconnect before Binance's 24h hard cutoff */
+  private readonly PROACTIVE_RECONNECT_MS = 23 * 60 * 60 * 1000; // 23 hours
+
+  /** Timestamp of last kline message received (for kline-specific watchdog) */
+  private lastKlineTimestamp = 0;
+
+  /** Kline freshness watchdog interval timer */
+  private klineWatchdogInterval: NodeJS.Timeout | null = null;
+
+  /** How often to check kline freshness */
+  private readonly KLINE_WATCHDOG_INTERVAL_MS = 120_000; // 2 minutes
+
+  /** Max silence before declaring klines stale and reconnecting */
+  private readonly KLINE_MAX_SILENCE_MS = 600_000; // 10 minutes
+
   constructor(options: BinanceAdapterOptions) {
     super();
     this.wsUrl = options.wsUrl;
@@ -195,21 +216,47 @@ export class BinanceAdapter extends BaseExchangeAdapter {
   }
 
   /**
+   * Build the WebSocket URL based on current subscription state.
+   * If symbols are known, uses /stream?streams= (combined format).
+   * Otherwise falls back to /ws (raw format) for initial bare connect.
+   */
+  private buildStreamUrl(): string {
+    if (this.subscribedSymbols.length > 0) {
+      const klineStreams = this.subscribedSymbols.map(
+        (s) => `${s.toLowerCase()}@kline_${this.subscribedTimeframe}`
+      );
+      const tickerStreams = this.subscribedSymbols.map(
+        (s) => `${s.toLowerCase()}@miniTicker`
+      );
+      const allStreams = [...klineStreams, ...tickerStreams];
+      return `${this.wsUrl}/stream?streams=${allStreams.join('/')}`;
+    }
+    return `${this.wsUrl}/ws`;
+  }
+
+  /**
    * Establish connection to Binance WebSocket
-   * Connects to the bare /ws endpoint for dynamic subscription management.
+   * Uses /stream?streams= when symbols are known (combined format),
+   * falls back to /ws for initial bare connect before subscribe().
    */
   async connect(): Promise<void> {
     return new Promise((resolve, reject) => {
       this.isIntentionalClose = false;
-      this.ws = new WebSocket(`${this.wsUrl}/ws`);
+      this.lastKlineTimestamp = 0;
+
+      const url = this.buildStreamUrl();
+      this.usingCombinedEndpoint = this.subscribedSymbols.length > 0;
+      this.ws = new WebSocket(url);
 
       this.ws.on('open', () => {
         logger.info(
-          { exchangeId: this.exchangeName },
+          { exchangeId: this.exchangeName, url, combined: this.usingCombinedEndpoint },
           'Connected to Binance WebSocket'
         );
         this.resetReconnectAttempts();
         this.resetWatchdog();
+        this.startProactiveReconnectTimer();
+        this.startKlineWatchdog();
 
         // Handle post-connection setup (resubscribe, backfill)
         this.onConnected().catch((err) => {
@@ -265,6 +312,8 @@ export class BinanceAdapter extends BaseExchangeAdapter {
    */
   disconnect(): void {
     this.stopWatchdog();
+    this.stopProactiveReconnectTimer();
+    this.stopKlineWatchdog();
     this.isIntentionalClose = true;
     if (this.ws) {
       this.ws.close();
@@ -295,31 +344,21 @@ export class BinanceAdapter extends BaseExchangeAdapter {
     this.subscribedSymbols = symbols;
     this.subscribedTimeframe = timeframe;
 
-    // Build stream names: ["btcusdt@kline_5m", "ethusdt@kline_5m"]
-    const klineStreams = symbols.map(
-      (s) => `${s.toLowerCase()}@kline_${timeframe}`
-    );
-    const tickerStreams = symbols.map(
-      (s) => `${s.toLowerCase()}@miniTicker`
-    );
-    const allStreams = [...klineStreams, ...tickerStreams];
+    if (this.usingCombinedEndpoint) {
+      // Already subscribed via /stream?streams= URL — no SUBSCRIBE frame needed
+      logger.info(
+        { symbols: symbols.length, timeframe },
+        'Streams already active via combined endpoint URL'
+      );
+      return;
+    }
 
-    this.requestId++;
-    const msg = {
-      method: 'SUBSCRIBE',
-      params: allStreams,
-      id: this.requestId,
-    };
-
-    this.ws!.send(JSON.stringify(msg));
+    // Connected to bare /ws — reconnect to /stream?streams= with symbols in URL
     logger.info(
-      {
-        symbols: symbols.length,
-        timeframe,
-        streams: allStreams.length,
-      },
-      'Subscribed to Binance kline and miniTicker streams'
+      { symbols: symbols.length, timeframe },
+      'Switching from /ws to /stream endpoint with stream subscriptions'
     );
+    this.forceReconnect();
   }
 
   /**
@@ -449,6 +488,8 @@ export class BinanceAdapter extends BaseExchangeAdapter {
    * This is much cleaner than Coinbase's timestamp-comparison approach.
    */
   private handleKlineMessage(event: BinanceKlineEvent): void {
+    this.lastKlineTimestamp = Date.now();
+
     const kline = event.k;
     const symbol = event.s;
     const timeframe = kline.i as Timeframe;
@@ -635,9 +676,92 @@ export class BinanceAdapter extends BaseExchangeAdapter {
     }
 
     this.stopWatchdog();
+    this.stopProactiveReconnectTimer();
+    this.stopKlineWatchdog();
 
     // Trigger reconnect via base class
     this.handleReconnect();
+  }
+
+  // ============================================
+  // Proactive Reconnect Timer (24h protection)
+  // ============================================
+
+  /**
+   * Start 23-hour proactive reconnect timer.
+   * Binance hard-disconnects at 24 hours — reconnecting at 23h avoids the hard cut.
+   */
+  private startProactiveReconnectTimer(): void {
+    this.stopProactiveReconnectTimer();
+
+    this.reconnectTimer = setTimeout(() => {
+      logger.info(
+        { exchangeId: this.exchangeName },
+        'Proactive 23h reconnect — preempting Binance 24h hard disconnect'
+      );
+      this.forceReconnect();
+    }, this.PROACTIVE_RECONNECT_MS);
+
+    logger.info(
+      { exchangeId: this.exchangeName, hours: 23 },
+      'Starting proactive reconnect timer'
+    );
+  }
+
+  /**
+   * Stop proactive reconnect timer
+   */
+  private stopProactiveReconnectTimer(): void {
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+  }
+
+  // ============================================
+  // Kline Freshness Watchdog
+  // ============================================
+
+  /**
+   * Start kline-specific freshness watchdog.
+   * The general 30s watchdog resets on ANY message (including miniTicker every ~1s),
+   * masking dead kline streams. This watchdog only cares about kline messages.
+   */
+  private startKlineWatchdog(): void {
+    this.stopKlineWatchdog();
+
+    this.klineWatchdogInterval = setInterval(() => {
+      // Skip check if no klines received yet (still warming up)
+      if (this.lastKlineTimestamp === 0) return;
+
+      const silenceMs = Date.now() - this.lastKlineTimestamp;
+      if (silenceMs > this.KLINE_MAX_SILENCE_MS) {
+        logger.warn(
+          {
+            exchangeId: this.exchangeName,
+            silenceMs,
+            lastKline: new Date(this.lastKlineTimestamp).toISOString(),
+          },
+          'Kline watchdog: no kline messages received — forcing reconnect'
+        );
+        this.forceReconnect();
+      }
+    }, this.KLINE_WATCHDOG_INTERVAL_MS);
+
+    logger.info(
+      { exchangeId: this.exchangeName, checkIntervalMs: this.KLINE_WATCHDOG_INTERVAL_MS, maxSilenceMs: this.KLINE_MAX_SILENCE_MS },
+      'Starting kline freshness watchdog'
+    );
+  }
+
+  /**
+   * Stop kline freshness watchdog
+   */
+  private stopKlineWatchdog(): void {
+    if (this.klineWatchdogInterval) {
+      clearInterval(this.klineWatchdogInterval);
+      this.klineWatchdogInterval = null;
+    }
   }
 
   // ============================================
@@ -646,13 +770,17 @@ export class BinanceAdapter extends BaseExchangeAdapter {
 
   /**
    * Called after successful connection/reconnection
-   * Resubscribes to channels and checks for backfill needs.
+   * When using combined endpoint, streams are already active via URL.
+   * When using bare /ws, subscribe() will be called by control-channel after connect().
    */
   private async onConnected(): Promise<void> {
-    if (this.subscribedSymbols.length > 0) {
-      this.subscribe(this.subscribedSymbols, this.subscribedTimeframe);
+    if (this.subscribedSymbols.length > 0 && this.usingCombinedEndpoint) {
+      // Streams already active via /stream?streams= URL — just check backfill
+      logger.info(
+        { symbols: this.subscribedSymbols.length },
+        'Streams active via combined endpoint — checking backfill'
+      );
 
-      // Check for gaps and backfill if needed (only on reconnection)
       if (this.restClient && this.reconnectAttempts > 0) {
         await this.checkAndBackfill();
       }

@@ -38,6 +38,14 @@ NODE_ENV=development npx tsx .claude/actions/claude-net/state.ts --work "Task" -
 NODE_ENV=development npx tsx .claude/actions/claude-net/state.ts --observe coinbase active
 ```
 
+### decode-file.ts — Extract file attachments from inbox
+```bash
+NODE_ENV=development npx tsx .claude/actions/claude-net/decode-file.ts                      # latest file message
+NODE_ENV=development npx tsx .claude/actions/claude-net/decode-file.ts --list               # list all file messages
+NODE_ENV=development npx tsx .claude/actions/claude-net/decode-file.ts --id 1771198264519-0 # specific message
+NODE_ENV=development npx tsx .claude/actions/claude-net/decode-file.ts --output report.md   # custom output path
+```
+
 ## Redis Keys
 
 | Key | Type | Purpose |
