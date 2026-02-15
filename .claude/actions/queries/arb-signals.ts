@@ -12,6 +12,7 @@
  *   npx tsx .claude/actions/queries/arb-signals.ts --symbol MORPHO        # specific base currency
  *   npx tsx .claude/actions/queries/arb-signals.ts --min-delta 5          # min 5 min lead time
  *   npx tsx .claude/actions/queries/arb-signals.ts --type level           # only level alerts (not reversals)
+ *   npx tsx .claude/actions/queries/arb-signals.ts --exchanges 1,2        # only Coinbase vs Binance
  */
 import { getDbClient, alertHistory, exchangeSymbols } from '@livermore/database';
 import { eq, and, desc, gte, inArray } from 'drizzle-orm';
@@ -85,6 +86,7 @@ async function main() {
   let symbolFilter: string | null = null;
   let minDelta = 0; // minimum lead time in minutes
   let typeFilter: string | null = null;
+  let exchangeFilter: number[] = []; // only these exchanges (empty = all)
 
   for (let i = 0; i < args.length; i++) {
     if (args[i] === '--since' && args[i + 1]) {
@@ -95,6 +97,8 @@ async function main() {
       minDelta = parseInt(args[++i], 10) || 0;
     } else if (args[i] === '--type' && args[i + 1]) {
       typeFilter = args[++i].toLowerCase();
+    } else if (args[i] === '--exchanges' && args[i + 1]) {
+      exchangeFilter = args[++i].split(',').map(s => parseInt(s.trim(), 10));
     }
   }
 
@@ -132,6 +136,9 @@ async function main() {
   const byBase = new Map<string, Map<number, AlertRow[]>>();
 
   for (const alert of allAlerts) {
+    // Apply exchange filter
+    if (exchangeFilter.length > 0 && !exchangeFilter.includes(alert.exchangeId)) continue;
+
     // Apply type filter
     if (typeFilter === 'level' && !alert.triggerLabel.startsWith('level_')) continue;
     if (typeFilter === 'reversal' && !alert.triggerLabel.startsWith('reversal_')) continue;
@@ -305,6 +312,7 @@ async function main() {
   if (symbolFilter) filterParts.push(`symbol=${symbolFilter}`);
   if (minDelta) filterParts.push(`min-delta=${minDelta}m`);
   if (typeFilter) filterParts.push(`type=${typeFilter}`);
+  if (exchangeFilter.length > 0) filterParts.push(`exchanges=${exchangeFilter.join(',')}`);
 
   console.log(`=== CROSS-EXCHANGE ARB SIGNALS (${filterParts.join(', ')}) ===`);
   console.log(`Total alerts scanned: ${allAlerts.length}`);
