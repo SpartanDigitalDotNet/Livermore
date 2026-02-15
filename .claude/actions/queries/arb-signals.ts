@@ -15,6 +15,7 @@
  *   npx tsx .claude/actions/queries/arb-signals.ts --exchanges 1,2        # only Coinbase vs Binance
  */
 import { getDbClient, alertHistory, exchangeSymbols } from '@livermore/database';
+import { getRedisClient } from '@livermore/cache';
 import { eq, and, desc, gte, inArray } from 'drizzle-orm';
 
 // Exchange name map
@@ -103,6 +104,67 @@ async function main() {
   }
 
   const db = getDbClient();
+  const redis = getRedisClient();
+
+  // Auto-detect active exchanges with fresh candles (unless --exchanges provided)
+  if (exchangeFilter.length === 0) {
+    const CANDLE_FRESHNESS_MAX_MS = 10 * 60 * 1000; // 10 minutes
+    const allExchangeIds = Object.keys(EXCHANGE_NAMES).map(Number);
+    const activeExchanges: number[] = [];
+    const skippedExchanges: string[] = [];
+
+    for (const exId of allExchangeIds) {
+      const statusRaw = await redis.get(`exchange:${exId}:status`);
+      if (!statusRaw) {
+        skippedExchanges.push(`${EXCHANGE_NAMES[exId]} (no instance)`);
+        continue;
+      }
+
+      const status = JSON.parse(statusRaw);
+      if (status.connectionState !== 'active') {
+        skippedExchanges.push(`${EXCHANGE_NAMES[exId]} (state=${status.connectionState})`);
+        continue;
+      }
+
+      // Check candle freshness — find a 1m candle key and check latest timestamp
+      const candleKeys = await redis.keys(`candles:${exId}:*:1m`);
+      if (!candleKeys || candleKeys.length === 0) {
+        skippedExchanges.push(`${EXCHANGE_NAMES[exId]} (no candle data)`);
+        continue;
+      }
+
+      // Spot-check the first key for freshness
+      const latest = await redis.zrevrange(candleKeys[0], 0, 0, 'WITHSCORES');
+      if (latest && latest.length >= 2) {
+        const latestEpoch = parseInt(latest[1], 10);
+        const ageMs = Date.now() - latestEpoch;
+        if (ageMs > CANDLE_FRESHNESS_MAX_MS) {
+          skippedExchanges.push(`${EXCHANGE_NAMES[exId]} (candles stale: ${Math.round(ageMs / 60000)}m old)`);
+          continue;
+        }
+      } else {
+        skippedExchanges.push(`${EXCHANGE_NAMES[exId]} (candles empty)`);
+        continue;
+      }
+
+      activeExchanges.push(exId);
+    }
+
+    exchangeFilter = activeExchanges;
+
+    console.log(`=== EXCHANGE ELIGIBILITY ===`);
+    console.log(`Active with fresh candles: ${activeExchanges.map(id => EXCHANGE_NAMES[id]).join(', ') || 'none'}`);
+    if (skippedExchanges.length > 0) {
+      console.log(`Skipped: ${skippedExchanges.join(', ')}`);
+    }
+    console.log('');
+
+    if (activeExchanges.length < 2) {
+      console.log('Need at least 2 active exchanges for cross-exchange analysis.');
+      await redis.quit();
+      process.exit(0);
+    }
+  }
 
   // Parse --since into a Date
   let sinceDate: Date;
@@ -322,6 +384,7 @@ async function main() {
   if (opportunities.length === 0) {
     console.log('No cross-exchange arb signals found in this time window.');
     console.log('Tips: Try --since 24h for a wider window, or wait for more alerts to accumulate.');
+    await redis.quit();
     process.exit(0);
   }
 
@@ -363,6 +426,7 @@ async function main() {
     console.log(`Best lead time: ${Math.max(...opportunities.map(o => o.leadTimeMinutes)).toFixed(1)} min`);
   }
 
+  await redis.quit();
   process.exit(0);
 }
 
