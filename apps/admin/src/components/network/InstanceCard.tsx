@@ -207,10 +207,10 @@ export function InstanceCard({ instance }: InstanceCardProps) {
               </div>
             </div>
 
-            {/* Warmup Progress Panel (only for starting or warming states) */}
-            {(status.connectionState === 'starting' || status.connectionState === 'warming') && (
+            {/* Warmup Progress Panel (starting/warming/active — persists after completion for report link) */}
+            {(status.connectionState === 'starting' || status.connectionState === 'warming' || status.connectionState === 'active') && (
               <div className="mt-3 pt-3 border-t">
-                <WarmupProgressPanel exchangeId={exchangeId} />
+                <WarmupProgressPanel exchangeId={exchangeId} exchangeLabel={displayName} />
               </div>
             )}
           </>
