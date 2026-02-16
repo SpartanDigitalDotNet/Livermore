@@ -1,3 +1,4 @@
+import type { ComponentType } from 'react';
 import {
   Table,
   TableBody,
@@ -6,6 +7,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { ExchangeBinance, ExchangeCoinbase, ExchangeKraken } from '@web3icons/react';
 
 interface Signal {
   id: number;
@@ -21,6 +23,52 @@ interface Signal {
    */
   signalDelta: number | null;
   triggeredAt: string;
+  exchangeId: number | null;
+  exchangeName: string | null;
+  triggerLabel: string | null;
+}
+
+/** Exchange ID → display name + icon */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const EXCHANGE_MAP: Record<number, { name: string; icon: ComponentType<any> | null }> = {
+  1: { name: 'Coinbase', icon: ExchangeCoinbase },
+  2: { name: 'Binance', icon: ExchangeBinance },
+  3: { name: 'BinanceUS', icon: ExchangeBinance },
+  4: { name: 'Kraken', icon: ExchangeKraken },
+};
+
+/**
+ * Format triggerLabel for display.
+ * level_150 → "Level 150", level_-150 → "Level -150"
+ * reversal_overbought → "Reversal OB", reversal_oversold → "Reversal OS"
+ */
+function formatTriggerLabel(label: string | null): { text: string; colorClass: string } | null {
+  if (!label) return null;
+
+  if (label.startsWith('level_')) {
+    const level = label.slice(6); // e.g. "150", "-150"
+    const num = parseFloat(level);
+    const isNeg = num < 0;
+    return {
+      text: `Level ${level}`,
+      colorClass: isNeg
+        ? 'text-green-600 dark:text-green-400'
+        : 'text-red-600 dark:text-red-400',
+    };
+  }
+
+  if (label.startsWith('reversal_')) {
+    const zone = label.slice(9); // e.g. "overbought", "oversold"
+    if (zone === 'overbought') {
+      return { text: 'Reversal OB', colorClass: 'text-red-600 dark:text-red-400' };
+    }
+    if (zone === 'oversold') {
+      return { text: 'Reversal OS', colorClass: 'text-green-600 dark:text-green-400' };
+    }
+    return { text: `Reversal ${zone}`, colorClass: 'text-gray-500 dark:text-gray-400' };
+  }
+
+  return { text: label, colorClass: 'text-gray-500 dark:text-gray-400' };
 }
 
 /**
@@ -132,8 +180,10 @@ export function SignalsTable({ data, highlightedIds }: SignalsTableProps) {
       <TableHeader>
         <TableRow>
           <TableHead>Time</TableHead>
+          <TableHead>Exchange</TableHead>
           <TableHead>Symbol</TableHead>
           <TableHead>Signal Type</TableHead>
+          <TableHead>Label</TableHead>
           <TableHead>Timeframe</TableHead>
           <TableHead>Price</TableHead>
           <TableHead>Value</TableHead>
@@ -142,7 +192,7 @@ export function SignalsTable({ data, highlightedIds }: SignalsTableProps) {
       <TableBody>
         {data.length === 0 ? (
           <TableRow>
-            <TableCell colSpan={6} className="text-center text-gray-500 dark:text-gray-400">
+            <TableCell colSpan={8} className="text-center text-gray-500 dark:text-gray-400">
               No signals triggered
             </TableCell>
           </TableRow>
@@ -152,6 +202,8 @@ export function SignalsTable({ data, highlightedIds }: SignalsTableProps) {
             const isHighlighted = highlightedIds?.has(signal.id);
             const dotColor = getMacdVDotColor(signal.triggerValue, signal.signalDelta);
             const bgClass = isHighlighted ? getMacdVBgClass(signal.triggerValue, signal.signalDelta) : '';
+            const exchange = signal.exchangeId ? EXCHANGE_MAP[signal.exchangeId] : null;
+            const triggerFormatted = formatTriggerLabel(signal.triggerLabel);
             return (
               <TableRow
                 key={signal.id}
@@ -166,6 +218,20 @@ export function SignalsTable({ data, highlightedIds }: SignalsTableProps) {
                       />
                     )}
                     {new Date(signal.triggeredAt).toLocaleString()}
+                  </span>
+                </TableCell>
+                <TableCell>
+                  <span className="flex items-center gap-1.5">
+                    {exchange?.icon ? (
+                      <exchange.icon size={18} variant="branded" />
+                    ) : exchange ? (
+                      <span className="flex h-[18px] w-[18px] items-center justify-center rounded-full bg-gray-200 text-[10px] font-bold text-gray-600 dark:bg-gray-700 dark:text-gray-300">
+                        {exchange.name.charAt(0)}
+                      </span>
+                    ) : null}
+                    <span className="text-sm text-gray-600 dark:text-gray-400">
+                      {exchange?.name ?? '-'}
+                    </span>
                   </span>
                 </TableCell>
                 <TableCell className="font-medium">
@@ -186,6 +252,15 @@ export function SignalsTable({ data, highlightedIds }: SignalsTableProps) {
                     {label}
                   </span>
                 </TableCell>
+                <TableCell>
+                  {triggerFormatted ? (
+                    <span className={`text-xs font-medium ${triggerFormatted.colorClass}`}>
+                      {triggerFormatted.text}
+                    </span>
+                  ) : (
+                    <span className="text-gray-400">-</span>
+                  )}
+                </TableCell>
                 <TableCell>{signal.timeframe ?? '-'}</TableCell>
                 <TableCell className="font-mono">
                   ${signal.price.toLocaleString(undefined, { maximumFractionDigits: 2 })}
@@ -202,4 +277,5 @@ export function SignalsTable({ data, highlightedIds }: SignalsTableProps) {
   );
 }
 
+export { EXCHANGE_MAP };
 export type { Signal };

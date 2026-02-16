@@ -502,6 +502,7 @@ export class AlertEvaluationService {
         triggeredAt: now.toISOString(),
         sourceExchangeId: this.exchangeId,
         sourceExchangeName: this.exchangeName,
+        triggerLabel: `level_${level}`,
       };
       broadcastAlert(alertPayload);
 
@@ -613,6 +614,7 @@ export class AlertEvaluationService {
         triggeredAt: now.toISOString(),
         sourceExchangeId: this.exchangeId,
         sourceExchangeName: this.exchangeName,
+        triggerLabel: `reversal_${zone}`,
       };
       broadcastAlert(alertPayload);
 

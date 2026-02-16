@@ -17,6 +17,9 @@ interface AlertWebSocketMessage {
      */
     signalDelta: number | null;
     triggeredAt: string;
+    sourceExchangeId?: number;
+    sourceExchangeName?: string;
+    triggerLabel?: string;
   };
 }
 
@@ -80,6 +83,9 @@ export function useAlertWebSocket(): UseAlertWebSocketReturn {
               triggerValue: message.data.triggerValue,
               signalDelta: message.data.signalDelta,
               triggeredAt: message.data.triggeredAt,
+              exchangeId: message.data.sourceExchangeId ?? null,
+              exchangeName: message.data.sourceExchangeName ?? null,
+              triggerLabel: message.data.triggerLabel ?? null,
             };
             setLastAlert(signal);
             console.log('[AlertWS] Alert received:', signal.symbol, signal.alertType);
