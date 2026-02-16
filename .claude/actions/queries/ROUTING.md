@@ -11,6 +11,12 @@ Natural language questions mapped to action scripts. When the user asks a questi
 | Show me Coinbase alerts from today | `NODE_ENV=development npx tsx .claude/actions/queries/alerts.ts --exchange 1 --since today` |
 | Alerts from the last 2 hours | `NODE_ENV=development npx tsx .claude/actions/queries/alerts.ts --since 2h` |
 | Binance alerts today | `NODE_ENV=development npx tsx .claude/actions/queries/alerts.ts --exchange 2 --since today` |
+| How many alerts for Binance? / Count Binance alerts | `NODE_ENV=development npx tsx .claude/actions/queries/alerts.ts --exchange 2 --summary` |
+| How many alerts total? / Alert count / Alert summary | `NODE_ENV=development npx tsx .claude/actions/queries/alerts.ts --summary` |
+| Alert breakdown by symbol | `NODE_ENV=development npx tsx .claude/actions/queries/alerts.ts --summary` |
+| How many BTC alerts? | `NODE_ENV=development npx tsx .claude/actions/queries/alerts.ts --symbol BTC-USD --summary` |
+| How many alerts today? | `NODE_ENV=development npx tsx .claude/actions/queries/alerts.ts --since today --summary` |
+| How many Coinbase alerts? | `NODE_ENV=development npx tsx .claude/actions/queries/alerts.ts --exchange 1 --summary` |
 | Is Binance running? / Is Binance up? | `NODE_ENV=development npx tsx .claude/actions/queries/instance-status.ts --name binance` |
 | Is Coinbase running? | `NODE_ENV=development npx tsx .claude/actions/queries/instance-status.ts --name coinbase` |
 | What's running? / Instance status / What exchanges are up? | `NODE_ENV=development npx tsx .claude/actions/queries/instance-status.ts` |
