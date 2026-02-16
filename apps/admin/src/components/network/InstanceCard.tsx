@@ -28,6 +28,7 @@ interface InstanceCardProps {
       exchangeName: string;
       hostname: string;
       ipAddress: string | null;
+      countryCode: string | null;
       adminEmail: string | null;
       adminDisplayName: string | null;
       connectionState:
@@ -171,8 +172,15 @@ export function InstanceCard({ instance }: InstanceCardProps) {
                 <Server className="h-3.5 w-3.5 text-gray-400 dark:text-gray-500" />
                 <span className="text-gray-700 truncate dark:text-gray-300">{status.hostname}</span>
               </div>
-              <div className="text-gray-500 truncate dark:text-gray-400">
-                {status.ipAddress ?? 'N/A'}
+              <div className="flex items-center gap-1.5 text-gray-500 dark:text-gray-400">
+                {status.countryCode && (
+                  <img
+                    src={`https://hatscripts.github.io/circle-flags/flags/${status.countryCode.toLowerCase()}.svg`}
+                    alt={status.countryCode.toUpperCase()}
+                    className="h-5 w-5 flex-shrink-0"
+                  />
+                )}
+                <span className="truncate">{status.ipAddress ?? 'N/A'}</span>
               </div>
 
               {/* Row 2: Admin and Symbol count */}

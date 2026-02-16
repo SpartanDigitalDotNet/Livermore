@@ -7,7 +7,7 @@ import {
 import { instanceStatusKey } from '@livermore/cache';
 import type { RedisClient } from '@livermore/cache';
 import { createLogger } from '@livermore/utils';
-import { detectPublicIp } from '../utils/detect-public-ip';
+import { detectPublicIp, detectCountry } from '../utils/detect-public-ip';
 
 const logger = createLogger({ name: 'instance-registry', service: 'network' });
 
@@ -52,6 +52,7 @@ export class InstanceRegistryService {
       exchangeName: this.exchangeName,
       hostname: this.host,
       ipAddress: null,
+      countryCode: null,
       adminEmail: null,
       adminDisplayName: null,
       connectionState: 'idle',
@@ -82,6 +83,7 @@ export class InstanceRegistryService {
       exchangeName: this.exchangeName,
       hostname: this.host,
       ipAddress: null,
+      countryCode: null,
       adminEmail: null,
       adminDisplayName: null,
       connectionState: 'idle',
@@ -116,11 +118,13 @@ export class InstanceRegistryService {
         // Ignore errors on cleanup of legacy key
       });
 
-      // Detect public IP asynchronously
+      // Detect public IP and country asynchronously
       detectPublicIp().then((ip) => {
         if (ip) {
-          this.updateStatus({ ipAddress: ip }).catch(() => {
-            // Non-critical: IP update failure is not fatal
+          detectCountry(ip).then((countryCode) => {
+            this.updateStatus({ ipAddress: ip, countryCode: countryCode ?? null }).catch(() => {
+              // Non-critical: IP/country update failure is not fatal
+            });
           });
         }
       });

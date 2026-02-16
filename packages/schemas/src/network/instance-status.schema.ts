@@ -67,6 +67,7 @@ export const InstanceStatusSchema = z.object({
   exchangeName: z.string(),
   hostname: z.string(),
   ipAddress: z.string().nullable(),
+  countryCode: z.string().nullable().default(null), // ISO 3166-1 alpha-2 (e.g. "US", "GB")
   adminEmail: z.string().nullable(),
   adminDisplayName: z.string().nullable(),
 
