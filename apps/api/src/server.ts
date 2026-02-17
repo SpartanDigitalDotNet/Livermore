@@ -406,7 +406,6 @@ async function start() {
     redis,
     subscriberRedis,
     {
-      userId: DEFAULT_BOUNDARY_CONFIG.userId,
       exchangeId: activeExchangeId ?? DEFAULT_BOUNDARY_CONFIG.exchangeId,
       higherTimeframes: ['15m', '1h', '4h', '1d'],
     }

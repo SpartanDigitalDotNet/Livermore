@@ -117,6 +117,17 @@ export class CandleCacheStrategy {
    * @param tier - 1 for shared exchange data (default), 2 for user overflow
    * @returns true if written, false if skipped (older or same sequence number)
    */
+  /**
+   * Add an exchange-scoped candle (tier 1) if it's newer than what's cached.
+   * No userId required — exchange-scoped keys only.
+   */
+  async addExchangeCandle(
+    exchangeId: number,
+    candle: UnifiedCandle
+  ): Promise<boolean> {
+    return this.addCandleIfNewer(0, exchangeId, candle, 1);
+  }
+
   async addCandleIfNewer(
     userId: number,
     exchangeId: number,
