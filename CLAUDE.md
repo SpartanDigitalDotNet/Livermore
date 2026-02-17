@@ -2,6 +2,15 @@
 
 Notes for Claude to avoid repeating mistakes.
 
+## MANDATORY: User Approval Required
+
+**NEVER make code changes, run scripts against the database, or modify production data without explicit user approval.** This includes:
+- Changing scoring formulas, thresholds, or business logic
+- Running refresh jobs or migration scripts
+- Any action that writes to the database or modifies live state
+
+When the user is testing or observing behavior, DO NOT assume they want a fix. Ask first. Wait for approval. No exceptions.
+
 ## Redis Connection
 
 **Production: Azure Managed Redis**

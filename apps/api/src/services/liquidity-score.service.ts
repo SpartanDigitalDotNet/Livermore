@@ -34,6 +34,21 @@ const WEIGHTS = {
 };
 
 /**
+ * Minimum 24h trade count for reliable indicator math.
+ * Below this, spread/depth signals can inflate the composite score
+ * but ATR→0 makes MACD-V diverge to infinity.
+ * 100 trades = ~4/hour — the absolute minimum for meaningful candles.
+ */
+const MIN_TRADE_COUNT = 100;
+
+/**
+ * Score cap when trade count is below MIN_TRADE_COUNT.
+ * Ensures low-trade symbols fall below the 0.4 monitoring threshold
+ * regardless of how tight their spread or deep their book.
+ */
+const LOW_TRADE_SCORE_CAP = 0.35;
+
+/**
  * Compute composite liquidity scores for a set of exchange products.
  * Scores are relative within the set (max trade count / max volume used for normalization).
  */
@@ -91,8 +106,15 @@ export function computeLiquidityScores(products: LiquidityInput[]): number[] {
     const totalWeight = signals.reduce((sum, s) => sum + s.weight, 0);
     const score = signals.reduce((sum, s) => sum + (s.weight / totalWeight) * s.value, 0);
 
-    // Clamp to [0, 1] and round to 3 decimal places
-    return Math.round(Math.min(1, Math.max(0, score)) * 1000) / 1000;
+    let finalScore = Math.min(1, Math.max(0, score));
+
+    // Hard floor: if trade count is known and below minimum,
+    // cap the score so spread/depth can't inflate past the monitoring threshold
+    if (p.tradeCount24h != null && p.tradeCount24h < MIN_TRADE_COUNT) {
+      finalScore = Math.min(finalScore, LOW_TRADE_SCORE_CAP);
+    }
+
+    return Math.round(finalScore * 1000) / 1000;
   });
 }
 
