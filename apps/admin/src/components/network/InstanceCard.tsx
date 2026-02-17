@@ -142,6 +142,11 @@ export function InstanceCard({ instance }: InstanceCardProps) {
     ...trpc.network.getCandleTimestamps.queryOptions({ exchangeId }),
     enabled: isActive,
     staleTime: Infinity, // Only fetch once — WebSocket keeps it fresh
+    // Retry if symbol registry wasn't populated yet (empty response during startup race)
+    refetchInterval: (query) => {
+      const symbols = query.state.data?.symbols;
+      return (!symbols || symbols.length === 0) ? 5000 : false;
+    },
   });
 
   // Seed context when data arrives

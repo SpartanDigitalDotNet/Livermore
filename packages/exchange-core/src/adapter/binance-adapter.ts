@@ -222,9 +222,16 @@ export class BinanceAdapter extends BaseExchangeAdapter {
    */
   private buildStreamUrl(): string {
     if (this.subscribedSymbols.length > 0) {
-      const klineStreams = this.subscribedSymbols.map(
-        (s) => `${s.toLowerCase()}@kline_${this.subscribedTimeframe}`
-      );
+      // Subscribe to both 1m and primary timeframe kline streams
+      // Binance natively supports 1m klines (unlike Coinbase which needs trade aggregation)
+      const klineStreams = this.subscribedSymbols.flatMap((s) => {
+        const lower = s.toLowerCase();
+        const streams = [`${lower}@kline_${this.subscribedTimeframe}`];
+        if (this.subscribedTimeframe !== '1m') {
+          streams.push(`${lower}@kline_1m`);
+        }
+        return streams;
+      });
       const tickerStreams = this.subscribedSymbols.map(
         (s) => `${s.toLowerCase()}@miniTicker`
       );
@@ -368,10 +375,15 @@ export class BinanceAdapter extends BaseExchangeAdapter {
   unsubscribe(symbols: string[], timeframe: Timeframe): void {
     if (!this.isConnected()) return;
 
-    // Build stream names to unsubscribe
-    const klineStreams = symbols.map(
-      (s) => `${s.toLowerCase()}@kline_${timeframe}`
-    );
+    // Build stream names to unsubscribe (includes 1m if primary is not 1m)
+    const klineStreams = symbols.flatMap((s) => {
+      const lower = s.toLowerCase();
+      const streams = [`${lower}@kline_${timeframe}`];
+      if (timeframe !== '1m') {
+        streams.push(`${lower}@kline_1m`);
+      }
+      return streams;
+    });
     const tickerStreams = symbols.map(
       (s) => `${s.toLowerCase()}@miniTicker`
     );
