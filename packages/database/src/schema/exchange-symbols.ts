@@ -29,6 +29,10 @@ export const exchangeSymbols = pgTable('exchange_symbols', {
   coingeckoId: varchar('coingecko_id', { length: 100 }),
   /** Human-friendly name (e.g., "Bitcoin") */
   displayName: varchar('display_name', { length: 100 }),
+  /** 24-hour trade count from exchange ticker */
+  tradeCount24h: integer('trade_count_24h'),
+  /** Composite liquidity score 0.000-1.000 */
+  liquidityScore: numeric('liquidity_score', { precision: 5, scale: 3 }),
   /** Whether symbol is actively monitored */
   isActive: boolean('is_active').default(true).notNull(),
   /** Last time volume data was updated */

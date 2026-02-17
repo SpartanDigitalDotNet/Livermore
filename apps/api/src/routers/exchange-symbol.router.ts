@@ -49,6 +49,8 @@ export const exchangeSymbolRouter = router({
           globalRank: exchangeSymbols.globalRank,
           marketCap: exchangeSymbols.marketCap,
           displayName: exchangeSymbols.displayName,
+          tradeCount24h: exchangeSymbols.tradeCount24h,
+          liquidityScore: exchangeSymbols.liquidityScore,
           isActive: exchangeSymbols.isActive,
           updatedAt: exchangeSymbols.updatedAt,
         })

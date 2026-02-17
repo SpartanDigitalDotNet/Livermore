@@ -52,6 +52,23 @@ function formatVolume(value: string | null): string {
   return num.toFixed(0);
 }
 
+function formatTradeCount(value: number | null): string {
+  if (value == null) return '-';
+  if (value >= 1e6) return `${(value / 1e6).toFixed(1)}M`;
+  if (value >= 1e3) return `${(value / 1e3).toFixed(1)}K`;
+  return value.toLocaleString();
+}
+
+function liquidityGrade(score: string | null): { grade: string; color: string } {
+  if (!score) return { grade: '-', color: 'bg-gray-500' };
+  const n = parseFloat(score);
+  if (n >= 0.6) return { grade: 'A', color: 'bg-green-600' };
+  if (n >= 0.4) return { grade: 'B', color: 'bg-blue-600' };
+  if (n >= 0.2) return { grade: 'C', color: 'bg-yellow-600' };
+  if (n >= 0.05) return { grade: 'D', color: 'bg-orange-600' };
+  return { grade: 'F', color: 'bg-red-600' };
+}
+
 function formatFee(value: number): string {
   return `${(value * 100).toFixed(2)}%`;
 }
@@ -245,6 +262,8 @@ export function ExchangeSymbols() {
                   <TableHead>Name</TableHead>
                   <TableHead>Pair</TableHead>
                   <TableHead className="text-right">Volume 24h</TableHead>
+                  <TableHead className="text-right">Trades 24h</TableHead>
+                  <TableHead className="text-center">Liquidity</TableHead>
                   <TableHead className="text-right">Market Cap</TableHead>
                   <TableHead className="text-center">Status</TableHead>
                 </TableRow>
@@ -274,6 +293,20 @@ export function ExchangeSymbols() {
                     </TableCell>
                     <TableCell className="text-right text-sm">
                       {formatVolume(s.volume24h)}
+                    </TableCell>
+                    <TableCell className="text-right text-sm font-mono">
+                      {formatTradeCount(s.tradeCount24h)}
+                    </TableCell>
+                    <TableCell className="text-center">
+                      {(() => {
+                        const { grade, color } = liquidityGrade(s.liquidityScore);
+                        return (
+                          <span className="inline-flex items-center gap-1">
+                            <Badge className={`${color} text-white text-xs`}>{grade}</Badge>
+                            <span className="text-xs text-gray-400">{s.liquidityScore ? parseFloat(s.liquidityScore).toFixed(3) : ''}</span>
+                          </span>
+                        );
+                      })()}
                     </TableCell>
                     <TableCell className="text-right text-sm">
                       {formatMarketCap(s.marketCap)}

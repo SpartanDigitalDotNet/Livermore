@@ -8,6 +8,11 @@ export interface ExchangeProduct {
   baseCurrency: string;  // e.g., "BTC"
   quoteCurrency: string; // e.g., "USD"
   volume24h: number;
+  tradeCount24h?: number;   // 24h trade count
+  bidPrice?: number;        // Best bid (for spread calc)
+  askPrice?: number;        // Best ask (for spread calc)
+  bidQty?: number;          // Bid depth quantity
+  askQty?: number;          // Ask depth quantity
 }
 
 /**
@@ -45,6 +50,8 @@ export class ExchangeProductService {
         trading_disabled: boolean;
         volume_24h: string;
         product_type: string;
+        price: string;
+        price_percentage_change_24h: string;
       }>;
     };
 
@@ -60,6 +67,7 @@ export class ExchangeProductService {
         baseCurrency: p.base_currency_id,
         quoteCurrency: p.quote_currency_id,
         volume24h: parseFloat(p.volume_24h) || 0,
+        // Coinbase bulk API doesn't expose trade count or book depth
       }));
 
     logger.info({ count: products.length }, 'Fetched Coinbase products');
@@ -74,12 +82,15 @@ export class ExchangeProductService {
   async getBinanceUSProducts(): Promise<ExchangeProduct[]> {
     logger.info('Fetching Binance US products (public API)');
 
-    // Fetch exchange info and 24hr tickers in parallel
-    const [infoResponse, tickerResponse] = await Promise.all([
+    // Fetch exchange info, 24hr tickers, and book tickers in parallel
+    const [infoResponse, tickerResponse, bookResponse] = await Promise.all([
       fetch('https://api.binance.us/api/v3/exchangeInfo', {
         headers: { 'Accept': 'application/json' },
       }),
       fetch('https://api.binance.us/api/v3/ticker/24hr', {
+        headers: { 'Accept': 'application/json' },
+      }),
+      fetch('https://api.binance.us/api/v3/ticker/bookTicker', {
         headers: { 'Accept': 'application/json' },
       }),
     ]);
@@ -107,12 +118,33 @@ export class ExchangeProductService {
       symbol: string;
       volume: string;
       quoteVolume: string;
+      count: number;
+      bidPrice: string;
+      askPrice: string;
     }>;
 
-    // Build volume lookup
-    const volumeMap = new Map<string, number>();
+    // Build ticker lookup (volume + trade count + bid/ask)
+    const tickerMap = new Map<string, typeof tickers[number]>();
     for (const t of tickers) {
-      volumeMap.set(t.symbol, parseFloat(t.quoteVolume) || 0);
+      tickerMap.set(t.symbol, t);
+    }
+
+    // Build book depth lookup
+    const bookMap = new Map<string, { bidQty: number; askQty: number }>();
+    if (bookResponse.ok) {
+      const books = await bookResponse.json() as Array<{
+        symbol: string;
+        bidPrice: string;
+        bidQty: string;
+        askPrice: string;
+        askQty: string;
+      }>;
+      for (const b of books) {
+        bookMap.set(b.symbol, {
+          bidQty: parseFloat(b.bidQty) || 0,
+          askQty: parseFloat(b.askQty) || 0,
+        });
+      }
     }
 
     // Filter to USD quote, TRADING status
@@ -121,12 +153,21 @@ export class ExchangeProductService {
         s.status === 'TRADING' &&
         (s.quoteAsset === 'USD' || s.quoteAsset === 'USDT')
       )
-      .map((s) => ({
-        symbol: s.symbol,  // Binance native format: "BTCUSD"
-        baseCurrency: s.baseAsset,
-        quoteCurrency: s.quoteAsset,
-        volume24h: volumeMap.get(s.symbol) || 0,
-      }));
+      .map((s) => {
+        const ticker = tickerMap.get(s.symbol);
+        const book = bookMap.get(s.symbol);
+        return {
+          symbol: s.symbol,  // Binance native format: "BTCUSD"
+          baseCurrency: s.baseAsset,
+          quoteCurrency: s.quoteAsset,
+          volume24h: ticker ? (parseFloat(ticker.quoteVolume) || 0) : 0,
+          tradeCount24h: ticker?.count,
+          bidPrice: ticker ? (parseFloat(ticker.bidPrice) || undefined) : undefined,
+          askPrice: ticker ? (parseFloat(ticker.askPrice) || undefined) : undefined,
+          bidQty: book?.bidQty,
+          askQty: book?.askQty,
+        };
+      });
 
     logger.info({ count: products.length }, 'Fetched Binance US products');
     return products;
@@ -140,11 +181,14 @@ export class ExchangeProductService {
   async getBinanceProducts(): Promise<ExchangeProduct[]> {
     logger.info('Fetching Binance products (public API)');
 
-    const [infoResponse, tickerResponse] = await Promise.all([
+    const [infoResponse, tickerResponse, bookResponse] = await Promise.all([
       fetch('https://api.binance.com/api/v3/exchangeInfo', {
         headers: { 'Accept': 'application/json' },
       }),
       fetch('https://api.binance.com/api/v3/ticker/24hr', {
+        headers: { 'Accept': 'application/json' },
+      }),
+      fetch('https://api.binance.com/api/v3/ticker/bookTicker', {
         headers: { 'Accept': 'application/json' },
       }),
     ]);
@@ -172,11 +216,31 @@ export class ExchangeProductService {
       symbol: string;
       volume: string;
       quoteVolume: string;
+      count: number;
+      bidPrice: string;
+      askPrice: string;
     }>;
 
-    const volumeMap = new Map<string, number>();
+    const tickerMap = new Map<string, typeof tickers[number]>();
     for (const t of tickers) {
-      volumeMap.set(t.symbol, parseFloat(t.quoteVolume) || 0);
+      tickerMap.set(t.symbol, t);
+    }
+
+    const bookMap = new Map<string, { bidQty: number; askQty: number }>();
+    if (bookResponse.ok) {
+      const books = await bookResponse.json() as Array<{
+        symbol: string;
+        bidPrice: string;
+        bidQty: string;
+        askPrice: string;
+        askQty: string;
+      }>;
+      for (const b of books) {
+        bookMap.set(b.symbol, {
+          bidQty: parseFloat(b.bidQty) || 0,
+          askQty: parseFloat(b.askQty) || 0,
+        });
+      }
     }
 
     const products = exchangeInfo.symbols
@@ -184,12 +248,21 @@ export class ExchangeProductService {
         s.status === 'TRADING' &&
         (s.quoteAsset === 'USDT' || s.quoteAsset === 'USD')
       )
-      .map((s) => ({
-        symbol: s.symbol,
-        baseCurrency: s.baseAsset,
-        quoteCurrency: s.quoteAsset,
-        volume24h: volumeMap.get(s.symbol) || 0,
-      }));
+      .map((s) => {
+        const ticker = tickerMap.get(s.symbol);
+        const book = bookMap.get(s.symbol);
+        return {
+          symbol: s.symbol,
+          baseCurrency: s.baseAsset,
+          quoteCurrency: s.quoteAsset,
+          volume24h: ticker ? (parseFloat(ticker.quoteVolume) || 0) : 0,
+          tradeCount24h: ticker?.count,
+          bidPrice: ticker ? (parseFloat(ticker.bidPrice) || undefined) : undefined,
+          askPrice: ticker ? (parseFloat(ticker.askPrice) || undefined) : undefined,
+          bidQty: book?.bidQty,
+          askQty: book?.askQty,
+        };
+      });
 
     logger.info({ count: products.length }, 'Fetched Binance products');
     return products;
@@ -244,14 +317,17 @@ export class ExchangeProductService {
     const tickerData = await tickerResponse.json() as {
       error: string[];
       result: Record<string, {
+        a: [string, string, string]; // ask [price, wholeLotVolume, lotVolume]
+        b: [string, string, string]; // bid [price, wholeLotVolume, lotVolume]
         v: [string, string]; // [today, last24h] volume
+        t: [number, number]; // [today, last24h] trade count
       }>;
     };
 
-    const volumeMap = new Map<string, number>();
+    const tickerLookup = new Map<string, typeof tickerData.result[string]>();
     if (tickerData.result) {
       for (const [key, ticker] of Object.entries(tickerData.result)) {
-        volumeMap.set(key, parseFloat(ticker.v[1]) || 0);
+        tickerLookup.set(key, ticker);
       }
     }
 
@@ -266,11 +342,17 @@ export class ExchangeProductService {
       else if (base === 'XXDG') base = 'DOGE';
       else if (base.startsWith('X') && base.length === 4) base = base.slice(1);
 
+      const ticker = tickerLookup.get(key);
       return {
         symbol: pair.wsname || pair.altname, // Kraken native: "XBT/USD"
         baseCurrency: base,
         quoteCurrency: 'USD',
-        volume24h: volumeMap.get(key) || 0,
+        volume24h: ticker ? (parseFloat(ticker.v[1]) || 0) : 0,
+        tradeCount24h: ticker?.t[1],
+        bidPrice: ticker ? (parseFloat(ticker.b[0]) || undefined) : undefined,
+        askPrice: ticker ? (parseFloat(ticker.a[0]) || undefined) : undefined,
+        bidQty: ticker ? (parseFloat(ticker.b[2]) || undefined) : undefined,
+        askQty: ticker ? (parseFloat(ticker.a[2]) || undefined) : undefined,
       };
     });
 
@@ -387,11 +469,14 @@ export class ExchangeProductService {
       symbol: string;
       volume: string;
       quoteVolume: string;
+      count: number;
+      bidPrice: string;
+      askPrice: string;
     }>;
 
-    const volumeMap = new Map<string, number>();
+    const tickerMap = new Map<string, typeof tickers[number]>();
     for (const t of tickers) {
-      volumeMap.set(t.symbol, parseFloat(t.quoteVolume) || 0);
+      tickerMap.set(t.symbol, t);
     }
 
     const products = exchangeInfo.symbols
@@ -400,12 +485,18 @@ export class ExchangeProductService {
         s.isSpotTradingAllowed &&
         s.quoteAsset === 'USDT'
       )
-      .map((s) => ({
-        symbol: s.symbol,       // MEXC native: "BTCUSDT"
-        baseCurrency: s.baseAsset,
-        quoteCurrency: s.quoteAsset,
-        volume24h: volumeMap.get(s.symbol) || 0,
-      }));
+      .map((s) => {
+        const ticker = tickerMap.get(s.symbol);
+        return {
+          symbol: s.symbol,       // MEXC native: "BTCUSDT"
+          baseCurrency: s.baseAsset,
+          quoteCurrency: s.quoteAsset,
+          volume24h: ticker ? (parseFloat(ticker.quoteVolume) || 0) : 0,
+          tradeCount24h: ticker?.count,
+          bidPrice: ticker ? (parseFloat(ticker.bidPrice) || undefined) : undefined,
+          askPrice: ticker ? (parseFloat(ticker.askPrice) || undefined) : undefined,
+        };
+      });
 
     logger.info({ count: products.length }, 'Fetched MEXC products');
     return products;
