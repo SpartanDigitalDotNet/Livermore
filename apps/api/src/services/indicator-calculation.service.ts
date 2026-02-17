@@ -197,6 +197,14 @@ export class IndicatorCalculationService {
           newBoundary: new Date(currentBoundary).toISOString(),
         }, `Boundary crossed: ${symbol} ${timeframe}`);
 
+        // Broadcast pulse for Candle Meter so higher TFs show fresh
+        broadcastCandlePulse({
+          exchangeId: this.exchangeId,
+          symbol,
+          timeframe,
+          timestamp: currentBoundary,
+        });
+
         // Recalculate from cache (cache populated by Phase 07 backfill)
         await this.recalculateFromCache(symbol, timeframe);
       }

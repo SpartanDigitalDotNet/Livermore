@@ -1,5 +1,6 @@
-import { useMemo, useState, useCallback } from 'react';
+import { useMemo, useState, useEffect, useCallback, useRef } from 'react';
 import { useCandlePulse } from '@/contexts/CandlePulseContext';
+import { useAlertContext } from '@/contexts/AlertContext';
 
 const TIMEFRAMES = ['1m', '5m', '15m', '1h', '4h', '1d'] as const;
 
@@ -12,6 +13,8 @@ const INTERVAL_MS: Record<string, number> = {
   '4h': 14_400_000,
   '1d': 86_400_000,
 };
+
+const FLASH_DURATION_MS = 4000;
 
 function getColor(timestamp: number | null, nowMs: number, timeframe: string): string {
   if (timestamp === null) return 'bg-gray-700';
@@ -43,10 +46,47 @@ interface CandleMeterProps {
 
 export function CandleMeter({ exchangeId, symbols }: CandleMeterProps) {
   const { getTimestamp, displayTick } = useCandlePulse();
+  const { lastAlert } = useAlertContext();
   const [hoveredSymbol, setHoveredSymbol] = useState<string | null>(null);
   const [tooltipPos, setTooltipPos] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const [flashingSymbols, setFlashingSymbols] = useState<Set<string>>(new Set());
+  const timersRef = useRef<Map<string, number>>(new Map());
 
   const nowMs = useMemo(() => Date.now(), [displayTick]);
+
+  // Flash a symbol column when an alert fires for it
+  useEffect(() => {
+    if (!lastAlert) return;
+    const symbol = lastAlert.symbol;
+    if (!symbols.includes(symbol)) return;
+
+    // Add to flashing set
+    setFlashingSymbols((prev) => new Set(prev).add(symbol));
+
+    // Clear any existing timer for this symbol
+    const existing = timersRef.current.get(symbol);
+    if (existing) clearTimeout(existing);
+
+    // Auto-remove after duration
+    const timer = window.setTimeout(() => {
+      setFlashingSymbols((prev) => {
+        const next = new Set(prev);
+        next.delete(symbol);
+        return next;
+      });
+      timersRef.current.delete(symbol);
+    }, FLASH_DURATION_MS);
+
+    timersRef.current.set(symbol, timer);
+  }, [lastAlert, symbols]);
+
+  // Cleanup timers on unmount
+  useEffect(() => {
+    const timers = timersRef.current;
+    return () => {
+      for (const t of timers.values()) clearTimeout(t);
+    };
+  }, []);
 
   const handleMouseEnter = useCallback((symbol: string, e: React.MouseEvent) => {
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
@@ -62,29 +102,44 @@ export function CandleMeter({ exchangeId, symbols }: CandleMeterProps) {
 
   return (
     <div>
+      <style>{`
+        @keyframes candleMeterFlash {
+          0% { box-shadow: 0 0 8px 4px rgba(250, 204, 21, 1); }
+          15% { box-shadow: 0 0 4px 2px rgba(250, 204, 21, 0.5); }
+          30% { box-shadow: 0 0 8px 4px rgba(250, 204, 21, 1); }
+          45% { box-shadow: 0 0 4px 2px rgba(250, 204, 21, 0.5); }
+          60% { box-shadow: 0 0 8px 4px rgba(250, 204, 21, 1); }
+          75% { box-shadow: 0 0 4px 2px rgba(250, 204, 21, 0.5); }
+          100% { box-shadow: 0 0 0 0 rgba(250, 204, 21, 0); }
+        }
+      `}</style>
       <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1.5">
         Candle Freshness
       </p>
       <div className="flex flex-wrap gap-x-px gap-y-1.5">
-        {symbols.map((symbol) => (
-          <div
-            key={symbol}
-            className="flex flex-col gap-px cursor-default"
-            onMouseEnter={(e) => handleMouseEnter(symbol, e)}
-            onMouseLeave={handleMouseLeave}
-          >
-            {TIMEFRAMES.map((tf) => {
-              const ts = getTimestamp(exchangeId, symbol, tf);
-              const color = getColor(ts, nowMs, tf);
-              return (
-                <div
-                  key={tf}
-                  className={`w-2 h-[3px] rounded-[0.5px] ${color}`}
-                />
-              );
-            })}
-          </div>
-        ))}
+        {symbols.map((symbol) => {
+          const isFlashing = flashingSymbols.has(symbol);
+          return (
+            <div
+              key={symbol}
+              className="flex flex-col gap-px cursor-default rounded-sm"
+              style={isFlashing ? { animation: `candleMeterFlash ${FLASH_DURATION_MS}ms ease-out` } : undefined}
+              onMouseEnter={(e) => handleMouseEnter(symbol, e)}
+              onMouseLeave={handleMouseLeave}
+            >
+              {TIMEFRAMES.map((tf) => {
+                const ts = getTimestamp(exchangeId, symbol, tf);
+                const color = getColor(ts, nowMs, tf);
+                return (
+                  <div
+                    key={tf}
+                    className={`w-2 h-[3px] rounded-[0.5px] ${color}`}
+                  />
+                );
+              })}
+            </div>
+          );
+        })}
       </div>
 
       {/* Custom tooltip — renders instantly, follows hovered symbol */}
