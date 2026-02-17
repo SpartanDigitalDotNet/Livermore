@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { trpc } from '@/lib/trpc';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { InstanceCard, ActivityFeed } from '@/components/network';
+import { CandlePulseProvider } from '@/contexts/CandlePulseContext';
 
 /**
  * Network Page
@@ -68,31 +69,33 @@ export function Network() {
   }
 
   return (
-    <div className="space-y-6">
-      {/* Summary header */}
-      <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-          Perseus Network
-        </h2>
-        <span className="text-sm text-gray-500 dark:text-gray-400">
-          {instanceData?.instances.filter((i) => i.online).length ?? 0} of{' '}
-          {instanceData?.instances.length ?? 0} online
-        </span>
-      </div>
+    <CandlePulseProvider>
+      <div className="space-y-6">
+        {/* Summary header */}
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+            Perseus Network
+          </h2>
+          <span className="text-sm text-gray-500 dark:text-gray-400">
+            {instanceData?.instances.filter((i) => i.online).length ?? 0} of{' '}
+            {instanceData?.instances.length ?? 0} online
+          </span>
+        </div>
 
-      {/* Instance Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {instanceData?.instances.map((inst) => (
-          <InstanceCard key={inst.exchangeId} instance={inst} />
-        ))}
-      </div>
+        {/* Instance Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {instanceData?.instances.map((inst) => (
+            <InstanceCard key={inst.exchangeId} instance={inst} />
+          ))}
+        </div>
 
-      {/* Activity Feed */}
-      <ActivityFeed
-        entries={activityData?.entries ?? []}
-        exchanges={instanceData?.instances.map((i) => i.exchangeName) ?? []}
-        isLoading={activityLoading}
-      />
-    </div>
+        {/* Activity Feed */}
+        <ActivityFeed
+          entries={activityData?.entries ?? []}
+          exchanges={instanceData?.instances.map((i) => i.exchangeName) ?? []}
+          isLoading={activityLoading}
+        />
+      </div>
+    </CandlePulseProvider>
   );
 }

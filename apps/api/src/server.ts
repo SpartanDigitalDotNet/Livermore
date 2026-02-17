@@ -24,7 +24,7 @@ import { IndicatorCalculationService } from './services/indicator-calculation.se
 import { AlertEvaluationService } from './services/alert-evaluation.service';
 import { getDiscordService } from './services/discord-notification.service';
 import { ControlChannelService } from './services/control-channel.service';
-import { initRuntimeState, getRuntimeState } from './services/runtime-state';
+import { initRuntimeState, getRuntimeState, setMonitoredSymbols } from './services/runtime-state';
 import { appRouter } from './routers';
 import { clerkWebhookHandler } from './routes/webhooks/clerk';
 import type { Timeframe } from '@livermore/schemas';
@@ -47,6 +47,27 @@ function createContext(opts: Parameters<typeof baseCreateContext>[0]) {
 
 // WebSocket clients for alert broadcasts
 const alertClients = new Set<WebSocket>();
+
+// WebSocket clients for candle pulse broadcasts (Candle Meter)
+const candlePulseClients = new Set<WebSocket>();
+
+/**
+ * Broadcast a candle pulse to all connected Candle Meter WebSocket clients.
+ * Called by IndicatorCalculationService on every candle:close event.
+ */
+export function broadcastCandlePulse(pulse: {
+  exchangeId: number;
+  symbol: string;
+  timeframe: string;
+  timestamp: number;
+}): void {
+  const message = JSON.stringify({ type: 'candle_pulse', data: pulse });
+  for (const client of candlePulseClients) {
+    if (client.readyState === 1) { // WebSocket.OPEN
+      client.send(message);
+    }
+  }
+}
 
 /**
  * Broadcast an alert to all connected WebSocket clients
@@ -334,6 +355,9 @@ async function start() {
     });
     await backfillService.backfill(monitoredSymbols, backfillTimeframes);
     logger.info('Cache backfill complete');
+
+    // Register monitored symbols for Candle Meter snapshot endpoint
+    setMonitoredSymbols(activeExchangeId!, monitoredSymbols);
   } else {
     // Idle mode: no exchange calls. Symbols loaded when user sends "start" command.
     logger.info('Idle mode - deferring symbol loading until "start" command');
@@ -385,6 +409,22 @@ async function start() {
     socket.on('error', (error) => {
       logger.error({ error }, 'Alert WebSocket error');
       alertClients.delete(socket);
+    });
+  });
+
+  // WebSocket route for candle pulse notifications (Candle Meter)
+  fastify.get('/ws/candle-pulse', { websocket: true }, (socket) => {
+    candlePulseClients.add(socket);
+    logger.info({ clientCount: candlePulseClients.size }, 'Candle pulse WebSocket client connected');
+
+    socket.on('close', () => {
+      candlePulseClients.delete(socket);
+      logger.info({ clientCount: candlePulseClients.size }, 'Candle pulse WebSocket client disconnected');
+    });
+
+    socket.on('error', (error) => {
+      logger.error({ error }, 'Candle pulse WebSocket error');
+      candlePulseClients.delete(socket);
     });
   });
 

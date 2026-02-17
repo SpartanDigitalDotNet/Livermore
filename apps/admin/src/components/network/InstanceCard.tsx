@@ -3,8 +3,13 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Server, Clock, User, Hash, Wifi, WifiOff } from 'lucide-react';
 import { ExchangeBinance, ExchangeCoinbase, ExchangeKraken, ExchangeKucoin } from '@web3icons/react';
+import { useEffect } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { trpc } from '@/lib/trpc';
+import { useCandlePulse } from '@/contexts/CandlePulseContext';
 import { ConnectButton } from './ConnectButton';
 import { WarmupProgressPanel } from './WarmupProgressPanel';
+import { CandleMeter } from './CandleMeter';
 
 /** Map exchange names to static web3icon components (null = letter fallback) */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -128,6 +133,25 @@ function formatUptime(connectedAt: string | null): string {
 export function InstanceCard({ instance }: InstanceCardProps) {
   const { online, displayName, status, exchangeId, exchangeName } = instance;
   const badge = getStateBadge(online, status?.connectionState);
+  const { seedTimestamps, getSymbols } = useCandlePulse();
+
+  const isActive = status?.connectionState === 'active';
+
+  // Fetch initial candle timestamps when instance becomes active
+  const { data: candleData } = useQuery({
+    ...trpc.network.getCandleTimestamps.queryOptions({ exchangeId }),
+    enabled: isActive,
+    staleTime: Infinity, // Only fetch once — WebSocket keeps it fresh
+  });
+
+  // Seed context when data arrives
+  useEffect(() => {
+    if (candleData?.timestamps) {
+      seedTimestamps(exchangeId, candleData.timestamps);
+    }
+  }, [candleData, exchangeId, seedTimestamps]);
+
+  const meterSymbols = isActive ? (candleData?.symbols ?? getSymbols(exchangeId)) : [];
 
   // Determine if exchange is connectable
   // Show button when: offline, OR (online AND (idle OR stopped))
@@ -214,6 +238,13 @@ export function InstanceCard({ instance }: InstanceCardProps) {
                 </span>
               </div>
             </div>
+
+            {/* Candle Freshness Meter (active only) */}
+            {isActive && meterSymbols.length > 0 && (
+              <div className="mt-3 pt-3 border-t">
+                <CandleMeter exchangeId={exchangeId} symbols={meterSymbols} />
+              </div>
+            )}
 
             {/* Warmup Progress Panel (starting/warming/active — persists after completion for report link) */}
             {(status.connectionState === 'starting' || status.connectionState === 'warming' || status.connectionState === 'active') && (

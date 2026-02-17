@@ -15,6 +15,7 @@ import {
   MACD_V_DEFAULTS,
   type OHLCWithSynthetic,
 } from '@livermore/indicators';
+import { broadcastCandlePulse } from '../server';
 
 /**
  * Configuration for a symbol/timeframe pair to calculate indicators for
@@ -127,6 +128,14 @@ export class IndicatorCalculationService {
 
     const candle = JSON.parse(message) as UnifiedCandle;
     logger.debug({ symbol, timeframe, timestamp: candle.timestamp }, 'Processing candle:close event');
+
+    // Broadcast pulse for Candle Meter (before recalculation so UI updates immediately)
+    broadcastCandlePulse({
+      exchangeId: this.exchangeId,
+      symbol,
+      timeframe,
+      timestamp: candle.timestamp,
+    });
 
     // Recalculate indicator for this timeframe (cache-only)
     await this.recalculateFromCache(symbol, timeframe);

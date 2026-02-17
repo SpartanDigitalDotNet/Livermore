@@ -18,7 +18,7 @@ import { detectPublicIp } from '../utils/detect-public-ip';
 import { eq, and, sql } from 'drizzle-orm';
 import { users, userExchanges } from '@livermore/database';
 import type { ServiceRegistry } from './types/service-registry';
-import { updateRuntimeState, type StartupProgress } from './runtime-state';
+import { updateRuntimeState, setMonitoredSymbols, clearMonitoredSymbols, type StartupProgress } from './runtime-state';
 
 const logger = createLogger({ name: 'control-channel', service: 'control' });
 
@@ -509,6 +509,9 @@ export class ControlChannelService {
           timeframes.map((timeframe) => ({ symbol, timeframe }))
         );
 
+        // Register symbols for Candle Meter snapshot endpoint
+        setMonitoredSymbols(userExchange.exchangeId, this.services.monitoredSymbols);
+
         logger.info(
           { total: this.services.monitoredSymbols.length, exchangeId: userExchange.exchangeId, symbols: this.services.monitoredSymbols },
           'Loaded Tier 1 symbols from user exchange'
@@ -712,6 +715,11 @@ export class ControlChannelService {
 
     this.isIdle = true;
     this.isPaused = false;
+
+    // Clear symbol registry for Candle Meter
+    if (this.services.exchangeId) {
+      clearMonitoredSymbols(this.services.exchangeId);
+    }
 
     logger.info('Exchange connection stopped, entered idle mode');
 
@@ -1025,6 +1033,9 @@ export class ControlChannelService {
 
     // 4. Update in-memory list
     this.services.monitoredSymbols.push(normalizedSymbol);
+    if (this.services.exchangeId) {
+      setMonitoredSymbols(this.services.exchangeId, this.services.monitoredSymbols);
+    }
 
     // 5. If not paused, start monitoring the new symbol
     if (!this.isPaused) {
@@ -1135,6 +1146,9 @@ export class ControlChannelService {
     if (idx > -1) {
       this.services.monitoredSymbols.splice(idx, 1);
     }
+    if (this.services.exchangeId) {
+      setMonitoredSymbols(this.services.exchangeId, this.services.monitoredSymbols);
+    }
 
     // 5. Clean up Redis cache for removed symbol
     await this.cleanupSymbolCache(normalizedSymbol);
@@ -1235,6 +1249,9 @@ export class ControlChannelService {
 
     // 3. Update in-memory list
     this.services.monitoredSymbols.push(...toAdd);
+    if (this.services.exchangeId) {
+      setMonitoredSymbols(this.services.exchangeId, this.services.monitoredSymbols);
+    }
 
     // 4. If not paused, initialize monitoring for new symbols
     const addedResults: Array<{ symbol: string; backfilled: boolean }> = [];

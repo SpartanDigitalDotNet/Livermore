@@ -87,3 +87,22 @@ export function initRuntimeState(initial: Partial<RuntimeState>): void {
     ...initial,
   });
 }
+
+// ============================================
+// SYMBOL REGISTRY: Per-exchange monitored symbols
+// Used by getCandleTimestamps to know which symbols to query
+// ============================================
+
+const symbolRegistry = new Map<number, string[]>();
+
+export function setMonitoredSymbols(exchangeId: number, symbols: string[]): void {
+  symbolRegistry.set(exchangeId, [...symbols]);
+}
+
+export function getMonitoredSymbols(exchangeId: number): string[] {
+  return symbolRegistry.get(exchangeId) ?? [];
+}
+
+export function clearMonitoredSymbols(exchangeId: number): void {
+  symbolRegistry.delete(exchangeId);
+}
