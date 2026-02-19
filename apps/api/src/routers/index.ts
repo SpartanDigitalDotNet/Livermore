@@ -9,6 +9,7 @@ import { symbolRouter } from './symbol.router';
 import { controlRouter } from './control.router';
 import { exchangeSymbolRouter } from './exchange-symbol.router';
 import { networkRouter } from './network.router';
+import { apiKeyRouter } from './api-key.router';
 
 /**
  * Main application router
@@ -26,6 +27,7 @@ export const appRouter = router({
   control: controlRouter,
   exchangeSymbol: exchangeSymbolRouter,
   network: networkRouter,
+  apiKey: apiKeyRouter,
 });
 
 export type AppRouter = typeof appRouter;
@@ -41,3 +43,4 @@ export { symbolRouter } from './symbol.router';
 export { controlRouter } from './control.router';
 export { exchangeSymbolRouter } from './exchange-symbol.router';
 export { networkRouter } from './network.router';
+export { apiKeyRouter } from './api-key.router';

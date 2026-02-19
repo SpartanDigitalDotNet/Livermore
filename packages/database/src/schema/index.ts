@@ -11,3 +11,4 @@ export * from './indicators';
 export * from './alert-history';
 export * from './positions';
 export * from './user-settings';
+export * from './api-keys';

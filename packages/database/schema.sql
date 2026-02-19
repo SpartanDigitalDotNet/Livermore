@@ -284,3 +284,21 @@ CREATE INDEX "alert_history_triggered_at_idx" ON "alert_history" ("triggered_at"
 
 -- Create index "alert_history_alert_type_idx" to table: "alert_history"
 CREATE INDEX "alert_history_alert_type_idx" ON "alert_history" ("alert_type");
+
+-- Create "api_keys" table (Phase 41)
+-- API keys for public REST API authentication
+CREATE TABLE "api_keys" (
+  "id" serial NOT NULL,
+  "name" character varying(100) NOT NULL,
+  "key" uuid NOT NULL DEFAULT gen_random_uuid(),
+  "is_active" boolean NOT NULL DEFAULT true,
+  "created_by" character varying(255) NOT NULL,
+  "last_used_at" timestamp NULL,
+  "created_at" timestamp NOT NULL DEFAULT now(),
+  "updated_at" timestamp NOT NULL DEFAULT now(),
+  PRIMARY KEY ("id"),
+  CONSTRAINT "api_keys_key_unique" UNIQUE ("key")
+);
+
+-- Partial index for fast active key lookups
+CREATE INDEX "api_keys_key_active_idx" ON "api_keys" ("key") WHERE is_active = true;
