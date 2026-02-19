@@ -18,6 +18,7 @@ export * from './math/calculations';
 
 // Validation utilities
 export * from './validation/env-validator';
+export { resolveMode } from '@livermore/schemas';
 
 // Candle utilities
 export * from './candle';

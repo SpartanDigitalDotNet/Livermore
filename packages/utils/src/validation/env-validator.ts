@@ -1,19 +1,29 @@
-import { EnvConfigSchema, type EnvConfig } from '@livermore/schemas';
+import {
+  EnvConfigSchema,
+  PwHostEnvConfigSchema,
+  type EnvConfig,
+  type PwHostEnvConfig,
+  type RuntimeMode,
+} from '@livermore/schemas';
 import { logger } from '../logger/logger';
 
 /**
- * Validate environment variables on application startup
+ * Validate environment variables on application startup.
  *
  * This function should be called at the very beginning of the application.
  * If validation fails, it logs the errors and exits the process.
  *
+ * @param mode - Runtime mode determining which schema to use (default: 'exchange')
  * @returns Validated environment configuration
  * @throws Exits process if validation fails
  */
-export function validateEnv(): EnvConfig {
+export function validateEnv(mode?: 'exchange'): EnvConfig;
+export function validateEnv(mode: 'pw-host'): PwHostEnvConfig;
+export function validateEnv(mode: RuntimeMode = 'exchange'): EnvConfig | PwHostEnvConfig {
   try {
-    const config = EnvConfigSchema.parse(process.env);
-    logger.info('✅ Environment variables validated successfully');
+    const schema = mode === 'pw-host' ? PwHostEnvConfigSchema : EnvConfigSchema;
+    const config = schema.parse(process.env);
+    logger.info({ mode }, 'Environment variables validated successfully');
     return config;
   } catch (error) {
     logger.error('Invalid environment variables:');
