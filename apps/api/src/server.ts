@@ -24,7 +24,7 @@ import { IndicatorCalculationService } from './services/indicator-calculation.se
 import { AlertEvaluationService } from './services/alert-evaluation.service';
 import { getDiscordService } from './services/discord-notification.service';
 import { ControlChannelService } from './services/control-channel.service';
-import { initRuntimeState, getRuntimeState } from './services/runtime-state';
+import { initRuntimeState, getRuntimeState, setMonitoredSymbols } from './services/runtime-state';
 import { appRouter } from './routers';
 import { clerkWebhookHandler } from './routes/webhooks/clerk';
 import type { Timeframe } from '@livermore/schemas';
@@ -47,6 +47,27 @@ function createContext(opts: Parameters<typeof baseCreateContext>[0]) {
 
 // WebSocket clients for alert broadcasts
 const alertClients = new Set<WebSocket>();
+
+// WebSocket clients for candle pulse broadcasts (Candle Meter)
+const candlePulseClients = new Set<WebSocket>();
+
+/**
+ * Broadcast a candle pulse to all connected Candle Meter WebSocket clients.
+ * Called by IndicatorCalculationService on every candle:close event.
+ */
+export function broadcastCandlePulse(pulse: {
+  exchangeId: number;
+  symbol: string;
+  timeframe: string;
+  timestamp: number;
+}): void {
+  const message = JSON.stringify({ type: 'candle_pulse', data: pulse });
+  for (const client of candlePulseClients) {
+    if (client.readyState === 1) { // WebSocket.OPEN
+      client.send(message);
+    }
+  }
+}
 
 /**
  * Broadcast an alert to all connected WebSocket clients
@@ -334,6 +355,9 @@ async function start() {
     });
     await backfillService.backfill(monitoredSymbols, backfillTimeframes);
     logger.info('Cache backfill complete');
+
+    // Register monitored symbols for Candle Meter snapshot endpoint
+    setMonitoredSymbols(activeExchangeId!, monitoredSymbols);
   } else {
     // Idle mode: no exchange calls. Symbols loaded when user sends "start" command.
     logger.info('Idle mode - deferring symbol loading until "start" command');
@@ -388,6 +412,22 @@ async function start() {
     });
   });
 
+  // WebSocket route for candle pulse notifications (Candle Meter)
+  fastify.get('/ws/candle-pulse', { websocket: true }, (socket) => {
+    candlePulseClients.add(socket);
+    logger.info({ clientCount: candlePulseClients.size }, 'Candle pulse WebSocket client connected');
+
+    socket.on('close', () => {
+      candlePulseClients.delete(socket);
+      logger.info({ clientCount: candlePulseClients.size }, 'Candle pulse WebSocket client disconnected');
+    });
+
+    socket.on('error', (error) => {
+      logger.error({ error }, 'Candle pulse WebSocket error');
+      candlePulseClients.delete(socket);
+    });
+  });
+
   // Create service instances (but don't start them yet in idle mode)
   // exchangeId defaults to 1 (Coinbase) for autostart; updated by handleStart for other exchanges
   const indicatorService = new IndicatorCalculationService(activeExchangeId ?? 1);
@@ -406,7 +446,6 @@ async function start() {
     redis,
     subscriberRedis,
     {
-      userId: DEFAULT_BOUNDARY_CONFIG.userId,
       exchangeId: activeExchangeId ?? DEFAULT_BOUNDARY_CONFIG.exchangeId,
       higherTimeframes: ['15m', '1h', '4h', '1d'],
     }
@@ -419,7 +458,7 @@ async function start() {
     redis,
     userId: 1,  // TODO: Get from authenticated user context
   });
-  const coinbaseAdapter = await adapterFactory.create(activeExchangeId ?? 1);
+  const exchangeAdapter = await adapterFactory.create(activeExchangeId ?? 1);
 
   const alertService = new AlertEvaluationService(activeExchangeId ?? 1, activeExchangeName ?? 'unknown');
 
@@ -446,9 +485,9 @@ async function start() {
     logger.info('BoundaryRestService started (subscribed to 5m candle:close events)');
 
     // Step 4: Start Coinbase Adapter
-    await coinbaseAdapter.connect();
-    coinbaseAdapter.subscribe(monitoredSymbols, '5m');
-    logger.info('Coinbase Adapter started (5m candles)');
+    await exchangeAdapter.connect();
+    exchangeAdapter.subscribe(monitoredSymbols, '5m');
+    logger.info('Exchange adapter started (5m candles)');
 
     // Start Alert Evaluation Service
     await alertService.start(monitoredSymbols, SUPPORTED_TIMEFRAMES);
@@ -492,7 +531,7 @@ async function start() {
 
   // Build ServiceRegistry for ControlChannelService command handlers
   const serviceRegistry: ServiceRegistry = {
-    coinbaseAdapter,
+    exchangeAdapter,
     indicatorService,
     alertService,
     boundaryRestService,
@@ -560,7 +599,7 @@ async function start() {
 
     // Stop services in reverse order
     await alertService.stop();
-    coinbaseAdapter.disconnect();
+    exchangeAdapter.disconnect();
     await boundaryRestService.stop();
     await indicatorService.stop();
 

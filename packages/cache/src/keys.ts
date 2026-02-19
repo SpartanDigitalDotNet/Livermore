@@ -34,6 +34,30 @@ export function networkActivityStreamKey(exchangeName: string): string {
 }
 
 // ============================================
+// WARMUP SCHEDULE: Smart Warmup Keys
+// ============================================
+
+/**
+ * Build Redis key for exchange warmup schedule (list of symbol/timeframe pairs needing data).
+ * Written by WarmupScheduleBuilder, read by Admin UI and warmup executor.
+ *
+ * @example warmupScheduleKey(1) // 'exchange:1:warm-up-schedule:symbols'
+ */
+export function warmupScheduleKey(exchangeId: number): string {
+  return `exchange:${exchangeId}:warm-up-schedule:symbols`;
+}
+
+/**
+ * Build Redis key for exchange warmup progress stats.
+ * Written by warmup executor, read by Admin UI for real-time progress.
+ *
+ * @example warmupStatsKey(1) // 'exchange:1:warm-up-schedule:stats'
+ */
+export function warmupStatsKey(exchangeId: number): string {
+  return `exchange:${exchangeId}:warm-up-schedule:stats`;
+}
+
+// ============================================
 // TIER 1: Exchange-Scoped Keys (Shared Data)
 // ============================================
 
@@ -114,6 +138,26 @@ export function exchangeAlertChannel(exchangeId: number): string {
   return `channel:alerts:exchange:${exchangeId}`;
 }
 
+/**
+ * Build an exchange-scoped ticker key.
+ * Tickers are shared across users on the same exchange.
+ *
+ * @example tickerKey(1, 'BTC-USD') // 'ticker:1:BTC-USD'
+ */
+export function tickerKey(exchangeId: number, symbol: string): string {
+  return `ticker:${exchangeId}:${symbol}`;
+}
+
+/**
+ * Build an exchange-scoped ticker pub/sub channel.
+ * All subscribers on the same exchange receive the same ticker updates.
+ *
+ * @example tickerChannel(1, 'BTC-USD') // 'channel:ticker:1:BTC-USD'
+ */
+export function tickerChannel(exchangeId: number, symbol: string): string {
+  return `channel:ticker:${exchangeId}:${symbol}`;
+}
+
 // ============================================
 // TIER 2: User-Scoped Keys (Overflow Data)
 // ============================================
@@ -177,13 +221,6 @@ export function candleKey(
 }
 
 /**
- * Build a cache key for ticker data
- */
-export function tickerKey(userId: number, exchangeId: number, symbol: string): string {
-  return `ticker:${userId}:${exchangeId}:${symbol}`;
-}
-
-/**
  * Build a cache key for orderbook
  */
 export function orderbookKey(userId: number, exchangeId: number, symbol: string): string {
@@ -240,13 +277,6 @@ export function candleCloseChannel(
   timeframe: Timeframe
 ): string {
   return `channel:candle:close:${userId}:${exchangeId}:${symbol}:${timeframe}`;
-}
-
-/**
- * Build a Redis pub/sub channel name for ticker updates
- */
-export function tickerChannel(userId: number, exchangeId: number, symbol: string): string {
-  return `channel:ticker:${userId}:${exchangeId}:${symbol}`;
 }
 
 /**

@@ -155,7 +155,7 @@ export function AddSymbolForm({
         <div className="relative">
           <div className="flex items-center gap-2">
             <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 dark:text-gray-500" />
               <Input
                 value={searchQuery}
                 onChange={(e) => {
@@ -177,14 +177,14 @@ export function AddSymbolForm({
           {!selectedSymbol &&
             debouncedQuery.length >= 1 &&
             (searchLoading || filteredResults.length > 0) && (
-              <div className="absolute z-10 mt-1 w-full bg-white border rounded-md shadow-lg max-h-60 overflow-auto">
+              <div className="absolute z-10 mt-1 w-full bg-white border rounded-md shadow-lg max-h-60 overflow-auto dark:bg-gray-900 dark:border-gray-800">
                 {searchLoading ? (
-                  <div className="p-3 text-center text-gray-500">
+                  <div className="p-3 text-center text-gray-500 dark:text-gray-400">
                     <Loader2 className="h-4 w-4 animate-spin inline mr-2" />
                     Searching...
                   </div>
                 ) : filteredResults.length === 0 ? (
-                  <div className="p-3 text-center text-gray-500">
+                  <div className="p-3 text-center text-gray-500 dark:text-gray-400">
                     No new symbols found
                   </div>
                 ) : (
@@ -192,12 +192,12 @@ export function AddSymbolForm({
                     <button
                       key={result.symbol}
                       onClick={() => handleSelectSymbol(result.symbol)}
-                      className="w-full px-3 py-2 text-left hover:bg-gray-100 flex items-center justify-between"
+                      className="w-full px-3 py-2 text-left hover:bg-gray-100 dark:hover:bg-gray-800 flex items-center justify-between"
                     >
                       <span className="font-mono font-medium">
                         {result.symbol}
                       </span>
-                      <span className="text-sm text-gray-500">
+                      <span className="text-sm text-gray-500 dark:text-gray-400">
                         {result.baseName}
                       </span>
                     </button>
@@ -212,8 +212,8 @@ export function AddSymbolForm({
           <div className="border rounded-lg p-4">
             {validationLoading ? (
               <div className="flex items-center justify-center py-4">
-                <Loader2 className="h-5 w-5 animate-spin text-gray-400" />
-                <span className="ml-2 text-gray-500">Validating...</span>
+                <Loader2 className="h-5 w-5 animate-spin text-gray-400 dark:text-gray-500" />
+                <span className="ml-2 text-gray-500 dark:text-gray-400">Validating...</span>
               </div>
             ) : validation?.valid ? (
               <div className="space-y-3">
@@ -235,13 +235,13 @@ export function AddSymbolForm({
                 {validationMetrics && (
                   <div className="grid grid-cols-3 gap-4 text-sm">
                     <div>
-                      <span className="text-gray-500">Price</span>
+                      <span className="text-gray-500 dark:text-gray-400">Price</span>
                       <div className="font-medium">
                         ${formatPrice(validationMetrics.price)}
                       </div>
                     </div>
                     <div>
-                      <span className="text-gray-500">24h Change</span>
+                      <span className="text-gray-500 dark:text-gray-400">24h Change</span>
                       <div
                         className={
                           parseFloat(validationMetrics.priceChange24h) >= 0
@@ -253,7 +253,7 @@ export function AddSymbolForm({
                       </div>
                     </div>
                     <div>
-                      <span className="text-gray-500">24h Volume</span>
+                      <span className="text-gray-500 dark:text-gray-400">24h Volume</span>
                       <div className="font-medium">
                         {formatVolume(validationMetrics.volume24h)}
                       </div>

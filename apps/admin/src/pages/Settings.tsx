@@ -98,7 +98,7 @@ export function Settings() {
         </CardHeader>
         <CardContent>
           <div className="flex items-center justify-center py-8">
-            <div className="h-8 w-8 animate-spin rounded-full border-4 border-gray-200 border-t-gray-600" />
+            <div className="h-8 w-8 animate-spin rounded-full border-4 border-gray-200 border-t-gray-600 dark:border-gray-700 dark:border-t-gray-400" />
           </div>
         </CardContent>
       </Card>
@@ -112,7 +112,7 @@ export function Settings() {
           <CardTitle>Settings</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="rounded-md bg-red-50 p-4 text-red-700">
+          <div className="rounded-md bg-red-50 p-4 text-red-700 dark:bg-red-950/50 dark:text-red-400">
             Error loading settings: {error.message}
           </div>
         </CardContent>
@@ -129,7 +129,7 @@ export function Settings() {
           <div className="flex items-center gap-3">
             <CardTitle>Settings</CardTitle>
             {isDirty && (
-              <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded">
+              <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded dark:bg-yellow-900/50 dark:text-yellow-300">
                 Unsaved changes
               </span>
             )}
@@ -139,14 +139,14 @@ export function Settings() {
               <>
                 <button
                   onClick={handleDiscard}
-                  className="rounded-md bg-white px-3 py-1 text-sm font-medium text-gray-700 border border-gray-300 hover:bg-gray-50"
+                  className="rounded-md bg-white px-3 py-1 text-sm font-medium text-gray-700 border border-gray-300 hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-700 dark:hover:bg-gray-700"
                 >
                   Discard
                 </button>
                 <button
                   onClick={handleSaveClick}
                   disabled={saveMutation.isPending}
-                  className="rounded-md bg-gray-900 px-3 py-1 text-sm font-medium text-white hover:bg-gray-800 disabled:opacity-50"
+                  className="rounded-md bg-gray-900 px-3 py-1 text-sm font-medium text-white hover:bg-gray-800 disabled:opacity-50 dark:bg-gray-50 dark:text-gray-900 dark:hover:bg-gray-200"
                 >
                   {saveMutation.isPending ? 'Saving...' : 'Save'}
                 </button>
@@ -155,7 +155,7 @@ export function Settings() {
             <button
               onClick={() => refetch()}
               disabled={isFetching}
-              className="rounded-md bg-gray-100 px-3 py-1 text-sm font-medium text-gray-700 hover:bg-gray-200 disabled:opacity-50"
+              className="rounded-md bg-gray-100 px-3 py-1 text-sm font-medium text-gray-700 hover:bg-gray-200 disabled:opacity-50 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
             >
               {isFetching ? 'Refreshing...' : 'Refresh'}
             </button>
@@ -163,7 +163,7 @@ export function Settings() {
         </CardHeader>
         <CardContent>
           {validationError && (
-            <div className="mb-4 rounded-md bg-red-50 p-4 text-red-700">
+            <div className="mb-4 rounded-md bg-red-50 p-4 text-red-700 dark:bg-red-950/50 dark:text-red-400">
               <p className="font-medium">Validation Errors:</p>
               <pre className="mt-2 text-sm whitespace-pre-wrap">
                 {validationError}

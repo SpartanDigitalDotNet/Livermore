@@ -26,10 +26,10 @@ export function ActiveSymbols({ symbols, isLoading }: ActiveSymbolsProps) {
       <CardContent>
         {isLoading ? (
           <div className="flex items-center justify-center py-4">
-            <div className="h-6 w-6 animate-spin rounded-full border-2 border-gray-200 border-t-gray-600" />
+            <div className="h-6 w-6 animate-spin rounded-full border-2 border-gray-200 border-t-gray-600 dark:border-gray-700 dark:border-t-gray-400" />
           </div>
         ) : symbols.length === 0 ? (
-          <p className="text-gray-500 text-sm">No symbols being monitored</p>
+          <p className="text-gray-500 dark:text-gray-400 text-sm">No symbols being monitored</p>
         ) : (
           <div className="flex flex-wrap gap-2">
             {symbols.map((symbol) => (

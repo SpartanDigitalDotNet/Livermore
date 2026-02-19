@@ -158,7 +158,7 @@ export class PositionSyncService {
     }
 
     // Get current price
-    const currentPrice = await this.getCurrentPrice(symbol, userId, exchangeId);
+    const currentPrice = await this.getCurrentPrice(symbol, exchangeId);
 
     // Calculate current value
     const currentValue = totalQuantity * currentPrice;
@@ -226,7 +226,6 @@ export class PositionSyncService {
    */
   private async getCurrentPrice(
     symbol: string,
-    userId: number,
     exchangeId: number
   ): Promise<number> {
     // Handle stablecoins and fiat
@@ -243,7 +242,7 @@ export class PositionSyncService {
     // Fallback to ticker cache (for WebSocket prices)
     const tradingPair = `${symbol}-USD`;
     try {
-      const ticker = await this.tickerCache.getTicker(userId, exchangeId, tradingPair);
+      const ticker = await this.tickerCache.getTicker(exchangeId, tradingPair);
       if (ticker?.price) {
         return ticker.price;
       }
@@ -283,7 +282,7 @@ export class PositionSyncService {
       const costBasis = pos.costBasis ? parseFloat(pos.costBasis) : 0;
 
       // Get current price
-      const currentPrice = await this.getCurrentPrice(symbol, userId, exchangeId);
+      const currentPrice = await this.getCurrentPrice(symbol, exchangeId);
       const currentValue = quantity * currentPrice;
       const unrealizedPnL = currentValue - costBasis;
       const unrealizedPnLPercent = costBasis > 0 ? (unrealizedPnL / costBasis) * 100 : 0;

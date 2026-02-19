@@ -191,7 +191,7 @@ export function BulkImportModal({
         <div className="flex-1 overflow-auto space-y-4">
           {/* JSON Input */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               Symbol Array (JSON)
             </label>
             <textarea
@@ -202,7 +202,7 @@ export function BulkImportModal({
               disabled={validateMutation.isPending || importMutation.isPending}
             />
             {parseError && (
-              <p className="mt-1 text-sm text-red-600">{parseError}</p>
+              <p className="mt-1 text-sm text-red-600 dark:text-red-400">{parseError}</p>
             )}
           </div>
 
@@ -272,7 +272,7 @@ export function BulkImportModal({
                         {result.symbol}
                       </span>
                     </div>
-                    <div className="text-sm text-gray-500">
+                    <div className="text-sm text-gray-500 dark:text-gray-400">
                       {result.status === 'valid' && result.metrics && (
                         <span>${parseFloat(result.metrics.price).toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
                       )}

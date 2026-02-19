@@ -29,6 +29,14 @@ Connects via LIVERMORE_REDIS_URL (Azure Managed Redis with OSS Cluster mode).
 - `exchange:{exchangeId}:status` — InstanceStatus JSON, TTL 45s (heartbeat)
 - `logs:network:{exchangeName}` — Redis Stream (activity feed)
 
+### Smart Warmup (Phase 35)
+- `exchange:{exchangeId}:warm-up-schedule` — Warmup schedule JSON (persisted after scan)
+- `exchange:{exchangeId}:warm-up-schedule:stats` — Real-time warmup progress (percent, ETA, current symbol, failures)
+
+Cache trust decision: sentinel symbol's 5m candle freshness (20-min threshold) determines
+targeted vs full_refresh. A missing instance status key (45s TTL) does NOT trigger full_refresh
+— only stale candle data does. This allows quick instance bounces without costly re-warmup.
+
 ### Exchange-Scoped Data (Tier 1 - Shared)
 - `candles:{exchangeId}:{symbol}:{timeframe}` — Sorted set of candle JSON
 - `indicator:{exchangeId}:{symbol}:{timeframe}:{type}` — Sorted set of indicator values

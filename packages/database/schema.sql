@@ -158,6 +158,8 @@ CREATE TABLE "exchange_symbols" (
   "market_cap" numeric(30,2) NULL,
   "coingecko_id" character varying(100) NULL,
   "display_name" character varying(100) NULL,
+  "trade_count_24h" integer NULL,
+  "liquidity_score" numeric(5,3) NULL,
   "is_active" boolean NOT NULL DEFAULT true,
   "last_volume_update" timestamp NULL,
   "created_at" timestamp NOT NULL DEFAULT now(),

@@ -33,6 +33,10 @@ Write-Host "Loaded CLERK_PUBLISHABLE_KEY: $(if ($env:CLERK_PUBLISHABLE_KEY) { 's
 Write-Host "Loaded CLERK_SECRET_KEY: $(if ($env:CLERK_SECRET_KEY) { 'set' } else { 'NOT SET' })"
 Write-Host "Loaded CLERK_WEBHOOK_SIGNING_SECRET: $(if ($env:CLERK_WEBHOOK_SIGNING_SECRET) { 'set' } else { 'NOT SET' })"
 
+# Increase Node.js heap for long-running dev sessions (default ~86MB is too small
+# for 53 symbols x 6 timeframes streaming candles + indicators)
+$env:NODE_OPTIONS = '--max-old-space-size=4096'
+
 # Change to project directory and run dev server
 Set-Location (Split-Path -Path $PSScriptRoot -Parent)
 

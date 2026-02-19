@@ -87,9 +87,9 @@ export function Dashboard() {
         </CardHeader>
         <CardContent>
           <div className="flex flex-col items-center justify-center gap-2 py-8">
-            <div className="h-8 w-8 animate-spin rounded-full border-4 border-gray-200 border-t-gray-600" />
+            <div className="h-8 w-8 animate-spin rounded-full border-4 border-gray-200 border-t-gray-600 dark:border-gray-700 dark:border-t-gray-400" />
             {syncMutation.isPending && (
-              <p className="text-sm text-gray-500">Syncing from Coinbase...</p>
+              <p className="text-sm text-gray-500 dark:text-gray-400 dark:text-gray-500">Syncing from Coinbase...</p>
             )}
           </div>
         </CardContent>
@@ -112,7 +112,7 @@ export function Dashboard() {
           </button>
         </CardHeader>
         <CardContent>
-          <div className="rounded-md bg-red-50 p-4 text-red-700">
+          <div className="rounded-md bg-red-50 p-4 text-red-700 dark:bg-red-950/50 dark:text-red-400">
             Error: {syncMutation.error?.message || positionsError?.message || error?.message}
           </div>
         </CardContent>
@@ -128,7 +128,7 @@ export function Dashboard() {
           <CardTitle>Positions</CardTitle>
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2">
-              <label htmlFor="show-small-empty" className="text-sm text-gray-600">
+              <label htmlFor="show-small-empty" className="text-sm text-gray-600 dark:text-gray-400">
                 Show small balances
               </label>
               <Switch
@@ -147,7 +147,7 @@ export function Dashboard() {
           </div>
         </CardHeader>
         <CardContent>
-          <div className="rounded-md bg-gray-50 p-4 text-gray-600">
+          <div className="rounded-md bg-gray-50 p-4 text-gray-600 dark:bg-gray-800 dark:text-gray-400">
             No positions found{!showSmallBalances ? ' above $10' : ''}.
             {positionsData?.data?.length === 0 && (
               <span> Click Sync to fetch positions from Coinbase.</span>
@@ -183,10 +183,10 @@ export function Dashboard() {
       <CardHeader className="flex flex-row items-center justify-between">
         <div>
           <CardTitle>Positions</CardTitle>
-          <p className="mt-1 text-sm text-gray-500">
+          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400 dark:text-gray-500">
             {symbols.length} position{symbols.length !== 1 ? 's' : ''}
             {hiddenCount > 0 && !showSmallBalances && (
-              <span className="text-gray-400">
+              <span className="text-gray-400 dark:text-gray-500">
                 {' '}({hiddenCount} small balance{hiddenCount !== 1 ? 's' : ''} hidden)
               </span>
             )}
@@ -194,7 +194,7 @@ export function Dashboard() {
         </div>
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2">
-            <label htmlFor="show-small" className="text-sm text-gray-600">
+            <label htmlFor="show-small" className="text-sm text-gray-600 dark:text-gray-400">
               Show small balances
             </label>
             <Switch
@@ -213,7 +213,7 @@ export function Dashboard() {
           <button
             onClick={() => refetch()}
             disabled={isFetching}
-            className="rounded-md bg-gray-100 px-3 py-1 text-sm font-medium text-gray-700 hover:bg-gray-200 disabled:opacity-50"
+            className="rounded-md bg-gray-100 px-3 py-1 text-sm font-medium text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700 disabled:opacity-50"
           >
             {isFetching ? 'Refreshing...' : 'Refresh'}
           </button>

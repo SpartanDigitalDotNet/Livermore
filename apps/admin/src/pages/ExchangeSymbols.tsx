@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import type { ComponentType } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { trpc } from '@/lib/trpc';
 import { Card, CardContent } from '@/components/ui/card';
@@ -12,6 +13,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { ExchangeBinance, ExchangeCoinbase, ExchangeKraken, ExchangeKucoin } from '@web3icons/react';
 
 const exchangeLabel: Record<string, string> = {
   coinbase: 'Coinbase',
@@ -20,6 +22,16 @@ const exchangeLabel: Record<string, string> = {
   kraken: 'Kraken',
   kucoin: 'KuCoin',
   mexc: 'MEXC',
+};
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const exchangeIconMap: Record<string, ComponentType<any> | null> = {
+  coinbase: ExchangeCoinbase,
+  binance: ExchangeBinance,
+  binance_us: ExchangeBinance,
+  kraken: ExchangeKraken,
+  kucoin: ExchangeKucoin,
+  mexc: null,
 };
 
 function formatMarketCap(value: string | null): string {
@@ -38,6 +50,23 @@ function formatVolume(value: string | null): string {
   if (num >= 1e6) return `${(num / 1e6).toFixed(1)}M`;
   if (num >= 1e3) return `${(num / 1e3).toFixed(0)}K`;
   return num.toFixed(0);
+}
+
+function formatTradeCount(value: number | null): string {
+  if (value == null) return '-';
+  if (value >= 1e6) return `${(value / 1e6).toFixed(1)}M`;
+  if (value >= 1e3) return `${(value / 1e3).toFixed(1)}K`;
+  return value.toLocaleString();
+}
+
+function liquidityGrade(score: string | null): { grade: string; color: string } {
+  if (!score) return { grade: '-', color: 'bg-gray-500' };
+  const n = parseFloat(score);
+  if (n >= 0.6) return { grade: 'A', color: 'bg-green-600' };
+  if (n >= 0.4) return { grade: 'B', color: 'bg-blue-600' };
+  if (n >= 0.2) return { grade: 'C', color: 'bg-yellow-600' };
+  if (n >= 0.05) return { grade: 'D', color: 'bg-orange-600' };
+  return { grade: 'F', color: 'bg-red-600' };
 }
 
 function formatFee(value: number): string {
@@ -123,10 +152,10 @@ export function ExchangeSymbols() {
   );
   const selectedStatus = selectedExchange ? statusMap.get(selectedExchange.name) : undefined;
 
-  // Loading state before we know which exchange to show
-  if (selectedExchangeId === null) {
+  // Loading state before we have exchange data resolved
+  if (selectedExchangeId === null || !exchangeData) {
     return (
-      <div className="flex items-center justify-center p-12 text-gray-500">
+      <div className="flex items-center justify-center p-12 text-gray-500 dark:text-gray-400">
         Loading exchange configuration...
       </div>
     );
@@ -137,15 +166,15 @@ export function ExchangeSymbols() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-lg font-semibold">Exchange Symbols</h2>
-          <p className="text-sm text-gray-500">
+          <h2 className="text-lg font-semibold dark:text-gray-100">Exchange Symbols</h2>
+          <p className="text-sm text-gray-500 dark:text-gray-400">
             {selectedExchange
               ? `${exchangeLabel[selectedExchange.name] ?? selectedExchange.displayName} — ${selectedExchange.activeCount} active of ${selectedExchange.symbolCount} symbols`
               : 'Select an exchange'}
           </p>
         </div>
         {exchangeData?.lastRefresh && (
-          <span className="text-xs text-gray-400">
+          <span className="text-xs text-gray-400 dark:text-gray-500 dark:text-gray-500">
             Last refreshed {formatTimeAgo(exchangeData.lastRefresh)}
           </span>
         )}
@@ -156,10 +185,15 @@ export function ExchangeSymbols() {
         {exchangeList.map((ex) => (
           <Button
             key={ex.id}
-            variant={selectedExchangeId === ex.id ? 'default' : 'outline'}
+            variant="outline"
             size="sm"
             onClick={() => handleExchangeChange(ex.id)}
+            className={selectedExchangeId === ex.id ? 'dark:bg-white/10 dark:border-white/20' : ''}
           >
+            {(() => {
+              const Icon = exchangeIconMap[ex.name];
+              return Icon ? <Icon size={16} variant="branded" /> : null;
+            })()}
             {exchangeLabel[ex.name] ?? ex.displayName}
             {ex.symbolCount > 0 && (
               <span className="ml-1 opacity-60">({ex.symbolCount})</span>
@@ -192,7 +226,7 @@ export function ExchangeSymbols() {
                 <Badge className="bg-yellow-600 text-white text-xs">{geo.note ?? 'Geo-restricted'}</Badge>
               )}
             </div>
-            <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm text-gray-600">
+            <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm text-gray-600 dark:text-gray-400">
               {fees && (
                 <span>Fees: {formatFee(fees.base_maker)} maker / {formatFee(fees.base_taker)} taker</span>
               )}
@@ -204,20 +238,20 @@ export function ExchangeSymbols() {
         );
       })()}
 
-      <p className="text-sm text-gray-500">
+      <p className="text-sm text-gray-500 dark:text-gray-400">
         Symbols ranked by global market cap via{' '}
-        <a href="https://www.coingecko.com/" target="_blank" rel="noopener noreferrer" className="underline hover:text-gray-300">CoinGecko</a>.
+        <a href="https://www.coingecko.com/" target="_blank" rel="noopener noreferrer" className="underline hover:text-gray-300 dark:hover:text-gray-200">CoinGecko</a>.
       </p>
 
       {/* Table */}
       <Card className="overflow-hidden">
         <CardContent className="p-0">
           {isLoading ? (
-            <div className="flex items-center justify-center p-12 text-gray-500">
+            <div className="flex items-center justify-center p-12 text-gray-500 dark:text-gray-400">
               Loading...
             </div>
           ) : symbols.length === 0 ? (
-            <div className="flex items-center justify-center p-12 text-gray-500">
+            <div className="flex items-center justify-center p-12 text-gray-500 dark:text-gray-400">
               No symbols for this exchange. Run the seed script to populate.
             </div>
           ) : (
@@ -228,6 +262,8 @@ export function ExchangeSymbols() {
                   <TableHead>Name</TableHead>
                   <TableHead>Pair</TableHead>
                   <TableHead className="text-right">Volume 24h</TableHead>
+                  <TableHead className="text-right">Trades 24h</TableHead>
+                  <TableHead className="text-center">Liquidity</TableHead>
                   <TableHead className="text-right">Market Cap</TableHead>
                   <TableHead className="text-center">Status</TableHead>
                 </TableRow>
@@ -235,18 +271,42 @@ export function ExchangeSymbols() {
               <TableBody>
                 {symbols.map((s) => (
                   <TableRow key={s.id}>
-                    <TableCell className="font-mono text-sm text-gray-500">
+                    <TableCell className="font-mono text-sm text-gray-500 dark:text-gray-400">
                       {s.globalRank ?? '-'}
                     </TableCell>
                     <TableCell>
-                      <span className="font-medium">{s.displayName ?? s.baseCurrency}</span>
-                      <span className="ml-1.5 text-xs text-gray-400">({s.baseCurrency})</span>
+                      <span className="flex items-center gap-2">
+                        <img
+                          src={`https://cdn.jsdelivr.net/gh/spothq/cryptocurrency-icons@master/svg/color/${s.baseCurrency.toLowerCase()}.svg`}
+                          alt=""
+                          className="h-5 w-5"
+                          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                        />
+                        <span>
+                          <span className="font-medium">{s.displayName ?? s.baseCurrency}</span>
+                          <span className="ml-1.5 text-xs text-gray-400 dark:text-gray-500">({s.baseCurrency})</span>
+                        </span>
+                      </span>
                     </TableCell>
                     <TableCell>
                       <span className="font-mono text-xs">{s.symbol}</span>
                     </TableCell>
                     <TableCell className="text-right text-sm">
                       {formatVolume(s.volume24h)}
+                    </TableCell>
+                    <TableCell className="text-right text-sm font-mono">
+                      {formatTradeCount(s.tradeCount24h)}
+                    </TableCell>
+                    <TableCell className="text-center">
+                      {(() => {
+                        const { grade, color } = liquidityGrade(s.liquidityScore);
+                        return (
+                          <span className="inline-flex items-center gap-1">
+                            <Badge className={`${color} text-white text-xs`}>{grade}</Badge>
+                            <span className="text-xs text-gray-400">{s.liquidityScore ? parseFloat(s.liquidityScore).toFixed(3) : ''}</span>
+                          </span>
+                        );
+                      })()}
                     </TableCell>
                     <TableCell className="text-right text-sm">
                       {formatMarketCap(s.marketCap)}
@@ -267,7 +327,7 @@ export function ExchangeSymbols() {
       {/* Pagination */}
       {totalPages > 1 && (
         <div className="flex items-center justify-between">
-          <span className="text-sm text-gray-500">
+          <span className="text-sm text-gray-500 dark:text-gray-400">
             Page {page} of {totalPages}
           </span>
           <div className="flex gap-2">

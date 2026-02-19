@@ -3,6 +3,7 @@ import { eq, and, notInArray, isNull } from 'drizzle-orm';
 import { logger } from '@livermore/utils';
 import { CoinGeckoService, type CoinGeckoCoin } from './coingecko.service';
 import { ExchangeProductService, type ExchangeProduct } from './exchange-product.service';
+import { scoreAndSummarize } from './liquidity-score.service';
 
 /**
  * Summary of a symbol refresh operation
@@ -208,11 +209,18 @@ export class SymbolRefreshService {
       }
     }
 
+    // Compute liquidity scores for the selected products
+    const selectedProducts = Array.from(bestProductByBase.values());
+    const { scores } = scoreAndSummarize(exchange.name, selectedProducts);
+    const scoreBySymbol = new Map<string, number>();
+    selectedProducts.forEach((p, i) => scoreBySymbol.set(p.symbol, scores[i]));
+
     for (const [baseCurrency, product] of bestProductByBase) {
       const coin = coinBySymbol.get(baseCurrency);
       if (!coin) continue; // Not in CoinGecko top N — skip
 
       upsertedSymbols.push(product.symbol);
+      const liquidityScore = scoreBySymbol.get(product.symbol)?.toString() ?? null;
 
       // Check if symbol already exists
       const [existing] = await this.db
@@ -232,6 +240,8 @@ export class SymbolRefreshService {
           .update(exchangeSymbols)
           .set({
             volume24h: product.volume24h.toString(),
+            tradeCount24h: product.tradeCount24h ?? null,
+            liquidityScore,
             globalRank: coin.market_cap_rank,
             marketCap: coin.market_cap.toString(),
             coingeckoId: coin.id,
@@ -252,6 +262,8 @@ export class SymbolRefreshService {
             baseCurrency: product.baseCurrency,
             quoteCurrency: product.quoteCurrency,
             volume24h: product.volume24h.toString(),
+            tradeCount24h: product.tradeCount24h ?? null,
+            liquidityScore,
             globalRank: coin.market_cap_rank,
             marketCap: coin.market_cap.toString(),
             coingeckoId: coin.id,

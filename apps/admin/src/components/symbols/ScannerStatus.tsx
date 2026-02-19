@@ -31,23 +31,23 @@ export function ScannerStatus({ scanner, isLoading }: ScannerStatusProps) {
       <CardContent>
         {isLoading ? (
           <div className="flex items-center justify-center py-4">
-            <div className="h-6 w-6 animate-spin rounded-full border-2 border-gray-200 border-t-gray-600" />
+            <div className="h-6 w-6 animate-spin rounded-full border-2 border-gray-200 border-t-gray-600 dark:border-gray-700 dark:border-t-gray-400" />
           </div>
         ) : scanner ? (
           <div className="space-y-3">
             <div className="flex items-center justify-between">
-              <span className="text-sm text-gray-500">Status</span>
+              <span className="text-sm text-gray-500 dark:text-gray-400">Status</span>
               <Badge variant={scanner.enabled ? 'default' : 'secondary'}>
                 {scanner.enabled ? 'Enabled' : 'Disabled'}
               </Badge>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-sm text-gray-500">Exchange</span>
+              <span className="text-sm text-gray-500 dark:text-gray-400">Exchange</span>
               <span className="text-sm font-medium">{scanner.exchange}</span>
             </div>
             {scanner.lastRun && (
               <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-500">Last Run</span>
+                <span className="text-sm text-gray-500 dark:text-gray-400">Last Run</span>
                 <span className="text-sm">
                   {new Date(scanner.lastRun).toLocaleString()}
                 </span>
@@ -55,7 +55,7 @@ export function ScannerStatus({ scanner, isLoading }: ScannerStatusProps) {
             )}
           </div>
         ) : (
-          <div className="flex items-center gap-2 text-gray-500">
+          <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400">
             <AlertCircle className="h-4 w-4" />
             <span className="text-sm">Scanner not configured</span>
           </div>

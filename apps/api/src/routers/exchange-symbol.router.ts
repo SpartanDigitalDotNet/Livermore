@@ -49,6 +49,8 @@ export const exchangeSymbolRouter = router({
           globalRank: exchangeSymbols.globalRank,
           marketCap: exchangeSymbols.marketCap,
           displayName: exchangeSymbols.displayName,
+          tradeCount24h: exchangeSymbols.tradeCount24h,
+          liquidityScore: exchangeSymbols.liquidityScore,
           isActive: exchangeSymbols.isActive,
           updatedAt: exchangeSymbols.updatedAt,
         })
@@ -193,6 +195,7 @@ export const exchangeSymbolRouter = router({
       const userExList = await db
         .select({
           exchangeName: userExchanges.exchangeName,
+          displayName: userExchanges.displayName,
           isDefault: userExchanges.isDefault,
           apiKeyEnvVar: userExchanges.apiKeyEnvVar,
           apiSecretEnvVar: userExchanges.apiSecretEnvVar,
@@ -208,8 +211,11 @@ export const exchangeSymbolRouter = router({
       return {
         statuses: userExList.map((ue) => ({
           exchangeName: ue.exchangeName,
+          displayName: ue.displayName,
           isDefault: ue.isDefault,
-          hasCredentials: hasEnvVar(ue.apiKeyEnvVar) && hasEnvVar(ue.apiSecretEnvVar),
+          apiKeyEnvVar: ue.apiKeyEnvVar,
+          apiSecretEnvVar: ue.apiSecretEnvVar,
+          hasCredentials: !!(ue.apiKeyEnvVar && ue.apiSecretEnvVar),
         })),
       };
     }),
@@ -333,6 +339,16 @@ export const exchangeSymbolRouter = router({
         throw new TRPCError({ code: 'CONFLICT', message: 'Exchange already configured for this user' });
       }
 
+      // is_default orchestration: unset any existing defaults before inserting new default
+      await db.update(userExchanges)
+        .set({ isDefault: false, updatedAt: new Date() })
+        .where(
+          and(
+            eq(userExchanges.userId, user.id),
+            eq(userExchanges.isDefault, true)
+          )
+        );
+
       const [inserted] = await db
         .insert(userExchanges)
         .values({
@@ -347,6 +363,139 @@ export const exchangeSymbolRouter = router({
         .returning({ id: userExchanges.id });
 
       return { success: true, userExchangeId: inserted.id };
+    }),
+
+  /**
+   * Update an existing user_exchanges record.
+   * Supports updating API key env var names, display name, and default status.
+   */
+  updateExchange: protectedProcedure
+    .input(
+      z.object({
+        exchangeName: z.string().min(1),
+        apiKeyEnvVar: z.string().min(1).optional(),
+        apiSecretEnvVar: z.string().min(1).optional(),
+        displayName: z.string().max(100).optional(),
+        isDefault: z.boolean().optional(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const db = getDbClient();
+      const clerkId = ctx.auth.userId;
+
+      // Get user ID from Clerk identity
+      const [user] = await db
+        .select({ id: users.id })
+        .from(users)
+        .where(
+          and(
+            eq(users.identityProvider, 'clerk'),
+            eq(users.identitySub, clerkId)
+          )
+        )
+        .limit(1);
+
+      if (!user) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'User not found' });
+      }
+
+      // Find the existing user_exchanges record
+      const [existing] = await db
+        .select({ id: userExchanges.id })
+        .from(userExchanges)
+        .where(
+          and(
+            eq(userExchanges.userId, user.id),
+            eq(userExchanges.exchangeName, input.exchangeName)
+          )
+        )
+        .limit(1);
+
+      if (!existing) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Exchange not configured for this user' });
+      }
+
+      // Build update object dynamically from provided fields
+      const updates: Record<string, unknown> = { updatedAt: new Date() };
+      if (input.apiKeyEnvVar) updates.apiKeyEnvVar = input.apiKeyEnvVar;
+      if (input.apiSecretEnvVar) updates.apiSecretEnvVar = input.apiSecretEnvVar;
+      if (input.displayName !== undefined) updates.displayName = input.displayName;
+
+      // is_default orchestration
+      if (input.isDefault === true) {
+        // Unset all other defaults for this user first
+        await db.update(userExchanges)
+          .set({ isDefault: false, updatedAt: new Date() })
+          .where(
+            and(
+              eq(userExchanges.userId, user.id),
+              eq(userExchanges.isDefault, true)
+            )
+          );
+        updates.isDefault = true;
+      } else if (input.isDefault === false) {
+        updates.isDefault = false;
+      }
+
+      // Execute the update
+      await db.update(userExchanges)
+        .set(updates)
+        .where(eq(userExchanges.id, existing.id));
+
+      return { success: true };
+    }),
+
+  /**
+   * Test connectivity to an exchange's REST API.
+   * Uses a public ping/time endpoint — no credentials required.
+   */
+  testConnection: protectedProcedure
+    .input(z.object({ exchangeName: z.string().min(1) }))
+    .mutation(async ({ input }) => {
+      const db = getDbClient();
+
+      const [exchange] = await db
+        .select({ restUrl: exchanges.restUrl })
+        .from(exchanges)
+        .where(and(eq(exchanges.name, input.exchangeName), eq(exchanges.isActive, true)))
+        .limit(1);
+
+      if (!exchange?.restUrl) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Exchange REST URL not configured' });
+      }
+
+      const pingPaths: Record<string, string> = {
+        binance: '/api/v3/ping',
+        binance_us: '/api/v3/ping',
+        coinbase: '/api/v3/brokerage/market/products/BTC-USD',
+        kraken: '/0/public/Time',
+        kucoin: '/api/v1/timestamp',
+        mexc: '/api/v3/ping',
+      };
+
+      const pingPath = pingPaths[input.exchangeName] ?? '/';
+      const url = `${exchange.restUrl}${pingPath}`;
+
+      try {
+        const start = Date.now();
+        const response = await fetch(url, {
+          method: 'GET',
+          signal: AbortSignal.timeout(10000),
+        });
+        const latencyMs = Date.now() - start;
+
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status} ${response.statusText}`);
+        }
+
+        return { success: true, latencyMs };
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Connection failed';
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: `Test connection failed: ${message}`,
+        });
+      }
     }),
 
 });

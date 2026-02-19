@@ -7,7 +7,7 @@ import {
   type CommandType,
   type Timeframe,
 } from '@livermore/schemas';
-import { StartupBackfillService } from '@livermore/exchange-core';
+import { StartupBackfillService, SmartWarmupService } from '@livermore/exchange-core';
 import { createRestClient } from './exchange/rest-client-factory';
 import { SymbolSourceService } from './symbol-source.service';
 import { hostname } from 'node:os';
@@ -18,7 +18,7 @@ import { detectPublicIp } from '../utils/detect-public-ip';
 import { eq, and, sql } from 'drizzle-orm';
 import { users, userExchanges } from '@livermore/database';
 import type { ServiceRegistry } from './types/service-registry';
-import { updateRuntimeState, type StartupProgress } from './runtime-state';
+import { updateRuntimeState, setMonitoredSymbols, clearMonitoredSymbols, type StartupProgress } from './runtime-state';
 
 const logger = createLogger({ name: 'control-channel', service: 'control' });
 
@@ -345,9 +345,9 @@ export class ControlChannelService {
     await this.services.alertService.stop();
     logger.debug('AlertService stopped');
 
-    // 2. CoinbaseAdapter - produces candle events (disconnect WebSocket)
-    this.services.coinbaseAdapter.disconnect();
-    logger.debug('CoinbaseAdapter disconnected');
+    // 2. Exchange adapter - produces candle events (disconnect WebSocket)
+    this.services.exchangeAdapter.disconnect();
+    logger.debug('Exchange adapter disconnected');
 
     // 3. BoundaryRestService - produces candle events from REST
     await this.services.boundaryRestService.stop();
@@ -387,10 +387,10 @@ export class ControlChannelService {
     await this.services.indicatorService.start(this.services.indicatorConfigs);
     logger.debug('IndicatorService started');
 
-    // 2. CoinbaseAdapter - connect WebSocket and subscribe
-    await this.services.coinbaseAdapter.connect();
-    this.services.coinbaseAdapter.subscribe(this.services.monitoredSymbols, '5m');
-    logger.debug('CoinbaseAdapter connected and subscribed');
+    // 2. Exchange adapter - connect WebSocket and subscribe
+    await this.services.exchangeAdapter.connect();
+    this.services.exchangeAdapter.subscribe(this.services.monitoredSymbols, '5m');
+    logger.debug('Exchange adapter connected and subscribed');
 
     // 3. BoundaryRestService - start listening for boundary events
     await this.services.boundaryRestService.start(this.services.monitoredSymbols);
@@ -443,18 +443,23 @@ export class ControlChannelService {
       updateRuntimeState({ startup: progress });
     };
 
+    let adminEmail: string = this.identitySub;
+    let adminDisplayName: string | null = null;
+
     try {
       // If symbols not yet loaded (idle startup), load Tier 1 from user's exchange
       if (this.services.monitoredSymbols.length === 0) {
         setProgress({ phase: 'indicators', phaseLabel: 'Loading Tier 1 symbols', percent: 5 });
 
-        // Resolve user's default exchange from user_exchanges
+        // Resolve the requested exchange from user_exchanges
         const [userExchange] = await this.services.db
           .select({
             exchangeId: userExchanges.exchangeId,
             exchangeName: userExchanges.exchangeName,
             apiKeyEnvVar: userExchanges.apiKeyEnvVar,
             apiSecretEnvVar: userExchanges.apiSecretEnvVar,
+            adminEmail: users.email,
+            adminDisplayName: users.displayName,
           })
           .from(userExchanges)
           .innerJoin(users, eq(users.id, userExchanges.userId))
@@ -462,7 +467,7 @@ export class ControlChannelService {
             and(
               eq(users.identityProvider, 'clerk'),
               eq(users.identitySub, this.identitySub),
-              eq(userExchanges.isDefault, true),
+              eq(userExchanges.exchangeName, exchangeName),
               eq(userExchanges.isActive, true)
             )
           )
@@ -472,8 +477,8 @@ export class ControlChannelService {
           throw new Error('No exchange configured. Set up your exchange in Admin first.');
         }
 
-        // Use the actual exchange name from the database (not the hardcoded default)
-        exchangeName = userExchange.exchangeName;
+        adminEmail = userExchange.adminEmail ?? this.identitySub;
+        adminDisplayName = userExchange.adminDisplayName ?? null;
 
         // Create exchange-specific REST client and store on registry
         const restClient = createRestClient(
@@ -504,6 +509,9 @@ export class ControlChannelService {
           timeframes.map((timeframe) => ({ symbol, timeframe }))
         );
 
+        // Register symbols for Candle Meter snapshot endpoint
+        setMonitoredSymbols(userExchange.exchangeId, this.services.monitoredSymbols);
+
         logger.info(
           { total: this.services.monitoredSymbols.length, exchangeId: userExchange.exchangeId, symbols: this.services.monitoredSymbols },
           'Loaded Tier 1 symbols from user exchange'
@@ -524,7 +532,7 @@ export class ControlChannelService {
         exchangeId: this.services.exchangeId!,
         exchangeName: exchangeName,
         hostname: hostname(),
-        adminEmail: this.identitySub,
+        adminEmail,
       });
       this.services.activityLogger = activityLogger;
       this.services.stateMachine = new StateMachineService(registry, activityLogger);
@@ -539,23 +547,35 @@ export class ControlChannelService {
         throw new Error('Failed to register instance');
       }
 
+      // Set admin info and symbol count immediately after registration
+      registry.setAdminInfo(adminEmail, adminDisplayName ?? adminEmail);
+      registry.setSymbolCount(this.services.monitoredSymbols.length);
+
       await this.services.stateMachine.transition('starting');
 
-      // Backfill cache with historical candles (MUST complete before indicators)
-      setProgress({ phase: 'indicators', phaseLabel: 'Backfilling historical candles', percent: 10 });
-      const backfillTimeframes: Timeframe[] = ['1m', '5m', '15m', '1h', '4h', '1d'];
+      // Smart warmup: assess cache trust, scan, build schedule, fetch, verify gaps (Phase 35)
+      setProgress({ phase: 'indicators', phaseLabel: 'Assessing cache trust', percent: 10 });
       if (!this.services.restClient) {
         throw new Error('No REST client available. Exchange setup may be incomplete.');
       }
       if (!this.services.exchangeId) {
         throw new Error('No exchange ID resolved. Exchange setup may be incomplete.');
       }
-      const backfillService = new StartupBackfillService(this.services.restClient, this.services.redis, {
-        userId: 1, // legacy
+      // Sentinel symbol is the #1 ranked symbol (first in monitoredSymbols, ordered by globalRank)
+      const sentinelSymbol = this.services.monitoredSymbols[0];
+      const smartWarmup = new SmartWarmupService({
+        redis: this.services.redis,
         exchangeId: this.services.exchangeId,
+        restClient: this.services.restClient,
       });
-      await backfillService.backfill(this.services.monitoredSymbols, backfillTimeframes);
-      logger.info('Cache backfill complete');
+      const warmupSchedule = await smartWarmup.warmup(this.services.monitoredSymbols, sentinelSymbol);
+      logger.info({
+        event: 'smart_warmup_complete',
+        totalPairs: warmupSchedule.totalPairs,
+        skipped: warmupSchedule.sufficientPairs,
+        fetched: warmupSchedule.needsFetching,
+        mode: warmupSchedule.mode,
+      }, `Smart warmup complete [${warmupSchedule.mode}]: ${warmupSchedule.sufficientPairs} skipped, ${warmupSchedule.needsFetching} fetched`);
 
       // Phase 30: Transition to warming after backfill
       await this.services.stateMachine.transition('warming');
@@ -584,11 +604,17 @@ export class ControlChannelService {
       }
       logger.debug({ warmupCount }, 'Indicator warmup complete');
 
-      // 3. CoinbaseAdapter - connect WebSocket and subscribe
+      // 3. Exchange adapter - connect WebSocket and subscribe
       setProgress({ phase: 'websocket', phaseLabel: 'Connecting to exchange', percent: 65 });
-      await this.services.coinbaseAdapter.connect();
-      this.services.coinbaseAdapter.subscribe(this.services.monitoredSymbols, '5m');
-      logger.debug('CoinbaseAdapter connected and subscribed');
+
+      // Create the correct adapter for this exchange via factory
+      if (this.services.adapterFactory) {
+        this.services.exchangeAdapter = await this.services.adapterFactory.create(this.services.exchangeId!);
+      }
+
+      await this.services.exchangeAdapter.connect();
+      this.services.exchangeAdapter.subscribe(this.services.monitoredSymbols, '5m');
+      logger.debug('Exchange adapter connected and subscribed');
 
       // 4. BoundaryRestService - start listening for boundary events
       setProgress({ phase: 'boundary', phaseLabel: 'Starting boundary service', percent: 80 });
@@ -606,9 +632,8 @@ export class ControlChannelService {
       this.isIdle = false;
       this.isPaused = false;
 
-      // Phase 30: Transition to active and update symbol count
+      // Phase 30: Transition to active
       await this.services.stateMachine.transition('active');
-      this.services.instanceRegistry.setSymbolCount(this.services.monitoredSymbols.length);
 
       // Complete!
       setProgress({ phase: 'complete', phaseLabel: 'Connected', percent: 100 });
@@ -671,9 +696,9 @@ export class ControlChannelService {
     await this.services.alertService.stop();
     logger.debug('AlertService stopped');
 
-    // 2. CoinbaseAdapter - produces candle events (disconnect WebSocket)
-    this.services.coinbaseAdapter.disconnect();
-    logger.debug('CoinbaseAdapter disconnected');
+    // 2. Exchange adapter - produces candle events (disconnect WebSocket)
+    this.services.exchangeAdapter.disconnect();
+    logger.debug('Exchange adapter disconnected');
 
     // 3. BoundaryRestService - produces candle events from REST
     await this.services.boundaryRestService.stop();
@@ -690,6 +715,11 @@ export class ControlChannelService {
 
     this.isIdle = true;
     this.isPaused = false;
+
+    // Clear symbol registry for Candle Meter
+    if (this.services.exchangeId) {
+      clearMonitoredSymbols(this.services.exchangeId);
+    }
 
     logger.info('Exchange connection stopped, entered idle mode');
 
@@ -1003,6 +1033,9 @@ export class ControlChannelService {
 
     // 4. Update in-memory list
     this.services.monitoredSymbols.push(normalizedSymbol);
+    if (this.services.exchangeId) {
+      setMonitoredSymbols(this.services.exchangeId, this.services.monitoredSymbols);
+    }
 
     // 5. If not paused, start monitoring the new symbol
     if (!this.isPaused) {
@@ -1029,7 +1062,7 @@ export class ControlChannelService {
       }
 
       // 5d. Resubscribe WebSocket with updated symbol list
-      this.services.coinbaseAdapter.subscribe(this.services.monitoredSymbols, '5m');
+      this.services.exchangeAdapter.subscribe(this.services.monitoredSymbols, '5m');
     }
 
     logger.info(
@@ -1113,6 +1146,9 @@ export class ControlChannelService {
     if (idx > -1) {
       this.services.monitoredSymbols.splice(idx, 1);
     }
+    if (this.services.exchangeId) {
+      setMonitoredSymbols(this.services.exchangeId, this.services.monitoredSymbols);
+    }
 
     // 5. Clean up Redis cache for removed symbol
     await this.cleanupSymbolCache(normalizedSymbol);
@@ -1125,8 +1161,7 @@ export class ControlChannelService {
       );
 
       // Resubscribe WebSocket without removed symbol
-      // (CoinbaseAdapter handles unsubscribe internally when new list doesn't include symbol)
-      this.services.coinbaseAdapter.subscribe(this.services.monitoredSymbols, '5m');
+      this.services.exchangeAdapter.subscribe(this.services.monitoredSymbols, '5m');
     }
 
     logger.info(
@@ -1214,6 +1249,9 @@ export class ControlChannelService {
 
     // 3. Update in-memory list
     this.services.monitoredSymbols.push(...toAdd);
+    if (this.services.exchangeId) {
+      setMonitoredSymbols(this.services.exchangeId, this.services.monitoredSymbols);
+    }
 
     // 4. If not paused, initialize monitoring for new symbols
     const addedResults: Array<{ symbol: string; backfilled: boolean }> = [];
@@ -1246,7 +1284,7 @@ export class ControlChannelService {
       }
 
       // Resubscribe WebSocket with all symbols
-      this.services.coinbaseAdapter.subscribe(this.services.monitoredSymbols, '5m');
+      this.services.exchangeAdapter.subscribe(this.services.monitoredSymbols, '5m');
     } else {
       // Paused - just record without backfill
       for (const symbol of toAdd) {

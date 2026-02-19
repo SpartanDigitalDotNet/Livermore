@@ -455,7 +455,6 @@ export const indicatorRouter = router({
 
       // Fetch all ticker prices in one Redis MGET call
       const tickerMap = await tickerCache.getTickers(
-        TEST_USER_ID,
         TEST_EXCHANGE_ID,
         symbols
       );

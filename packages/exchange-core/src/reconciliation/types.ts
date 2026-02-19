@@ -8,9 +8,7 @@ import type { Timeframe } from '@livermore/schemas';
  * for all symbols at that timeframe.
  */
 export interface BoundaryRestConfig {
-  /** User ID for cache keys */
-  userId: number;
-  /** Exchange ID for cache keys */
+  /** Exchange ID for cache keys and pub/sub channels */
   exchangeId: number;
   /** Requests per batch (default: 5) */
   batchSize: number;
@@ -34,7 +32,6 @@ export interface BoundaryRestConfig {
  * - 1d: daily (00:00 UTC)
  */
 export const DEFAULT_BOUNDARY_CONFIG: BoundaryRestConfig = {
-  userId: 1,
   exchangeId: 1,
   batchSize: 5,
   batchDelayMs: 1000,

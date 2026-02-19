@@ -1,5 +1,5 @@
 import { getDbClient, exchangeSymbols } from '@livermore/database';
-import { eq, and, lte, isNotNull } from 'drizzle-orm';
+import { eq, and, lte, gte, isNotNull } from 'drizzle-orm';
 import { logger } from '@livermore/utils';
 
 /**
@@ -30,6 +30,9 @@ export class SymbolSourceService {
   /** Maximum Tier 1 symbols per exchange */
   private readonly TIER_1_LIMIT = 100;
 
+  /** Minimum liquidity score to include (Grade B boundary) */
+  private readonly MIN_LIQUIDITY_SCORE = 0.4;
+
   constructor(private exchangeId: number) {}
 
   /**
@@ -50,7 +53,8 @@ export class SymbolSourceService {
           eq(exchangeSymbols.exchangeId, this.exchangeId),
           eq(exchangeSymbols.isActive, true),
           isNotNull(exchangeSymbols.globalRank),
-          lte(exchangeSymbols.globalRank, this.TIER_1_LIMIT)
+          lte(exchangeSymbols.globalRank, this.TIER_1_LIMIT),
+          gte(exchangeSymbols.liquidityScore, this.MIN_LIQUIDITY_SCORE.toString())
         )
       )
       .orderBy(exchangeSymbols.globalRank);
@@ -256,7 +260,8 @@ export class SymbolSourceService {
           eq(exchangeSymbols.symbol, symbol),
           eq(exchangeSymbols.isActive, true),
           isNotNull(exchangeSymbols.globalRank),
-          lte(exchangeSymbols.globalRank, this.TIER_1_LIMIT)
+          lte(exchangeSymbols.globalRank, this.TIER_1_LIMIT),
+          gte(exchangeSymbols.liquidityScore, this.MIN_LIQUIDITY_SCORE.toString())
         )
       )
       .limit(1);

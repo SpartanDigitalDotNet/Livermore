@@ -15,6 +15,7 @@ import {
   MACD_V_DEFAULTS,
   type OHLCWithSynthetic,
 } from '@livermore/indicators';
+import { broadcastCandlePulse } from '../server';
 
 /**
  * Configuration for a symbol/timeframe pair to calculate indicators for
@@ -53,6 +54,8 @@ export class IndicatorCalculationService {
 
   // Track last processed boundary for each symbol/timeframe to detect higher timeframe closes
   private lastProcessedBoundary: Map<string, number> = new Map(); // key: "symbol:timeframe"
+  // Separate boundary tracking for Candle Meter pulses (all symbols, not just indicator-configured)
+  private lastPulseBoundary: Map<string, number> = new Map(); // key: "pulse:symbol:timeframe"
 
   // Exchange ID for scoping Redis keys and pub/sub channels
   private exchangeId: number;
@@ -120,12 +123,27 @@ export class IndicatorCalculationService {
     const symbol = parts[5];
     const timeframe = parts[6] as Timeframe;
 
-    // Only process monitored symbols
+    const candle = JSON.parse(message) as UnifiedCandle;
+
+    // Broadcast pulse for Candle Meter unconditionally (all streamed symbols,
+    // not just those with indicator configs)
+    broadcastCandlePulse({
+      exchangeId: this.exchangeId,
+      symbol,
+      timeframe,
+      timestamp: candle.timestamp,
+    });
+
+    // Broadcast higher-TF boundary pulses for all symbols (Candle Meter freshness)
+    if (timeframe === '5m') {
+      this.broadcastHigherTimeframePulses(symbol, candle.timestamp);
+    }
+
+    // Only recalculate indicators for configured symbols
     if (!this.monitoredSymbols.has(symbol)) {
       return;
     }
 
-    const candle = JSON.parse(message) as UnifiedCandle;
     logger.debug({ symbol, timeframe, timestamp: candle.timestamp }, 'Processing candle:close event');
 
     // Recalculate indicator for this timeframe (cache-only)
@@ -164,6 +182,29 @@ export class IndicatorCalculationService {
     }
 
     await this.calculateIndicators(symbol, timeframe, candles);
+  }
+
+  /**
+   * Broadcast Candle Meter pulses for higher timeframes when boundaries are crossed.
+   * Runs for ALL symbols (not just indicator-configured ones) so the meter stays fresh.
+   * Uses its own boundary tracking separate from indicator recalculation.
+   */
+  private broadcastHigherTimeframePulses(symbol: string, timestamp: number): void {
+    for (const timeframe of this.HIGHER_TIMEFRAMES) {
+      const key = `pulse:${symbol}:${timeframe}`;
+      const lastBoundary = this.lastPulseBoundary.get(key) || 0;
+      const currentBoundary = getCandleTimestamp(timestamp, timeframe);
+
+      if (currentBoundary > lastBoundary) {
+        this.lastPulseBoundary.set(key, currentBoundary);
+        broadcastCandlePulse({
+          exchangeId: this.exchangeId,
+          symbol,
+          timeframe,
+          timestamp: currentBoundary,
+        });
+      }
+    }
   }
 
   /**
@@ -251,6 +292,7 @@ export class IndicatorCalculationService {
     }
 
     this.lastProcessedBoundary.clear();
+    this.lastPulseBoundary.clear();
     this.configsByTimeframe.clear();
     this.monitoredSymbols.clear();
   }

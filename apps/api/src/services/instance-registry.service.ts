@@ -7,7 +7,7 @@ import {
 import { instanceStatusKey } from '@livermore/cache';
 import type { RedisClient } from '@livermore/cache';
 import { createLogger } from '@livermore/utils';
-import { detectPublicIp } from '../utils/detect-public-ip';
+import { detectPublicIp, detectCountry } from '../utils/detect-public-ip';
 
 const logger = createLogger({ name: 'instance-registry', service: 'network' });
 
@@ -36,6 +36,7 @@ export class InstanceRegistryService {
   private readonly host: string;
   private readonly instanceId: string;
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
+  private registered = false;
   private currentStatus: InstanceStatus;
 
   constructor(options: RegistryOptions) {
@@ -51,6 +52,7 @@ export class InstanceRegistryService {
       exchangeName: this.exchangeName,
       hostname: this.host,
       ipAddress: null,
+      countryCode: null,
       adminEmail: null,
       adminDisplayName: null,
       connectionState: 'idle',
@@ -81,6 +83,7 @@ export class InstanceRegistryService {
       exchangeName: this.exchangeName,
       hostname: this.host,
       ipAddress: null,
+      countryCode: null,
       adminEmail: null,
       adminDisplayName: null,
       connectionState: 'idle',
@@ -104,6 +107,7 @@ export class InstanceRegistryService {
 
     if (result === 'OK') {
       // Registration succeeded -- we own this exchange
+      this.registered = true;
       logger.info(
         { exchangeId: this.exchangeId, exchangeName: this.exchangeName, hostname: this.host, instanceId: this.instanceId },
         'Instance registered'
@@ -114,11 +118,13 @@ export class InstanceRegistryService {
         // Ignore errors on cleanup of legacy key
       });
 
-      // Detect public IP asynchronously
+      // Detect public IP and country asynchronously
       detectPublicIp().then((ip) => {
         if (ip) {
-          this.updateStatus({ ipAddress: ip }).catch(() => {
-            // Non-critical: IP update failure is not fatal
+          detectCountry(ip).then((countryCode) => {
+            this.updateStatus({ ipAddress: ip, countryCode: countryCode ?? null }).catch(() => {
+              // Non-critical: IP/country update failure is not fatal
+            });
           });
         }
       });
@@ -146,6 +152,7 @@ export class InstanceRegistryService {
           'XX'
         );
 
+        this.registered = true;
         logger.info(
           { exchangeId: this.exchangeId, hostname: this.host },
           'Instance re-registered (same host restart)'
@@ -172,6 +179,7 @@ export class InstanceRegistryService {
     );
 
     if (retryResult === 'OK') {
+      this.registered = true;
       logger.info(
         { exchangeId: this.exchangeId, hostname: this.host },
         'Instance registered (after stale key expired)'
@@ -263,6 +271,14 @@ export class InstanceRegistryService {
    */
   async updateStatus(updates: Partial<InstanceStatus>): Promise<void> {
     Object.assign(this.currentStatus, updates);
+
+    // Guard: don't write to Redis if register() was never called.
+    // Prevents ghost keys (e.g. exchange:0:status) when the placeholder
+    // registry records an error before a real exchange is configured.
+    if (!this.registered) {
+      return;
+    }
+
     await this.redis.set(
       instanceStatusKey(this.exchangeId),
       JSON.stringify(this.currentStatus),

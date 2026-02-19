@@ -118,8 +118,8 @@ export function SettingsSplitView({
       {/* Form Editor (Left Side) */}
       <div className="space-y-4">
         <div className="flex items-center justify-between">
-          <h3 className="text-sm font-medium text-gray-700">Form Editor</h3>
-          <span className="text-xs text-gray-500">
+          <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">Form Editor</h3>
+          <span className="text-xs text-gray-500 dark:text-gray-400">
             Edit fields to update settings
           </span>
         </div>
@@ -131,8 +131,8 @@ export function SettingsSplitView({
       {/* JSON Editor (Right Side) */}
       <div className="space-y-4">
         <div className="flex items-center justify-between">
-          <h3 className="text-sm font-medium text-gray-700">JSON Editor</h3>
-          <span className="text-xs text-gray-500">
+          <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">JSON Editor</h3>
+          <span className="text-xs text-gray-500 dark:text-gray-400">
             Edit raw JSON for advanced changes
           </span>
         </div>

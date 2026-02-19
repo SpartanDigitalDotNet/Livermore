@@ -1,97 +1,108 @@
-# Roadmap: Livermore v6.0 Perseus Network
+# Roadmap: Livermore v7.0 Smart Warmup & Binance Adapter
 
 ## Overview
 
-v6.0 transforms Livermore from isolated API instances with no mutual awareness into a coordinated Perseus Network with identity, health monitoring, and audit logging. The roadmap progresses from foundational instance registration and heartbeat (replacing the broken prototype) through Redis Streams logging, tRPC API surface, and finally an Admin UI Network page that makes the entire system observable. Each phase delivers a complete, testable capability that the next phase builds upon.
+v7.0 transforms warmup from brute-force backfill into a smart, observable process and brings Binance WebSocket streaming online for Kaia's instance. The roadmap starts with a surgical ticker key migration to align the last user-scoped keys with the exchange-scoped pattern established in v5.0, then builds the smart warmup engine that scans cached data before fetching, followed by the Binance WebSocket adapter (the REST client already exists from v5.0), Admin UI enhancements for exchange connection and warmup monitoring, and finally a test harness that validates the complete Binance pipeline end-to-end before Kaia handoff.
 
 ## Phases
 
 **Phase Numbering:**
-- Integer phases (30, 31, 32, 33): Planned v6.0 milestone work
-- Decimal phases (30.1, 30.2): Urgent insertions if needed (marked with INSERTED)
+- Integer phases (34, 35, 36, 37, 38): Planned v7.0 milestone work
+- Decimal phases (34.1, 34.2): Urgent insertions if needed (marked with INSERTED)
 
 Decimal phases appear between their surrounding integers in numeric order.
 
-- [x] **Phase 30: Instance Registry and State Machine** - Exchange-scoped registration with typed state machine, TTL heartbeat, and one-instance-per-exchange enforcement
-- [x] **Phase 31: Network Activity Logging** - Redis Streams event log for state transitions and errors with 90-day retention
-- [x] **Phase 32: tRPC Network Router** - API endpoints for reading instance status and activity logs
-- [x] **Phase 33: Admin UI Network View** - Visual network dashboard with instance cards, status badges, activity feed, and differentiators
+- [x] **Phase 34: Ticker Key Migration** - Remove userId from ticker keys and pub/sub channels to complete exchange-scoped key alignment
+- [x] **Phase 35: Smart Warmup Engine** - Scan cached candle data first, build a schedule of what is missing, execute only the gaps, and publish real-time progress stats
+- [ ] **Phase 36: Binance WebSocket Adapter** - Implement IExchangeAdapter for Binance with WebSocket streaming, symbol normalization, and factory wiring
+- [x] **Phase 37: Admin UI -- Connect, Exchange Setup & Warmup Progress** - Network page Connect button with lock-check, Exchange Setup Modal for user_exchanges, and warmup progress subscription
+- [ ] **Phase 38: Binance Test Harness & Handoff** - Validate Binance REST warmup and WebSocket streaming end-to-end, then prepare Kaia handoff
 
 ## Phase Details
 
-### Phase 30: Instance Registry and State Machine
-**Goal**: Each Livermore API instance is a uniquely identifiable, self-reporting node in Redis with validated state transitions and automatic dead-instance detection
-**Depends on**: Nothing (first phase -- replaces broken prototype)
-**Requirements**: REG-01, REG-02, REG-03, REG-04, REG-05, REG-06, HB-01, HB-02, HB-03, HB-04, LOCK-01, LOCK-02, LOCK-03, LOCK-04, FIX-01, FIX-02, FIX-03
+### Phase 34: Ticker Key Migration
+**Goal**: Ticker keys and pub/sub channels are exchange-scoped (consistent with candle and indicator keys), with no user_id in the key pattern
+**Depends on**: Nothing (first phase -- surgical refactor of existing key pattern)
+**Requirements**: TICK-01, TICK-02, TICK-03
 **Success Criteria** (what must be TRUE):
-  1. When a Livermore API instance starts and receives a `start` command, an exchange-scoped Redis key appears with full identity payload (exchangeId, exchangeName, connectionState, hostname, IP, admin info, symbolCount, connectedAt, lastHeartbeat, lastError)
-  2. The instance key TTL refreshes every heartbeat interval (default 15s) and the key auto-expires after 3x the interval (default 45s) if heartbeating stops -- meaning a killed process leaves no permanent ghost key
-  3. Connection state progresses through `idle -> starting -> warming -> active` during normal startup and `active -> stopping -> stopped` during shutdown, with invalid transitions rejected
-  4. A second instance attempting to claim the same exchange is refused with an error message identifying who holds the lock (hostname, IP, connectedAt)
-  5. The three existing bugs are resolved: heartbeat updates consistently (FIX-01), errors persist to the status key (FIX-02), and dead instances do not show as `idle` forever (FIX-03)
-**Plans**: 3 plans
-
+  1. An impact assessment documents every service, router, and component that reads or writes ticker keys or subscribes to ticker pub/sub channels, confirming nothing is missed before code changes begin
+  2. Ticker data is stored at `ticker:{exchangeId}:{symbol}` instead of `ticker:{userId}:{exchangeId}:{symbol}`, and all services that read ticker data (alert price display, Admin UI) resolve prices correctly from the new key
+  3. Ticker pub/sub channels use the new exchange-scoped pattern, and real-time price updates flow from the WebSocket ticker handler through pub/sub to any subscriber without interruption
+**Plans:** 2 plans
 Plans:
-- [x] 30-01-PLAN.md -- Foundation: Zod schemas, key builders, IP detection utility
-- [x] 30-02-PLAN.md -- Core services: StateMachineService and InstanceRegistryService
-- [x] 30-03-PLAN.md -- Integration: Wire into server.ts, control-channel, cleanup adapter-factory
+- [x] 34-01-PLAN.md -- Impact assessment + cache layer migration (tickerKey, tickerChannel, TickerCacheStrategy)
+- [x] 34-02-PLAN.md -- Update all consumer code + final verification audit
 
-### Phase 31: Network Activity Logging
-**Goal**: Every state transition and error across all instances is durably recorded in Redis Streams with automatic retention management
-**Depends on**: Phase 30 (state transitions and errors to log)
-**Requirements**: LOG-01, LOG-02, LOG-03, LOG-04, LOG-05, LOG-06
+### Phase 35: Smart Warmup Engine
+**Goal**: Warmup only fetches candle data that is actually missing, skipping symbol/timeframe pairs that already have sufficient cached data, with real-time progress visible in Redis
+**Depends on**: Phase 34 (clean key patterns before building new warmup logic)
+**Requirements**: WARM-01, WARM-02, WARM-03, WARM-04, WARM-05
 **Success Criteria** (what must be TRUE):
-  1. When an instance transitions state (e.g., idle to starting, active to stopping), an entry appears in the exchange's Redis Stream (`logs:network:{exchange_name}`) containing timestamp, event type, fromState, toState, exchangeId, exchangeName, hostname, ip, and adminEmail
-  2. When an error occurs, an error event is logged to the same stream with timestamp, event type, error message, exchangeId, exchangeName, hostname, ip, and current state
-  3. Heartbeat refreshes do NOT produce stream entries -- only state transitions and errors appear in the log
-  4. Stream entries older than 90 days are automatically trimmed via inline MAXLEN or MINID on every XADD, preventing unbounded memory growth
-**Plans**: 2 plans
-
+  1. Before any REST calls are made, an Exchange Candle Status Scan checks each symbol from largest to smallest timeframe (1d, 4h, 1h, 15m, 5m) and identifies which symbol/timeframe pairs already have 60+ cached candles -- pairs with sufficient data are skipped entirely
+  2. The scan results are compiled into a warmup schedule stored at `exchange:<exchange_id>:warm-up-schedule:symbols` in Redis, listing only the symbol/timeframe pairs that need fetching -- an external observer (or Admin UI) can read this key to see what warmup will do before it starts
+  3. Warmup execution follows the schedule, making REST calls only for symbol/timeframe pairs listed as needing data -- a warm restart with fully cached data results in zero REST backfill calls
+  4. Warmup progress stats (percent complete, ETA, symbols remaining, failures) are continuously updated at `exchange:<exchange_id>:warm-up-schedule:stats` in Redis as warmup progresses, reflecting real-time status
+**Plans:** 2 plans
 Plans:
-- [x] 31-01-PLAN.md -- Foundation: Zod schemas for log entries, key builder, NetworkActivityLogger service
-- [x] 31-02-PLAN.md -- Integration: Wire logger into StateMachineService, error paths, server.ts lifecycle
+- [x] 35-01-PLAN.md -- Candle Status Scanner + Warmup Schedule Builder (types, scanner, schedule builder, Redis keys)
+- [x] 35-02-PLAN.md -- SmartWarmupService executor with progress stats + handleStart() integration
 
-### Phase 32: tRPC Network Router
-**Goal**: The Admin UI has a reliable API surface to read instance status and activity logs without SCAN/KEYS commands
-**Depends on**: Phase 30 (instance keys to read), Phase 31 (stream entries to query)
-**Requirements**: RPC-01, RPC-02, RPC-03
+### Phase 36: Binance WebSocket Adapter
+**Goal**: BinanceAdapter streams real-time candle data via WebSocket, handles Binance message formats, and integrates into the existing exchange adapter pipeline
+**Depends on**: Nothing from this milestone (BinanceRestClient and IExchangeAdapter interface already exist from v5.0)
+**Requirements**: BIN-01, BIN-02, BIN-04, BIN-05
 **Success Criteria** (what must be TRUE):
-  1. Calling `network.getInstances` returns status for all known exchanges (sourced from the `exchanges` database table, not Redis SCAN/KEYS), including instances that are offline (key missing)
-  2. Calling `network.getActivityLog` returns recent state transitions and errors from Redis Streams in reverse chronological order with pagination support (COUNT parameter)
-  3. Calling `network.getExchangeStatus` returns the full status payload for a single exchange by ID, or a clear "offline" indicator if the key has expired
-**Plans**: 1 plan
-
+  1. BinanceAdapter implements IExchangeAdapter and streams real-time kline (candle) data via WebSocket, processing Binance's JSON message format into the same candle events that CoinbaseAdapter produces
+  2. The adapter works for both binance.com and binance.us by reading wsUrl and restUrl from the exchanges table -- no code changes needed to switch between the two, only the database row differs
+  3. ExchangeAdapterFactory creates a BinanceAdapter when the exchange name is 'binance' or 'binance_us' -- the commented-out factory branch is replaced with working code
+  4. The adapter handles Binance WebSocket specifics: ping/pong heartbeat, automatic reconnection on disconnect, and subscription management for multiple symbol streams
+**Plans:** 2 plans
 Plans:
-- [x] 32-01-PLAN.md -- Network router: getInstances, getActivityLog, getExchangeStatus procedures + registration
+- [x] 36-01-PLAN.md -- BinanceAdapter core implementation (WebSocket streaming, kline/ticker handling, cache integration)
+- [x] 36-02-PLAN.md -- ExchangeAdapterFactory wiring for binance/binance_us
 
-### Phase 33: Admin UI Network View
-**Goal**: Admins can see every instance in the Perseus Network at a glance -- who is running what, where, whether it is healthy, and what happened recently
-**Depends on**: Phase 32 (tRPC endpoints to consume)
-**Requirements**: UI-01, UI-02, UI-03, UI-04, UI-05, DIFF-01, DIFF-02, DIFF-04
+### Phase 37: Admin UI -- Connect, Exchange Setup & Warmup Progress
+**Goal**: Admins can connect an exchange from the Network page, manage exchange credentials, and monitor warmup progress in real time
+**Depends on**: Phase 35 (warmup stats in Redis), Phase 36 (Binance adapter for connect to work), existing Network page from v6.0
+**Requirements**: ADM-01, ADM-02, ADM-03, ADM-04, WARM-06
 **Success Criteria** (what must be TRUE):
-  1. A "Network" link appears in the Admin header navigation, and clicking it shows instance cards for every known exchange -- each card displays exchange name, connection state as a color-coded badge, hostname, IP, admin name, symbol count, last heartbeat timestamp, and connected-since time
-  2. When an instance key has expired (instance is dead), its card displays as "Offline" with last-known information pulled from the most recent stream entry
-  3. A scrollable activity feed below the cards shows state transitions and errors in reverse chronological order, auto-refreshing alongside the instance cards
-  4. The entire page polls at a 5-second interval consistent with the existing control panel pattern, showing live heartbeat latency with color degradation (green < 10s, yellow < 30s, red > 30s) and uptime duration ("Running for 4h 23m")
-  5. Discord notifications fire when an instance changes state (e.g., goes offline, comes online), leveraging the existing Discord notification service
-**Plans**: 2 plans
-
+  1. The Admin Network page shows a "Connect" button on instance cards for exchanges that are offline or idle, and clicking it initiates the connection flow
+  2. If the exchange is already running on another machine, the Connect button shows a warning modal displaying the current lock holder's hostname, IP, and connected-since timestamp -- the user must explicitly confirm before proceeding
+  3. An Exchange Setup Modal allows creating and updating user_exchanges records (API key env var names, display name), with correct is_active/is_default orchestration -- setting a new default exchange automatically unsets the previous default for that user
+  4. During warmup, the Admin UI subscribes to warmup progress stats and displays real-time percent complete, ETA, current symbol being warmed, and any failures -- the subscription is active only for the lifetime of the warmup process
+**Plans:** 3 plans
 Plans:
-- [x] 33-01-PLAN.md -- Admin UI: Network page, InstanceCard, ActivityFeed components, header nav link
-- [x] 33-02-PLAN.md -- Discord notifications: Wire state change notifications into StateMachineService
+- [x] 37-01-PLAN.md -- Connect button + lock-check warning modal (ADM-01, ADM-02)
+- [x] 37-02-PLAN.md -- Exchange Setup Modal update + is_default orchestration (ADM-03, ADM-04)
+- [x] 37-03-PLAN.md -- Warmup progress panel with real-time stats (WARM-06)
+
+### Phase 38: Binance Test Harness & Handoff
+**Goal**: Binance exchange integration is validated end-to-end with real exchange data and Kaia has everything needed to configure and run her Binance instance
+**Depends on**: Phase 35 (smart warmup), Phase 36 (Binance adapter), Phase 37 (Admin UI for exchange setup)
+**Requirements**: TST-01, TST-02, TST-03, TST-04
+**Success Criteria** (what must be TRUE):
+  1. A Subscription Test Harness performs a BTC 1d warmup against the configured exchange, confirming REST candle fetching works and candles are cached correctly in Redis
+  2. The same test harness runs a 2-second WebSocket subscription test, confirming live streaming data is received and parsed into valid candle events
+  3. Binance.us is tested end-to-end with real exchange data -- warmup completes, candles are cached at the correct exchange-scoped Redis keys, and WebSocket streaming delivers live updates
+  4. Handoff documentation is prepared for Kaia covering: environment variable setup, exchange database configuration, first-run steps, and how to verify the Binance instance is healthy via the Admin Network page
+**Plans:** 2 plans
+Plans:
+- [ ] 38-01-PLAN.md -- Subscription Test Harness script (REST warmup + WebSocket streaming tests)
+- [ ] 38-02-PLAN.md -- Binance.us E2E test execution + Kaia handoff documentation
 
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 30 -> 31 -> 32 -> 33
+Phases execute in numeric order: 34 -> 35 -> 36 -> 37 -> 38
 
 | Phase | Plans Complete | Status | Completed |
 |-------|---------------|--------|-----------|
-| 30. Instance Registry and State Machine | 3/3 | Complete | 2026-02-10 |
-| 31. Network Activity Logging | 2/2 | Complete | 2026-02-10 |
-| 32. tRPC Network Router | 1/1 | Complete | 2026-02-10 |
-| 33. Admin UI Network View | 2/2 | Complete | 2026-02-10 |
+| 34. Ticker Key Migration | 2/2 | Complete | 2026-02-13 |
+| 35. Smart Warmup Engine | 2/2 | Complete | 2026-02-13 |
+| 36. Binance WebSocket Adapter | 2/2 | Complete | 2026-02-13 |
+| 37. Admin UI -- Connect, Exchange Setup & Warmup Progress | 3/3 | Complete | 2026-02-13 |
+| 38. Binance Test Harness & Handoff | 0/2 | Not started | - |
 
 ---
-*Roadmap created: 2026-02-10*
-*Last updated: 2026-02-10 -- ALL PHASES COMPLETE -- v6.0 milestone delivered*
+*Roadmap created: 2026-02-13*
+*Last updated: 2026-02-13 -- Phase 38 plans created (Binance Test Harness & Handoff)*

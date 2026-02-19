@@ -137,7 +137,7 @@ export class AlertEvaluationService {
 
     // Subscribe to ticker channels for all symbols (for price tracking)
     for (const symbol of this.symbols) {
-      channels.push(tickerChannel(1, this.exchangeId, symbol));
+      channels.push(tickerChannel(this.exchangeId, symbol));
     }
 
     // Subscribe to indicator channels for all symbol/timeframe combos
@@ -416,7 +416,11 @@ export class AlertEvaluationService {
     histogram: number,
     indicator: CachedIndicatorValue
   ): Promise<void> {
-    const price = this.currentPrices.get(symbol) || 0;
+    let price = this.currentPrices.get(symbol) || 0;
+    if (price === 0) {
+      const latestCandle = await this.candleCache.getLatestCandle(1, this.exchangeId, symbol, timeframe);
+      if (latestCandle) price = latestCandle.close;
+    }
 
     logger.info(
       { symbol, timeframe, level, direction, macdV: currentMacdV, price },
@@ -498,6 +502,7 @@ export class AlertEvaluationService {
         triggeredAt: now.toISOString(),
         sourceExchangeId: this.exchangeId,
         sourceExchangeName: this.exchangeName,
+        triggerLabel: `level_${level}`,
       };
       broadcastAlert(alertPayload);
 
@@ -521,7 +526,11 @@ export class AlertEvaluationService {
     bufferValue: number,
     indicator: CachedIndicatorValue
   ): Promise<void> {
-    const price = this.currentPrices.get(symbol) || 0;
+    let price = this.currentPrices.get(symbol) || 0;
+    if (price === 0) {
+      const latestCandle = await this.candleCache.getLatestCandle(1, this.exchangeId, symbol, timeframe);
+      if (latestCandle) price = latestCandle.close;
+    }
     const bufferPct = zone === 'oversold' ? this.OVERSOLD_BUFFER_PCT : this.OVERBOUGHT_BUFFER_PCT;
 
     logger.info(
@@ -605,6 +614,7 @@ export class AlertEvaluationService {
         triggeredAt: now.toISOString(),
         sourceExchangeId: this.exchangeId,
         sourceExchangeName: this.exchangeName,
+        triggerLabel: `reversal_${zone}`,
       };
       broadcastAlert(alertPayload);
 

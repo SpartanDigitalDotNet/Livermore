@@ -1,9 +1,12 @@
 import { z } from 'zod';
 import { router, protectedProcedure } from '@livermore/trpc-config';
 import { getDbClient, exchanges } from '@livermore/database';
-import { getRedisClient, instanceStatusKey, networkActivityStreamKey } from '@livermore/cache';
+import { getRedisClient, instanceStatusKey, networkActivityStreamKey, warmupStatsKey, exchangeCandleKey } from '@livermore/cache';
 import { eq, asc } from 'drizzle-orm';
-import type { InstanceStatus } from '@livermore/schemas';
+import { InstanceStatusSchema, type InstanceStatus } from '@livermore/schemas';
+import type { Timeframe } from '@livermore/schemas';
+import type { WarmupStats } from '@livermore/exchange-core';
+import { getMonitoredSymbols } from '../services/runtime-state';
 
 /**
  * Parse a Redis Stream entry's flat field-value array into an object.
@@ -71,7 +74,10 @@ export const networkRouter = router({
       for (const r of results) {
         if (r.data) {
           try {
-            statusMap.set(r.id, JSON.parse(r.data) as InstanceStatus);
+            const parsed = InstanceStatusSchema.safeParse(JSON.parse(r.data));
+            if (parsed.success) {
+              statusMap.set(r.id, parsed.data);
+            }
           } catch {
             // Parse failure -- treat as offline
           }
@@ -216,6 +222,89 @@ export const networkRouter = router({
       } catch {
         return { online: false as const, status: null };
       }
+    }),
+
+  /**
+   * GET /network.getWarmupStats
+   *
+   * Returns real-time warmup progress stats for a single exchange.
+   * Used by Admin UI WarmupProgressPanel to display percent complete, ETA, current symbol, failures.
+   *
+   * Returns null when no warmup is active or stats have expired.
+   */
+  getWarmupStats: protectedProcedure
+    .input(
+      z.object({
+        exchangeId: z.number(),
+      })
+    )
+    .query(async ({ input }) => {
+      try {
+        const redis = getRedisClient();
+        const data = await redis.get(warmupStatsKey(input.exchangeId));
+
+        if (!data) {
+          return { stats: null };
+        }
+
+        const stats = JSON.parse(data) as WarmupStats;
+        return { stats };
+      } catch {
+        // Redis unavailable or parse failure -- return null
+        return { stats: null };
+      }
+    }),
+  /**
+   * GET /network.getCandleTimestamps
+   *
+   * Returns the latest candle timestamp for each symbol × timeframe pair
+   * for a given exchange. Used by Candle Meter to seed initial state.
+   *
+   * Uses individual zrevrangebyscore calls (Azure Cluster compatible).
+   */
+  getCandleTimestamps: protectedProcedure
+    .input(
+      z.object({
+        exchangeId: z.number(),
+      })
+    )
+    .query(async ({ input }) => {
+      const { exchangeId } = input;
+      const symbols = getMonitoredSymbols(exchangeId);
+      const timeframes: Timeframe[] = ['1m', '5m', '15m', '1h', '4h', '1d'];
+
+      if (symbols.length === 0) {
+        return { exchangeId, symbols: [], timestamps: {} };
+      }
+
+      const redis = getRedisClient();
+
+      // Build all symbol × timeframe queries in parallel
+      const timestamps: Record<string, Record<string, number | null>> = {};
+
+      await Promise.all(
+        symbols.map(async (symbol) => {
+          const tfResults: Record<string, number | null> = {};
+
+          await Promise.all(
+            timeframes.map(async (tf) => {
+              try {
+                const key = exchangeCandleKey(exchangeId, symbol, tf);
+                // Get the single most recent entry (highest score = most recent timestamp)
+                const results = await redis.zrevrangebyscore(key, '+inf', '-inf', 'WITHSCORES', 'LIMIT', 0, 1);
+                // results = [member, score] or empty
+                tfResults[tf] = results.length >= 2 ? Number(results[1]) : null;
+              } catch {
+                tfResults[tf] = null;
+              }
+            })
+          );
+
+          timestamps[symbol] = tfResults;
+        })
+      );
+
+      return { exchangeId, symbols, timestamps };
     }),
 });
 

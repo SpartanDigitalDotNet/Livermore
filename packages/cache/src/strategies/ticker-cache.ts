@@ -3,11 +3,12 @@ import { tickerKey, tickerChannel } from '../keys';
 import type { RedisClient } from '../client';
 
 /**
- * Ticker caching strategy using Redis strings
+ * Exchange-scoped ticker caching strategy using Redis strings
  *
  * Tickers are stored as JSON strings with short TTL (60 seconds)
  * for near-real-time price updates.
- * All tickers are scoped by userId and exchangeId for multi-user support.
+ * Tickers are exchange-scoped (shared across users on the same exchange),
+ * consistent with candle and indicator key patterns.
  */
 export class TickerCacheStrategy {
   constructor(private redis: RedisClient) {}
@@ -15,11 +16,11 @@ export class TickerCacheStrategy {
   /**
    * Set ticker data in cache
    */
-  async setTicker(userId: number, exchangeId: number, ticker: Ticker): Promise<void> {
+  async setTicker(exchangeId: number, ticker: Ticker): Promise<void> {
     // Validate with Zod
     const validated = TickerSchema.parse(ticker);
 
-    const key = tickerKey(userId, exchangeId, validated.symbol);
+    const key = tickerKey(exchangeId, validated.symbol);
 
     // Store as JSON string
     await this.redis.setex(
@@ -32,8 +33,8 @@ export class TickerCacheStrategy {
   /**
    * Get ticker data from cache
    */
-  async getTicker(userId: number, exchangeId: number, symbol: string): Promise<Ticker | null> {
-    const key = tickerKey(userId, exchangeId, symbol);
+  async getTicker(exchangeId: number, symbol: string): Promise<Ticker | null> {
+    const key = tickerKey(exchangeId, symbol);
 
     const data = await this.redis.get(key);
 
@@ -45,10 +46,10 @@ export class TickerCacheStrategy {
   /**
    * Get multiple tickers at once
    */
-  async getTickers(userId: number, exchangeId: number, symbols: string[]): Promise<Map<string, Ticker>> {
+  async getTickers(exchangeId: number, symbols: string[]): Promise<Map<string, Ticker>> {
     if (symbols.length === 0) return new Map();
 
-    const keys = symbols.map((symbol) => tickerKey(userId, exchangeId, symbol));
+    const keys = symbols.map((symbol) => tickerKey(exchangeId, symbol));
 
     // Use individual GET calls for Azure Redis Cluster compatibility (avoids CROSSSLOT errors)
     const values = await Promise.all(keys.map((key) => this.redis.get(key)));
@@ -74,24 +75,24 @@ export class TickerCacheStrategy {
   /**
    * Publish ticker update to Redis pub/sub
    */
-  async publishUpdate(userId: number, exchangeId: number, ticker: Ticker): Promise<void> {
-    const channel = tickerChannel(userId, exchangeId, ticker.symbol);
+  async publishUpdate(exchangeId: number, ticker: Ticker): Promise<void> {
+    const channel = tickerChannel(exchangeId, ticker.symbol);
     await this.redis.publish(channel, JSON.stringify(ticker));
   }
 
   /**
    * Delete ticker from cache
    */
-  async deleteTicker(userId: number, exchangeId: number, symbol: string): Promise<void> {
-    const key = tickerKey(userId, exchangeId, symbol);
+  async deleteTicker(exchangeId: number, symbol: string): Promise<void> {
+    const key = tickerKey(exchangeId, symbol);
     await this.redis.del(key);
   }
 
   /**
    * Check if ticker exists in cache
    */
-  async hasTicker(userId: number, exchangeId: number, symbol: string): Promise<boolean> {
-    const key = tickerKey(userId, exchangeId, symbol);
+  async hasTicker(exchangeId: number, symbol: string): Promise<boolean> {
+    const key = tickerKey(exchangeId, symbol);
     const exists = await this.redis.exists(key);
     return exists === 1;
   }

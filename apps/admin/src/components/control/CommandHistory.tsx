@@ -64,7 +64,7 @@ export function CommandHistory({
       </CardHeader>
       <CardContent>
         {displayedCommands.length === 0 ? (
-          <p className="text-gray-500 text-sm">No commands executed yet</p>
+          <p className="text-gray-500 dark:text-gray-400 text-sm">No commands executed yet</p>
         ) : (
           <div className="space-y-2">
             {displayedCommands.map((cmd) => (
@@ -90,7 +90,7 @@ export function CommandHistory({
                       {formatCommandType(cmd.type)}
                     </div>
                     {cmd.message && (
-                      <div className="text-xs text-gray-500 truncate max-w-xs">
+                      <div className="text-xs text-gray-500 dark:text-gray-400 truncate max-w-xs">
                         {cmd.message}
                       </div>
                     )}
@@ -99,11 +99,11 @@ export function CommandHistory({
 
                 {/* Timestamp and Duration */}
                 <div className="text-right">
-                  <div className="text-xs text-gray-500">
+                  <div className="text-xs text-gray-500 dark:text-gray-400">
                     {formatRelativeTime(cmd.timestamp)}
                   </div>
                   {cmd.duration !== undefined && cmd.status !== 'pending' && (
-                    <div className="text-xs text-gray-400">
+                    <div className="text-xs text-gray-400 dark:text-gray-500">
                       {cmd.duration}ms
                     </div>
                   )}

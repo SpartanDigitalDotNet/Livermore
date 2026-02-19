@@ -2,5 +2,8 @@
   "mode": "interactive",
   "depth": "standard",
   "parallelization": true,
-  "created": "2026-01-18"
+  "created": "2026-01-18",
+  "workflow": {
+    "research": false
+  }
 }

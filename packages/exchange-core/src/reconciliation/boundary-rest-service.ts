@@ -1,5 +1,5 @@
 import type { Timeframe, UnifiedCandle, IRestClient } from '@livermore/schemas';
-import { CandleCacheStrategy, candleClosePattern, type RedisClient } from '@livermore/cache';
+import { CandleCacheStrategy, exchangeCandleClosePattern, type RedisClient } from '@livermore/cache';
 import { logger } from '@livermore/utils';
 import { BoundaryRestConfig, DEFAULT_BOUNDARY_CONFIG } from './types';
 import { detectBoundaries } from './boundary-detector';
@@ -75,9 +75,8 @@ export class BoundaryRestService {
     this.symbols = symbols;
     this.isRunning = true;
 
-    // Subscribe to 5m candle:close events for all symbols using pattern
-    const pattern = candleClosePattern(
-      this.config.userId,
+    // Subscribe to 5m candle:close events for all symbols using exchange-scoped pattern
+    const pattern = exchangeCandleClosePattern(
       this.config.exchangeId,
       '*', // Wildcard for all symbols
       '5m'
@@ -287,8 +286,7 @@ export class BoundaryRestService {
       exchange: this.exchangeName,
     };
 
-    await this.candleCache.addCandleIfNewer(
-      this.config.userId,
+    await this.candleCache.addExchangeCandle(
       this.config.exchangeId,
       unified
     );

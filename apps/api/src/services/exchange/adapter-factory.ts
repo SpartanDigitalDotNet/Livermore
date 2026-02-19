@@ -1,7 +1,8 @@
 import { getDbClient, exchanges } from '@livermore/database';
 import { eq } from 'drizzle-orm';
 import type { RedisClient } from '@livermore/cache';
-import { CoinbaseAdapter, type CoinbaseAdapterOptions } from '@livermore/exchange-core';
+import { CoinbaseAdapter, type CoinbaseAdapterOptions, BinanceAdapter, type BinanceAdapterOptions } from '@livermore/exchange-core';
+import { BinanceRestClient } from '@livermore/binance-client';
 import { logger } from '@livermore/utils';
 import type { IExchangeAdapter } from '@livermore/schemas';
 
@@ -21,9 +22,9 @@ interface ExchangeConfig {
  * Configuration for creating an adapter via factory
  */
 export interface AdapterFactoryConfig {
-  /** Coinbase API key ID (from env or secrets) */
+  /** Coinbase API key ID (required for Coinbase, not used for Binance) */
   apiKeyId: string;
-  /** Coinbase private key PEM (from env or secrets) */
+  /** Coinbase private key PEM (required for Coinbase, not used for Binance) */
   privateKeyPem: string;
   /** Redis client for caching and pub/sub */
   redis: RedisClient;
@@ -37,12 +38,10 @@ export interface AdapterFactoryConfig {
  * Creates exchange adapters based on exchange configuration from database.
  * Phase 28 EXC-03: Factory instantiates correct adapter by exchange type.
  *
- * Currently supports:
+ * Supported exchanges:
  * - coinbase: CoinbaseAdapter (Coinbase Advanced Trade WebSocket)
- *
- * Future:
- * - binance: BinanceAdapter
- * - binanceus: BinanceUSAdapter
+ * - binance: BinanceAdapter (Binance WebSocket kline + miniTicker)
+ * - binance_us: BinanceAdapter (same adapter, different wsUrl/restUrl)
  */
 export class ExchangeAdapterFactory {
   private db = getDbClient();
@@ -100,14 +99,12 @@ export class ExchangeAdapterFactory {
       case 'coinbase':
         return this.createCoinbaseAdapter(exchange);
 
-      // Future: Add other exchanges
-      // case 'binance':
-      //   return this.createBinanceAdapter(exchange);
-      // case 'binanceus':
-      //   return this.createBinanceUSAdapter(exchange);
+      case 'binance':
+      case 'binance_us':
+        return this.createBinanceAdapter(exchange);
 
       default:
-        throw new Error(`Unsupported exchange type: ${exchange.name}. Supported: coinbase`);
+        throw new Error(`Unsupported exchange type: ${exchange.name}. Supported: coinbase, binance, binance_us`);
     }
   }
 
@@ -128,6 +125,40 @@ export class ExchangeAdapterFactory {
     logger.info(
       { exchangeId: exchange.id, exchangeName: exchange.name },
       'Created Coinbase adapter via factory'
+    );
+
+    return adapter;
+  }
+
+  /**
+   * Create a Binance adapter instance
+   * Works for both binance.com and binance.us -- only wsUrl/restUrl differ
+   */
+  private createBinanceAdapter(exchange: ExchangeConfig): BinanceAdapter {
+    if (!exchange.wsUrl) {
+      throw new Error(`Exchange ${exchange.name} (ID: ${exchange.id}) has no wsUrl configured`);
+    }
+
+    // Create REST client for reconnection backfill
+    // restUrl determines binance.com vs binance.us
+    const restClient = new BinanceRestClient({
+      baseUrl: exchange.restUrl ?? undefined,
+    });
+
+    const config: BinanceAdapterOptions = {
+      wsUrl: exchange.wsUrl,
+      redis: this.config.redis,
+      userId: this.config.userId,
+      exchangeId: exchange.id,
+      exchangeName: exchange.name,
+      restClient,
+    };
+
+    const adapter = new BinanceAdapter(config);
+
+    logger.info(
+      { exchangeId: exchange.id, exchangeName: exchange.name, wsUrl: exchange.wsUrl },
+      'Created Binance adapter via factory'
     );
 
     return adapter;
