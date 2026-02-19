@@ -11,10 +11,10 @@ See: .planning/PROJECT.md (updated 2026-02-18)
 
 **Milestone:** v8.0 Perseus Web Public API
 **Phase:** 41 of 43 (Authentication & Rate Limiting)
-**Plan:** 1 of 2 complete
-**Status:** Executing Phase 41
+**Plan:** 2 of 2 complete
+**Status:** Phase 41 Complete
 
-**Last activity:** 2026-02-19 — Phase 41 Plan 01 complete (auth middleware, rate limiting, API key management)
+**Last activity:** 2026-02-19 — Phase 41 Plan 02 complete (API keys admin UI)
 
 Progress: [████░░░░░░] 8 of 13 milestones complete (61%)
 
@@ -53,6 +53,7 @@ See `.planning/MILESTONES.md` for full history.
 | Phase 40 P01 | 223 | 2 tasks | 6 files |
 | Phase 40 P02 | 241 | 2 tasks | 4 files |
 | Phase 41 P01 | 474 | 2 tasks | 11 files |
+| Phase 41 P02 | 264 | 1 task | 3 files |
 
 ## Tech Debt (Carried Forward)
 
@@ -117,6 +118,10 @@ Recent decisions affecting v8.0 work:
 - **CORS delegator pattern**: Single registration with route-scoped origin logic
 - **Redis hash tag {rl}: for rate limit namespace**: Ensures cluster slot compatibility
 
+**Phase 41-02 decisions:**
+- **Radix Dialog for confirmations**: Used existing Dialog component over window.confirm for visual consistency
+- **Page-level revealed key state**: Create and regenerate share single revealedKey state, one key shown at a time
+
 **Phase 40-02 decisions:**
 - **Signals not paginated**: Fixed set of 4 timeframes per symbol, static meta with has_more: false
 - **Internal alertType in WHERE only**: `alertType='macdv'` filters DB query but never appears in response
@@ -135,8 +140,8 @@ None.
 ### Last Session
 
 **Date:** 2026-02-19
-**Activity:** Executing Phase 41 Plan 01
-**Stopped At:** Completed 41-01-PLAN.md (Auth middleware, rate limiting, API key management)
+**Activity:** Executing Phase 41 Plan 02
+**Stopped At:** Completed 41-02-PLAN.md (API keys admin UI)
 
 ### Resume Context
 
@@ -178,8 +183,17 @@ Phase 41 Plan 01 delivered:
 - Route-scoped CORS (permissive for public API, restrictive for admin)
 - OpenAPI X-API-Key security scheme in spec
 
-**Next step:** Phase 41 Plan 02
+**PHASE 41 COMPLETE**
+
+Phase 41 Plan 02 delivered:
+- API Keys admin page at #/api-keys with navigation link
+- ApiKeyTable component with masked previews, status badges, confirmation dialogs
+- Create flow shows full key once with copy-to-clipboard
+- Regenerate and deactivate with Radix Dialog confirmations
+- Toast notifications for all mutation feedback
+
+**Next step:** Phase 42 (WebSocket Streaming)
 
 ---
 *State initialized: 2026-01-18*
-*Last updated: 2026-02-19 — Phase 41 Plan 01 complete (auth + rate limiting)*
+*Last updated: 2026-02-19 — Phase 41 complete (auth + rate limiting + admin UI)*
