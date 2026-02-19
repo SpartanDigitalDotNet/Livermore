@@ -11,19 +11,19 @@ See: .planning/PROJECT.md (updated 2026-02-18)
 
 **Milestone:** v8.0 Perseus Web Public API
 **Phase:** 39 of 43 (Public API Foundation & IP Protection)
-**Plan:** Ready to plan
-**Status:** Roadmap complete, awaiting phase planning
+**Plan:** 2 of 3 (In Progress)
+**Status:** Executing Phase 39 plans
 
-**Last activity:** 2026-02-18 — v8.0 roadmap created (5 phases, 37 requirements)
+**Last activity:** 2026-02-19 — Completed Plan 39-01 (Public API Foundation & IP Protection)
 
 Progress: [████░░░░░░] 8 of 13 milestones complete (61%)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 84+ (across v1.0-v7.0)
+- Total plans completed: 85+ (across v1.0-v8.0)
 - Average duration: Varies by phase complexity
-- Total execution time: ~45 hours (across 7 milestones)
+- Total execution time: ~45.1 hours (across 8 milestones in progress)
 
 **Recent milestones:**
 - v7.0: 7 phases, 2 days (2026-02-13)
@@ -86,6 +86,12 @@ Recent decisions affecting v8.0 work:
 - **Runtime modes last**: Phase 43 (pw-host mode) not required until production deployment
 - **5-phase structure**: Derived from requirements (not imposed template), aligns with research recommendations
 
+**Phase 39-01 decisions:**
+- **Explicit field whitelisting over omission**: transformCandle() uses explicit field selection (not spreading and omitting) - ensures new internal fields never leak
+- **String decimals for prices**: API uses string format (not numbers) to prevent precision loss, aligns with API-08 requirement
+- **Opaque Base64 cursors**: Pagination cursors encode internal values (hides implementation details)
+- **Zero indicators dependency**: @livermore/public-api does NOT depend on @livermore/indicators - hard IP isolation boundary
+
 ### Pending Todos
 
 None.
@@ -98,25 +104,24 @@ None.
 
 ### Last Session
 
-**Date:** 2026-02-18
-**Activity:** Creating v8.0 roadmap
-**Stopped At:** Roadmap complete, requirements traced to phases
+**Date:** 2026-02-19
+**Activity:** Executing Phase 39 Plan 01
+**Stopped At:** Completed 39-01-PLAN.md - Public API Foundation & IP Protection
 
 ### Resume Context
 
-**v8.0 ROADMAP COMPLETE**
+**Phase 39 Plan 01 COMPLETE**
 
-Phase structure (5 phases, starting at 39):
-- **Phase 39**: Public API Foundation & IP Protection (16 requirements)
-- **Phase 40**: Trade Signals with Generic Labeling (2 requirements)
-- **Phase 41**: Authentication & Rate Limiting (5 requirements)
-- **Phase 42**: WebSocket Bridge with Backpressure (11 requirements)
-- **Phase 43**: Runtime Modes & Distributed Architecture (4 requirements)
+Created @livermore/public-api package with:
+- Public Zod schemas (candle, exchange, symbol, error, envelope)
+- DTO transformers with explicit field whitelisting
+- Cursor-based pagination helpers
+- Zero proprietary field exposure verified
 
-**Coverage:** 37/37 requirements mapped (100%)
+**Phase 39 Progress:** Plan 1 of 3 complete
 
-**Next step:** `/gsd:plan-phase 39` to decompose Phase 39 into executable plans
+**Next step:** Execute Plan 39-02 (REST Endpoints) or Plan 39-03 (OpenAPI Spec)
 
 ---
 *State initialized: 2026-01-18*
-*Last updated: 2026-02-18 — v8.0 roadmap created, Phase 39 ready to plan*
+*Last updated: 2026-02-19 — Phase 39 Plan 01 complete (Public API Foundation & IP Protection)*
