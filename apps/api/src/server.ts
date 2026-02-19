@@ -7,7 +7,8 @@ import websocket from '@fastify/websocket';
 import { clerkPlugin } from '@clerk/fastify';
 import { fastifyTRPCPlugin } from '@trpc/server/adapters/fastify';
 import { publicApiPlugin } from '@livermore/public-api';
-import { logger, validateEnv } from '@livermore/utils';
+import { logger, validateEnv, resolveMode } from '@livermore/utils';
+import type { EnvConfig } from '@livermore/schemas';
 import { getDbClient, testDatabaseConnection } from '@livermore/database';
 import { getRedisClient, testRedisConnection, deleteKeysClusterSafe, exchangeCandleKey, exchangeIndicatorKey } from '@livermore/cache';
 import { createContext as baseCreateContext } from '@livermore/trpc-config';
@@ -219,18 +220,22 @@ async function cleanupExcludedSymbols(
  * Handles Coinbase data ingestion, indicator calculation, and alerts
  */
 async function start() {
+  // Resolve runtime mode (Phase 43: pw-host vs exchange)
+  const mode = resolveMode();
+  const isPwHost = mode === 'pw-host';
+
   // Parse CLI arguments (Phase 26 CTL-03)
   const cliArgs = parseCliArgs();
   const isAutostart = cliArgs.autostart !== null;
 
   logger.info(
-    { autostart: isAutostart, exchange: cliArgs.autostart },
+    { mode, autostart: isAutostart, exchange: cliArgs.autostart },
     'Starting Livermore API server...'
   );
 
-  // Validate environment variables
-  const config = validateEnv();
-  logger.info('Environment variables validated');
+  // Validate environment variables (schema depends on mode)
+  const config = isPwHost ? validateEnv('pw-host') : validateEnv();
+  logger.info({ mode }, 'Environment variables validated');
 
   // Create Fastify instance
   const fastify = Fastify({
@@ -253,14 +258,17 @@ async function start() {
 
   await fastify.register(websocket);
 
-  // WEBHOOK ROUTE - must be registered BEFORE clerkPlugin
-  // This route does NOT require JWT authentication (server-to-server)
-  fastify.post('/webhooks/clerk', clerkWebhookHandler);
-  logger.info('Clerk webhook route registered at /webhooks/clerk');
+  // Clerk webhook + auth plugin (exchange mode only - pw-host has no Clerk)
+  if (!isPwHost) {
+    // WEBHOOK ROUTE - must be registered BEFORE clerkPlugin
+    // This route does NOT require JWT authentication (server-to-server)
+    fastify.post('/webhooks/clerk', clerkWebhookHandler);
+    logger.info('Clerk webhook route registered at /webhooks/clerk');
 
-  // Register Clerk authentication plugin (must be before tRPC so getAuth works in context)
-  await fastify.register(clerkPlugin);
-  logger.info('Clerk authentication plugin registered');
+    // Register Clerk authentication plugin (must be before tRPC so getAuth works in context)
+    await fastify.register(clerkPlugin);
+    logger.info('Clerk authentication plugin registered');
+  }
 
   // ============================================
   // PRE-FLIGHT CONNECTION CHECKS
@@ -276,14 +284,79 @@ async function start() {
   const redis = getRedisClient();
   await testRedisConnection(redis);
 
+  logger.info('Pre-flight checks passed - all connections verified');
+
+  // ============================================
+  // PW-HOST MODE: Early exit path
+  // Only serves public API from Redis cache and database
+  // ============================================
+  if (isPwHost) {
+    // Register public API with optional WebSocket bridge (via env vars for exchange identity)
+    const exchangeIdStr = process.env.LIVERMORE_EXCHANGE_ID;
+    const exchangeNameStr = process.env.LIVERMORE_EXCHANGE_NAME;
+    const pwHostExchangeId = exchangeIdStr ? parseInt(exchangeIdStr, 10) : undefined;
+    const pwHostExchangeName = exchangeNameStr || undefined;
+
+    await fastify.register(publicApiPlugin, {
+      prefix: '/public/v1',
+      redis,
+      exchangeId: pwHostExchangeId,
+      exchangeName: pwHostExchangeName,
+    });
+    logger.info(
+      { exchangeId: pwHostExchangeId, exchangeName: pwHostExchangeName },
+      'Public API registered at /public/v1 (pw-host mode)'
+    );
+
+    // Health endpoint (pw-host version - no exchange services)
+    fastify.get('/health', async () => ({
+      status: 'ok',
+      mode: 'pw-host' as const,
+      timestamp: new Date().toISOString(),
+      services: {
+        database: 'connected',
+        redis: 'connected',
+      },
+    }));
+
+    // Start listener
+    const port = config.API_PORT;
+    const host = config.API_HOST;
+
+    try {
+      await fastify.listen({ port, host });
+      logger.info({ mode: 'pw-host', host, port }, 'pw-host server listening');
+    } catch (error) {
+      logger.error({ error }, 'Failed to start pw-host server');
+      process.exit(1);
+    }
+
+    // Simplified shutdown (no exchange services to clean up)
+    const shutdown = async () => {
+      logger.info('Shutting down pw-host server...');
+      await redis.quit();
+      await fastify.close();
+      logger.info('pw-host server shut down');
+      process.exit(0);
+    };
+    process.on('SIGINT', shutdown);
+    process.on('SIGTERM', shutdown);
+    return; // Exit start() -- don't run exchange-mode code below
+  }
+
+  // ============================================
+  // EXCHANGE MODE (everything below is unchanged)
+  // ============================================
+
+  // Exchange mode: cast config to full EnvConfig (safe: pw-host returned above)
+  const exchangeConfig = config as EnvConfig;
+
   // Create separate Redis subscriber connection (required for psubscribe - cannot share with main client)
   const subscriberRedis = redis.duplicate();
   subscriberRedis.on('error', (err) => {
     logger.error({ error: err.message }, 'Subscriber Redis connection error');
   });
   await testRedisConnection(subscriberRedis);
-
-  logger.info('Pre-flight checks passed - all connections verified');
 
   // Phase 30: Create instance registry and state machine
   // Autostart uses Coinbase (exchangeId=1). Idle mode starts with placeholder (exchangeId=0).
@@ -351,8 +424,8 @@ async function start() {
     const symbolSourceService = new SymbolSourceService(activeExchangeId!);
     logger.info('Fetching symbols from Coinbase account...');
     const { monitored: userPositionSymbols, excluded: excludedSymbols } = await getAccountSymbols(
-      config.Coinbase_ApiKeyId,
-      config.Coinbase_EcPrivateKeyPem
+      exchangeConfig.Coinbase_ApiKeyId,
+      exchangeConfig.Coinbase_EcPrivateKeyPem
     );
 
     const classifiedSymbols = await symbolSourceService.classifyUserPositions(userPositionSymbols);
@@ -368,7 +441,7 @@ async function start() {
     // Backfill cache with historical candles
     logger.info('Starting cache backfill...');
     const backfillTimeframes: Timeframe[] = ['1m', '5m', '15m', '1h', '4h', '1d'];
-    restClient = new CoinbaseRestClient(config.Coinbase_ApiKeyId, config.Coinbase_EcPrivateKeyPem);
+    restClient = new CoinbaseRestClient(exchangeConfig.Coinbase_ApiKeyId, exchangeConfig.Coinbase_EcPrivateKeyPem);
     const backfillService = new StartupBackfillService(restClient, redis, {
       userId: 1, // legacy
       exchangeId: activeExchangeId!,
@@ -396,11 +469,12 @@ async function start() {
   });
   logger.info('tRPC router registered at /trpc');
 
-  // Health check endpoint
+  // Health check endpoint (exchange mode - includes exchange services status)
   fastify.get('/health', async () => {
     const runtimeState = getRuntimeState();
     return {
       status: 'ok',
+      mode: 'exchange' as const,
       timestamp: new Date().toISOString(),
       services: {
         database: 'connected',
@@ -458,7 +532,7 @@ async function start() {
   );
 
   const boundaryRestClient = restClient ?? new CoinbaseRestClient(
-    config.Coinbase_ApiKeyId, config.Coinbase_EcPrivateKeyPem
+    exchangeConfig.Coinbase_ApiKeyId, exchangeConfig.Coinbase_EcPrivateKeyPem
   );
   const boundaryRestService = new BoundaryRestService(
     boundaryRestClient,
@@ -473,8 +547,8 @@ async function start() {
 
   // Phase 29: Use ExchangeAdapterFactory instead of direct instantiation
   const adapterFactory = new ExchangeAdapterFactory({
-    apiKeyId: config.Coinbase_ApiKeyId,
-    privateKeyPem: config.Coinbase_EcPrivateKeyPem,
+    apiKeyId: exchangeConfig.Coinbase_ApiKeyId,
+    privateKeyPem: exchangeConfig.Coinbase_EcPrivateKeyPem,
     redis,
     userId: 1,  // TODO: Get from authenticated user context
   });
@@ -545,8 +619,8 @@ async function start() {
 
   // Build RuntimeConfig with API credentials
   const runtimeConfig: RuntimeConfig = {
-    apiKeyId: config.Coinbase_ApiKeyId,
-    privateKeyPem: config.Coinbase_EcPrivateKeyPem,
+    apiKeyId: exchangeConfig.Coinbase_ApiKeyId,
+    privateKeyPem: exchangeConfig.Coinbase_EcPrivateKeyPem,
   };
 
   // Build ServiceRegistry for ControlChannelService command handlers
@@ -592,8 +666,8 @@ async function start() {
   }
 
   // Start server
-  const port = config.API_PORT;
-  const host = config.API_HOST;
+  const port = exchangeConfig.API_PORT;
+  const host = exchangeConfig.API_HOST;
 
   try {
     await fastify.listen({ port, host });
