@@ -113,9 +113,9 @@ Plans:
 **Plans:** 3 plans
 
 Plans:
-- [ ] 39-01-PLAN.md -- Scaffold packages/public-api, public Zod schemas, DTO transformers, pagination helpers
-- [ ] 39-02-PLAN.md -- Candle, exchange, and symbol route handlers with Fastify OpenAPI plugin
-- [ ] 39-03-PLAN.md -- Wire plugin into server.ts, end-to-end verification of IP protection
+- [x] 39-01-PLAN.md -- Scaffold packages/public-api, public Zod schemas, DTO transformers, pagination helpers
+- [x] 39-02-PLAN.md -- Candle, exchange, and symbol route handlers with Fastify OpenAPI plugin
+- [x] 39-03-PLAN.md -- Wire plugin into server.ts, end-to-end verification of IP protection
 
 #### Phase 40: Trade Signals with Generic Labeling
 **Goal**: Expose trade signals and alert history with proprietary indicator details stripped
@@ -190,7 +190,7 @@ Phases execute in numeric order: 34 → 35 → 36 → 37 → 38 → 39 → 40 �
 | 36. Binance WebSocket Adapter | v7.0 | 2/2 | Complete | 2026-02-13 |
 | 37. Admin UI -- Connect, Exchange Setup & Warmup Progress | v7.0 | 3/3 | Complete | 2026-02-13 |
 | 38. Binance Test Harness & Handoff | v7.0 | 0/2 | Not started | - |
-| 39. Public API Foundation & IP Protection | v8.0 | 0/3 | Not started | - |
+| 39. Public API Foundation & IP Protection | v8.0 | 3/3 | Complete | 2026-02-18 |
 | 40. Trade Signals with Generic Labeling | v8.0 | 0/? | Not started | - |
 | 41. Authentication & Rate Limiting | v8.0 | 0/? | Not started | - |
 | 42. WebSocket Bridge with Backpressure | v8.0 | 0/? | Not started | - |
@@ -198,4 +198,4 @@ Phases execute in numeric order: 34 → 35 → 36 → 37 → 38 → 39 → 40 �
 
 ---
 *Roadmap created: 2026-02-13*
-*Last updated: 2026-02-18 -- Phase 39 planned (3 plans in 3 waves)*
+*Last updated: 2026-02-18 -- Phase 39 complete (3/3 plans, verified)*

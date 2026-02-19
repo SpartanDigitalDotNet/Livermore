@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-02-18)
 
 **Core value:** Data accuracy and timely alerts
-**Current focus:** v8.0 Perseus Web Public API - Phase 39 (Public API Foundation & IP Protection)
+**Current focus:** v8.0 Perseus Web Public API - Phase 40 (Trade Signals with Generic Labeling)
 
 ## Current Position
 
 **Milestone:** v8.0 Perseus Web Public API
-**Phase:** 39 of 43 (Public API Foundation & IP Protection)
-**Plan:** 3 of 3 (Complete - Awaiting Verification)
-**Status:** Phase 39 Complete - Checkpoint verification pending
+**Phase:** 40 of 43 (Trade Signals with Generic Labeling)
+**Plan:** Ready to plan
+**Status:** Phase 39 complete and verified, Phase 40 awaiting planning
 
-**Last activity:** 2026-02-19 — Completed Plan 39-03 (Server Integration)
+**Last activity:** 2026-02-19 — Phase 39 complete (3/3 plans, verified 8/8 must-haves)
 
 Progress: [████░░░░░░] 8 of 13 milestones complete (61%)
 
@@ -119,20 +119,26 @@ None.
 
 ### Resume Context
 
-**Phase 39 Plans 01-02 COMPLETE**
+**PHASE 39 COMPLETE AND VERIFIED**
 
-Plan 01 created @livermore/public-api package with schemas, transformers, and pagination helpers.
+Phase 39 delivered:
+- `@livermore/public-api` package with Zod schemas, DTO transformers, cursor pagination
+- GET /public/v1/candles/:exchange/:symbol/:timeframe (Redis sorted set read)
+- GET /public/v1/exchanges (DB + Redis status check)
+- GET /public/v1/symbols (DB with liquidity grading)
+- Fastify plugin with OpenAPI 3.1 spec (jsonSchemaTransform), Swagger UI at /docs
+- Sanitized error handler (no stack traces, no internal fields)
+- Verification: 8/8 must-haves passed, zero proprietary field names in code/spec
 
-Plan 02 implemented three REST endpoints:
-- GET /public/v1/candles/:exchange/:symbol/:timeframe (Redis read with cursor pagination)
-- GET /public/v1/exchanges (DB query with Redis status check)
-- GET /public/v1/symbols (DB query with liquidity grading)
-- Fastify plugin with OpenAPI 3.1 spec, Swagger UI, sanitized error handler
+**Fixes applied post-execution:**
+- Added `jsonSchemaTransform` to swagger config (spec was dumping raw Zod internals)
+- Moved error handler before route registration (wasn't covering child scopes)
+- Bypassed Zod response serializer in error handler (prevented double-fault)
 
-**Phase 39 Progress:** All 3 plans complete - checkpoint verification pending
+**Model profile:** Switched to `quality` (Opus for executors) per user preference
 
-**Next step:** User verification of IP protection and response formats (Task 2 checkpoint from Plan 39-03). After approval, proceed to Phase 40 (MACD-V Trade Signals).
+**Next step:** `/gsd:plan-phase 40` — Trade Signals with Generic Labeling
 
 ---
 *State initialized: 2026-01-18*
-*Last updated: 2026-02-19 — Phase 39 Plan 01 complete (Public API Foundation & IP Protection)*
+*Last updated: 2026-02-19 — Phase 39 complete and verified, model profile set to quality*

@@ -2,8 +2,9 @@
   "mode": "interactive",
   "depth": "standard",
   "parallelization": true,
+  "model_profile": "quality",
   "created": "2026-01-18",
   "workflow": {
-    "research": false
+    "research": true
   }
 }
