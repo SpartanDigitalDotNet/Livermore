@@ -37,6 +37,24 @@ export {
   type SymbolQuery,
 } from './symbol.schema.js';
 
+// Signal schemas
+export {
+  PublicSignalSchema,
+  SignalParamsSchema,
+  SignalQuerySchema,
+  type PublicSignal,
+  type SignalParams,
+  type SignalQuery,
+} from './signal.schema.js';
+
+// Alert schemas
+export {
+  PublicAlertSchema,
+  AlertQuerySchema,
+  type PublicAlert,
+  type AlertQuery,
+} from './alert.schema.js';
+
 // Error schemas
 export {
   ErrorCodeSchema,
