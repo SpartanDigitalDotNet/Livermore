@@ -9,6 +9,7 @@ import { Network } from './pages/Network';
 import { Symbols } from './pages/Symbols';
 import { ExchangeSymbols } from './pages/ExchangeSymbols';
 import { Settings } from './pages/Settings';
+import { ApiKeys } from './pages/ApiKeys';
 import { UserSync } from './components/UserSync';
 import { ExchangeGuard } from './components/exchange/ExchangeGuard';
 import { Toaster } from '@/components/ui/sonner';
@@ -105,6 +106,12 @@ function App() {
                   >
                     Settings
                   </a>
+                  <a
+                    href="#/api-keys"
+                    className={`${hash === '#/api-keys' ? 'text-gray-900 dark:text-gray-100 font-medium' : 'text-gray-600 dark:text-gray-400'} hover:text-gray-900 dark:hover:text-gray-100`}
+                  >
+                    API Keys
+                  </a>
                   <button
                     onClick={toggleTheme}
                     className="rounded-md p-1.5 text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800"
@@ -152,6 +159,8 @@ function HashRouter({ hash }: { hash: string }) {
       return <ExchangeSymbols />;
     case '#/settings':
       return <Settings />;
+    case '#/api-keys':
+      return <ApiKeys />;
     default:
       return <Dashboard />;
   }
