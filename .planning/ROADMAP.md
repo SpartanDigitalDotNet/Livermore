@@ -143,10 +143,11 @@ Plans:
   4. Admin tRPC routes exempt from rate limiting
   5. Admin can generate, view, and regenerate API keys via Admin UI
   6. Public API errors are sanitized with no stack traces or internal details exposed
-**Plans**: TBD
+**Plans:** 2 plans
 
 Plans:
-- [ ] 41-01: TBD
+- [ ] 41-01-PLAN.md -- Database schema, auth middleware, rate limiting, plugin wiring, CORS, tRPC router
+- [ ] 41-02-PLAN.md -- Admin UI page for API key management
 
 #### Phase 42: WebSocket Bridge with Backpressure
 **Goal**: Real-time streaming of candle closes and trade signals via WebSocket with connection management
