@@ -376,6 +376,9 @@ importers:
       '@fastify/swagger-ui':
         specifier: ^5.2.0
         version: 5.2.5
+      '@fastify/websocket':
+        specifier: ^11.0.1
+        version: 11.2.0
       '@livermore/cache':
         specifier: workspace:*
         version: link:../cache

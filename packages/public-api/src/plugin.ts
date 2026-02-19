@@ -1,3 +1,4 @@
+/// <reference types="@fastify/websocket" />
 import type { FastifyPluginAsync } from 'fastify';
 import {
   serializerCompiler,
@@ -10,8 +11,9 @@ import {
 import fastifySwagger from '@fastify/swagger';
 import fastifySwaggerUi from '@fastify/swagger-ui';
 import { candlesRoute, exchangesRoute, symbolsRoute, signalsRoute, alertsRoute } from './routes/index.js';
-import { buildAuthHook } from './middleware/auth.js';
+import { buildAuthHook, validateApiKey } from './middleware/auth.js';
 import { getRateLimitConfig } from './middleware/rate-limit.js';
+import { WebSocketBridge, handleClientMessage } from './ws/index.js';
 
 /**
  * Sanitized error handler for the public API scope.
@@ -94,7 +96,11 @@ function publicErrorHandler(
  *
  * This plugin should be registered under the /public/v1 prefix in server.ts.
  */
-export const publicApiPlugin: FastifyPluginAsync<{ redis?: any }> = async (instance, opts) => {
+export const publicApiPlugin: FastifyPluginAsync<{
+  redis?: any;
+  exchangeId?: number;
+  exchangeName?: string;
+}> = async (instance, opts) => {
   // Register Zod type provider compilers for validation and serialization
   instance.setValidatorCompiler(validatorCompiler);
   instance.setSerializerCompiler(serializerCompiler);
@@ -202,6 +208,65 @@ This API is designed for programmatic access by:
   await typedInstance.register(symbolsRoute, { prefix: '/symbols' });
   await typedInstance.register(signalsRoute, { prefix: '/signals' });
   await typedInstance.register(alertsRoute, { prefix: '/alerts' });
+
+  // WebSocket streaming endpoint (Phase 42)
+  if (opts.redis && opts.exchangeId && opts.exchangeName) {
+    const bridge = new WebSocketBridge({
+      redis: opts.redis,
+      exchangeId: opts.exchangeId,
+      exchangeName: opts.exchangeName,
+    });
+    await bridge.start();
+
+    // Store bridge on instance for lifecycle management
+    instance.decorate('wsBridge', bridge);
+
+    // Register cleanup on server close
+    instance.addHook('onClose', async () => {
+      await bridge.stop();
+    });
+
+    instance.get('/stream', { websocket: true }, async (socket, request) => {
+      // WS-01: API key auth via query parameter
+      const apiKey = (request.query as any).apiKey as string | undefined;
+      if (!apiKey) {
+        socket.close(4001, 'API key required');
+        return;
+      }
+
+      const keyId = await validateApiKey(apiKey);
+      if (keyId === null) {
+        socket.close(4001, 'Invalid API key');
+        return;
+      }
+
+      // WS-06: Per-key connection limit
+      if (bridge.getConnectionCount(keyId) >= 5) {
+        socket.close(4008, 'Connection limit exceeded');
+        return;
+      }
+
+      // Register connection with bridge
+      const connection = bridge.addClient(socket, keyId);
+      if (!connection) {
+        socket.close(4008, 'Connection limit exceeded');
+        return;
+      }
+
+      // CRITICAL: Attach message handler synchronously per @fastify/websocket requirement
+      socket.on('message', (data: Buffer | string) => {
+        handleClientMessage(bridge, connection, data);
+      });
+
+      socket.on('close', () => {
+        bridge.removeClient(connection.connectionId);
+      });
+
+      socket.on('error', () => {
+        bridge.removeClient(connection.connectionId);
+      });
+    });
+  }
 
   // OpenAPI spec endpoint
   typedInstance.get('/openapi.json', {

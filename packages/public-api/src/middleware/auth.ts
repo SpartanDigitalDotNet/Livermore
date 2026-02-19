@@ -86,9 +86,10 @@ export function buildAuthHook() {
       routerPath === '/docs' ||
       routerPath === '/docs/' ||
       routerPath.startsWith('/docs/') ||
-      routerPath === '/openapi.json'
+      routerPath === '/openapi.json' ||
+      routerPath === '/stream'
     ) {
-      return;
+      return; // WS auth for /stream is handled in-route via query param
     }
 
     // Also check against the full URL for safety
@@ -97,7 +98,7 @@ export function buildAuthHook() {
       url.endsWith('/openapi.json')
     ) {
       // Only skip if it matches the public API docs paths
-      const publicDocsPattern = /\/public\/v1\/(docs|openapi\.json)/;
+      const publicDocsPattern = /\/public\/v1\/(docs|openapi\.json|stream)/;
       if (publicDocsPattern.test(url)) {
         return;
       }

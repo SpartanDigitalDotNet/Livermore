@@ -285,15 +285,21 @@ async function start() {
 
   logger.info('Pre-flight checks passed - all connections verified');
 
-  // Public REST API (Phase 39/41) - registered after Redis init for rate limiting
-  await fastify.register(publicApiPlugin, { prefix: '/public/v1', redis });
-  logger.info('Public API registered at /public/v1 (auth + rate limiting enabled)');
-
   // Phase 30: Create instance registry and state machine
   // Autostart uses Coinbase (exchangeId=1). Idle mode starts with placeholder (exchangeId=0).
   // Idle mode's registry will be replaced in handleStart when the actual exchangeId is known.
   let activeExchangeId: number | null = isAutostart ? 1 : null;
   let activeExchangeName: string | null = isAutostart ? 'coinbase' : null;
+
+  // Public REST API (Phase 39/41) - registered after Redis init for rate limiting
+  // Must be after activeExchangeId/Name declarations for WebSocket bridge (Phase 42)
+  await fastify.register(publicApiPlugin, {
+    prefix: '/public/v1',
+    redis,
+    exchangeId: activeExchangeId ?? undefined,
+    exchangeName: activeExchangeName ?? undefined,
+  });
+  logger.info('Public API registered at /public/v1 (auth + rate limiting enabled)');
 
   const instanceRegistry = new InstanceRegistryService({
     exchangeId: activeExchangeId ?? 0,
