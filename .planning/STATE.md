@@ -11,10 +11,10 @@ See: .planning/PROJECT.md (updated 2026-02-18)
 
 **Milestone:** v8.0 Perseus Web Public API
 **Phase:** 43 of 43 (Runtime Modes & Distributed Architecture)
-**Plan:** 1 of 2 complete
-**Status:** Executing Phase 43
+**Plan:** 2 of 2 complete
+**Status:** Phase 43 Complete
 
-**Last activity:** 2026-02-19 — Phase 43 Plan 01 complete (RuntimeMode type system + mode-aware env validation)
+**Last activity:** 2026-02-19 — Phase 43 Plan 02 complete (mode-gated server startup for pw-host vs exchange)
 
 Progress: [████░░░░░░] 8 of 13 milestones complete (61%)
 
@@ -57,6 +57,7 @@ See `.planning/MILESTONES.md` for full history.
 | Phase 42 P01 | 294 | 2 tasks | 6 files |
 | Phase 42 P02 | 540 | 2 tasks | 7 files |
 | Phase 43 P01 | 286 | 2 tasks | 3 files |
+| Phase 43 P02 | 287 | 1 task | 1 file |
 
 ## Tech Debt (Carried Forward)
 
@@ -136,6 +137,11 @@ Recent decisions affecting v8.0 work:
 - **Skip /stream in buildAuthHook**: WS auth via query param, not X-API-Key header
 - **Bridge conditional on exchangeId**: Idle mode (no exchange) has no WebSocket bridge
 
+**Phase 43-02 decisions:**
+- **Early-return pattern for mode isolation**: isPwHost block returns early, keeping exchange code at original indentation and unchanged
+- **Conditional validateEnv call**: isPwHost ? validateEnv('pw-host') : validateEnv() satisfies TypeScript overloads (union type doesn't match either overload)
+- **Exchange identity from env vars in pw-host**: LIVERMORE_EXCHANGE_ID/NAME enables optional WS bridge without exchange adapter
+
 **Phase 43-01 decisions:**
 - **Zod .omit() for schema derivation**: PwHostEnvConfigSchema derived from EnvConfigSchema, stays in sync automatically
 - **Function overloads for validateEnv()**: Compile-time type narrowing based on mode parameter
@@ -161,8 +167,8 @@ None.
 ### Last Session
 
 **Date:** 2026-02-19
-**Activity:** Executing Phase 43 Plan 01
-**Stopped At:** Completed 43-01-PLAN.md (RuntimeMode type system + mode-aware env validation)
+**Activity:** Executing Phase 43 Plan 02
+**Stopped At:** Completed 43-02-PLAN.md (mode-gated server startup for pw-host vs exchange)
 
 ### Resume Context
 
@@ -240,8 +246,18 @@ Phase 43 Plan 01 delivered:
 - validateEnv() accepts optional RuntimeMode with TypeScript overloads for type-safe returns
 - Full backward compatibility: existing validateEnv() calls unchanged
 
-**Next step:** Phase 43 Plan 02 (server startup branching for pw-host mode)
+**PHASE 43 COMPLETE**
+
+Phase 43 Plan 02 delivered:
+- Mode-gated server.ts with pw-host early-return path
+- pw-host mode: Fastify + CORS + WS + DB + Redis + publicApiPlugin + /health only
+- No Clerk, tRPC, Discord, or exchange services in pw-host mode
+- Health endpoint reports mode ('pw-host' or 'exchange') with appropriate service status
+- WebSocket bridge optionally available in pw-host via LIVERMORE_EXCHANGE_ID/NAME env vars
+- Exchange mode completely unchanged except mode field in health response
+
+**Phase 43 (Runtime Modes) complete: v8.0 Perseus Web Public API milestone fully delivered**
 
 ---
 *State initialized: 2026-01-18*
-*Last updated: 2026-02-19 — Phase 43 Plan 01 complete (RuntimeMode type system + mode-aware env validation)*
+*Last updated: 2026-02-19 — Phase 43 Plan 02 complete (mode-gated server startup for pw-host vs exchange)*
