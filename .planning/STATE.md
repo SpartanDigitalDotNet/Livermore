@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-02-18)
 
 **Core value:** Data accuracy and timely alerts
-**Current focus:** v8.0 Perseus Web Public API - Phase 41 (Authentication & Rate Limiting)
+**Current focus:** v8.0 Perseus Web Public API - Phase 42 (WebSocket Bridge & Backpressure)
 
 ## Current Position
 
 **Milestone:** v8.0 Perseus Web Public API
-**Phase:** 41 of 43 (Authentication & Rate Limiting)
-**Plan:** 2 of 2 complete
-**Status:** Phase 41 complete, ready for Phase 42
+**Phase:** 42 of 43 (WebSocket Bridge & Backpressure)
+**Plan:** 1 of 2 complete
+**Status:** Phase 42 Plan 01 complete, ready for Plan 02
 
-**Last activity:** 2026-02-19 — Phase 41 Plan 02 complete (API keys admin UI)
+**Last activity:** 2026-02-19 — Phase 42 Plan 01 complete (WS bridge engine)
 
 Progress: [████░░░░░░] 8 of 13 milestones complete (61%)
 
@@ -54,6 +54,7 @@ See `.planning/MILESTONES.md` for full history.
 | Phase 40 P02 | 241 | 2 tasks | 4 files |
 | Phase 41 P01 | 474 | 2 tasks | 11 files |
 | Phase 41 P02 | 264 | 1 task | 3 files |
+| Phase 42 P01 | 294 | 2 tasks | 6 files |
 
 ## Tech Debt (Carried Forward)
 
@@ -127,6 +128,13 @@ Recent decisions affecting v8.0 work:
 - **Internal alertType in WHERE only**: `alertType='macdv'` filters DB query but never appears in response
 - **Bidirectional exchange cache**: alerts route caches name->id and id->name from same DB query
 
+**Phase 42-01 decisions:**
+- **bufferedAmount thresholds**: 64KB skip, 256KB terminate -- heuristic backpressure detection
+- **Pong handler in constructor**: Attached once to avoid listener accumulation
+- **Stringify once, fan out many**: Envelope JSON.stringify'd once then sent to all matching clients
+- **Alert channel from payload**: External channel built from parsed JSON payload (symbol+timeframe), not Redis channel
+- **External channel format**: `candles:SYMBOL:TIMEFRAME` and `signals:SYMBOL:TIMEFRAME`
+
 ### Pending Todos
 
 None.
@@ -140,8 +148,8 @@ None.
 ### Last Session
 
 **Date:** 2026-02-19
-**Activity:** Executing Phase 41 Plan 02
-**Stopped At:** Completed 41-02-PLAN.md (API keys admin UI)
+**Activity:** Executing Phase 42 Plan 01
+**Stopped At:** Completed 42-01-PLAN.md (WS bridge engine)
 
 ### Resume Context
 
@@ -192,8 +200,17 @@ Phase 41 Plan 02 delivered:
 - Regenerate and deactivate with Radix Dialog confirmations
 - Toast notifications for all mutation feedback
 
-**Next step:** Phase 42 (WebSocket Streaming)
+**PHASE 42 PLAN 01 COMPLETE**
+
+Phase 42 Plan 01 delivered:
+- WebSocketBridge class with Redis psubscribe fan-out through IP-protective transformers
+- ClientConnection with heartbeat ping/pong (30s) and bufferedAmount backpressure (64KB/256KB)
+- WS message types, Zod discriminated union schemas, external channel parser
+- Message handlers for subscribe/unsubscribe with channel format validation
+- Per-API-key connection counting (max 5) for WS-06 enforcement
+
+**Next step:** Phase 42 Plan 02 (wire bridge into Fastify WebSocket route)
 
 ---
 *State initialized: 2026-01-18*
-*Last updated: 2026-02-19 — Phase 41 complete (auth + rate limiting + admin UI)*
+*Last updated: 2026-02-19 — Phase 42 Plan 01 complete (WS bridge engine)*
