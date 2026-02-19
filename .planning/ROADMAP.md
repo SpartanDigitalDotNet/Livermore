@@ -176,10 +176,11 @@ Plans:
   2. In pw-host mode, server serves public API from Redis cache without running warmup or indicator calculations
   3. In exchange mode, server runs full data pipeline and optionally serves public API
   4. Health endpoint reports runtime mode and mode-appropriate status (exchange: WebSocket connected; pw-host: Redis connected)
-**Plans**: TBD
+**Plans:** 2 plans
 
 Plans:
-- [ ] 43-01: TBD
+- [ ] 43-01-PLAN.md -- RuntimeMode type, mode-aware env validation, resolveMode()
+- [ ] 43-02-PLAN.md -- server.ts mode-gated startup, pw-host health endpoint
 
 ## Progress
 
