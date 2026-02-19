@@ -21,6 +21,7 @@
     "@livermore/exchange-core": "workspace:*",
     "@livermore/database": "workspace:*",
     "@livermore/indicators": "workspace:*",
+    "@livermore/public-api": "workspace:*",
     "@livermore/schemas": "workspace:*",
     "@livermore/trpc-config": "workspace:*",
     "@livermore/utils": "workspace:*",

@@ -6,6 +6,7 @@ import cors from '@fastify/cors';
 import websocket from '@fastify/websocket';
 import { clerkPlugin } from '@clerk/fastify';
 import { fastifyTRPCPlugin } from '@trpc/server/adapters/fastify';
+import { publicApiPlugin } from '@livermore/public-api';
 import { logger, validateEnv } from '@livermore/utils';
 import { getDbClient, testDatabaseConnection } from '@livermore/database';
 import { getRedisClient, testRedisConnection, deleteKeysClusterSafe, exchangeCandleKey, exchangeIndicatorKey } from '@livermore/cache';
@@ -251,6 +252,10 @@ async function start() {
   // Register Clerk authentication plugin (must be before tRPC so getAuth works in context)
   await fastify.register(clerkPlugin);
   logger.info('Clerk authentication plugin registered');
+
+  // Public REST API (Phase 39) - separate from tRPC admin routes
+  await fastify.register(publicApiPlugin, { prefix: '/public/v1' });
+  logger.info('Public API registered at /public/v1');
 
   // ============================================
   // PRE-FLIGHT CONNECTION CHECKS

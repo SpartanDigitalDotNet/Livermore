@@ -171,6 +171,9 @@ importers:
       '@livermore/indicators':
         specifier: workspace:*
         version: link:../../packages/indicators
+      '@livermore/public-api':
+        specifier: workspace:*
+        version: link:../../packages/public-api
       '@livermore/schemas':
         specifier: workspace:*
         version: link:../../packages/schemas
