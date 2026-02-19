@@ -8,23 +8,25 @@ A real-time cryptocurrency trading analysis platform with multi-exchange support
 
 Data accuracy and timely alerts — indicators must calculate on complete, accurate candle data, and signals must fire reliably without missing conditions or producing false positives from stale data.
 
-## Current Milestone: v7.0 Smart Warmup & Binance Adapter
+## Current Milestone: v8.0 Perseus Web Public API
 
-**Goal:** Transform warmup from brute-force backfill into a smart, observable process that scans cached data first, then build and test the Binance WebSocket adapter so Kaia's Binance instance streams live candle data.
+**Goal:** Expose Livermore's data through a public REST API and WebSocket endpoint with OpenAPI spec so the open-source Perseus Web client (and any AI agent) can connect without direct Redis/DB access.
 
 **Target features:**
-- Smart Warmup Optimization with Exchange Candle Status Scan (check what's already cached before fetching), warmup schedule in Redis, and real-time progress stats for Admin UI
-- Ticker key migration (remove user_id, make exchange-scoped)
-- Binance WebSocket Adapter for binance.com and binance.us (URL from exchanges table)
-- Admin Network "Connect" button with lock-check warning modal
-- Exchange Setup Modal for managing user_exchanges records with is_active/is_default orchestration
+- Public REST API at `/public/v1/*` — candles, alerts, alert history, exchange metadata
+- OpenAPI spec via `zod-to-openapi` with AI-agent-ready documentation (rich descriptions, examples, error schemas)
+- WebSocket bridge relaying Redis pub/sub (candle closes, alerts) to external clients
+- AsyncAPI spec for WebSocket message schemas
+- Runtime mode flag (`LIVERMORE_MODE=exchange` vs `pw-host`) for headless instances
+- Auth & security — API keys or Clerk tokens, rate limiting, CORS on public routes
+- Client contract generation support via `openapi-typescript` + `openapi-fetch`
 - Subscription Test Harness (BTC 1d warmup + 2s WebSocket test)
 - Binance.us end-to-end warmup testing and Kaia handoff
 
 ## Current State
 
-**Status:** v7.0 in progress
-**Current focus:** Smart Warmup & Binance Adapter
+**Status:** v8.0 in progress
+**Current focus:** Perseus Web Public API
 
 **Architecture (v6.0):**
 ```
@@ -167,4 +169,4 @@ Each Livermore API instance registers itself in Redis with full identity (hostna
 **v6.0 goal:** Each Livermore API instance becomes a visible, identifiable node in the Perseus Network. Admins can see who's running what, where, and whether it's healthy — the foundation for future active/passive failover and remote administration.
 
 ---
-*Last updated: 2026-02-13 — start v7.0 Smart Warmup & Binance Adapter milestone*
+*Last updated: 2026-02-18 — start v8.0 Perseus Web Public API milestone*

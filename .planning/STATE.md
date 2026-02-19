@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-02-13)
 
 **Core value:** Data accuracy and timely alerts
-**Current focus:** v7.0 Smart Warmup & Binance Adapter
+**Current focus:** v8.0 Perseus Web Public API
 
 ## Current Position
 
-**Milestone:** v7.0 Smart Warmup & Binance Adapter
-**Phase:** 38 of 38 (Test Harness & Handoff)
-**Plan:** 2 of 2 complete
-**Status:** Complete -- Test harness validated, Kaia handoff documentation delivered
+**Milestone:** v8.0 Perseus Web Public API
+**Phase:** Not started (defining requirements)
+**Plan:** —
+**Status:** Defining requirements
 
-**Last activity:** 2026-02-13 -- Completed Plan 38-02 (Kaia Handoff Documentation)
+**Last activity:** 2026-02-18 — Milestone v8.0 started
 
 ## Milestones
 
@@ -26,6 +26,7 @@ See: .planning/PROJECT.md (updated 2026-02-13)
 | v4.0 | User Settings + Runtime Control | Archived | 2026-02-06 |
 | v5.0 | Distributed Exchange Architecture | Archived | 2026-02-08 |
 | v6.0 | Perseus Network | Archived | 2026-02-10 |
+| v7.0 | Smart Warmup & Binance Adapter | Archived | 2026-02-13 |
 
 See `.planning/MILESTONES.md` for full history.
 
@@ -56,6 +57,7 @@ See `.planning/MILESTONES.md` for full history.
 | **No silent defaults** | If exchange unknown, surface error -- never default to Coinbase |
 | **One instance per exchange** | Only one Livermore API may actively serve a given exchange at any time |
 | **Env vars from Windows User scope** | Never use .env files -- environment variables injected via .ps1 scripts |
+| **MACD-V is proprietary IP** | NEVER expose MACD-V name, formula, or calculation details publicly. Public API uses generic labels ("trade signal", "momentum", "divergence"). Internal indicator names must not leak through public endpoints. |
 
 ### Decisions
 
@@ -101,23 +103,25 @@ None.
 
 ### Last Session
 
-**Date:** 2026-02-13
-**Activity:** Completed Plan 38-02 (Kaia Handoff Documentation)
-**Stopped At:** Completed 38-02-PLAN.md -- KAIA-HANDOFF.md created with test results and complete setup guide
+**Date:** 2026-02-18
+**Activity:** Starting v8.0 Perseus Web Public API milestone
+**Stopped At:** Defining requirements
 
 ### Resume Context
 
-**v7.0 SMART WARMUP & BINANCE ADAPTER -- ROADMAP CREATED**
+**v8.0 PERSEUS WEB PUBLIC API — MILESTONE STARTED**
 
 Key context:
-- v6.0 Perseus Network complete (phases 30-33)
-- v7.0 roadmap: 5 phases (34-38), 22 requirements
-- Phase 34 (Ticker Key Migration) is first -- surgical refactor, 3 requirements
-- Phase 35 (Smart Warmup Engine) is the big one -- 5 requirements, core innovation
-- Phase 36 (Binance WebSocket Adapter) -- 5 requirements, BinanceRestClient already exists
-- Phase 37 (Admin UI) -- 5 requirements, combines connect/setup/warmup-progress
-- Phase 38 (Test Harness & Handoff) -- 4 requirements, validates everything for Kaia
+- v7.0 complete (phases 34-38, shipped 2026-02-13)
+- Liquidity scoring shipped on Binance-Wireup branch (post-v7.0)
+- v8.0 branch: `public-api`
+- Perseus Web (PW) is open-source client in separate repo
+- Livermore exposes public REST API + WebSocket for PW consumption
+- "Headless" mode: Livermore instances that serve PW without exchange connections
+- OpenAPI spec as contract between repos (zod-to-openapi server, openapi-typescript client)
+- AsyncAPI for WebSocket message schemas
+- NATS deferred to future milestone
 
 ---
 *State initialized: 2026-01-18*
-*Last updated: 2026-02-13 -- Phase 38 complete (Test Harness & Kaia Handoff)*
+*Last updated: 2026-02-18 — Milestone v8.0 started (Perseus Web Public API)*
