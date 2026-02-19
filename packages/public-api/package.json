@@ -17,9 +17,11 @@
     "@livermore/database": "workspace:*",
     "@livermore/schemas": "workspace:*",
     "@livermore/utils": "workspace:*",
+    "@types/ws": "^8.5.13",
     "drizzle-orm": "^0.36.4",
     "fastify": "^5.2.2",
     "fastify-type-provider-zod": "^4.0.2",
+    "ws": "^8.18.0",
     "zod": "^3.24.1"
   },
   "devDependencies": {
