@@ -1,6 +1,7 @@
 import {
   EnvConfigSchema,
   PwHostEnvConfigSchema,
+  resolveMode,
   type EnvConfig,
   type PwHostEnvConfig,
   type RuntimeMode,
@@ -10,20 +11,22 @@ import { logger } from '../logger/logger';
 /**
  * Validate environment variables on application startup.
  *
- * This function should be called at the very beginning of the application.
- * If validation fails, it logs the errors and exits the process.
+ * When called with no mode argument, auto-detects from LIVERMORE_MODE env var.
+ * This ensures callers like getRedisClient() and getDbClient() that call
+ * validateEnv() internally use the correct schema in pw-host mode.
  *
- * @param mode - Runtime mode determining which schema to use (default: 'exchange')
+ * @param mode - Runtime mode determining which schema to use (auto-detected if omitted)
  * @returns Validated environment configuration
  * @throws Exits process if validation fails
  */
 export function validateEnv(mode?: 'exchange'): EnvConfig;
 export function validateEnv(mode: 'pw-host'): PwHostEnvConfig;
-export function validateEnv(mode: RuntimeMode = 'exchange'): EnvConfig | PwHostEnvConfig {
+export function validateEnv(mode?: RuntimeMode): EnvConfig | PwHostEnvConfig {
   try {
-    const schema = mode === 'pw-host' ? PwHostEnvConfigSchema : EnvConfigSchema;
+    const effectiveMode = mode ?? resolveMode();
+    const schema = effectiveMode === 'pw-host' ? PwHostEnvConfigSchema : EnvConfigSchema;
     const config = schema.parse(process.env);
-    logger.info({ mode }, 'Environment variables validated successfully');
+    logger.info({ mode: effectiveMode }, 'Environment variables validated');
     return config;
   } catch (error) {
     logger.error('Invalid environment variables:');
