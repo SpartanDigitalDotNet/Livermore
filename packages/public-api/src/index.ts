@@ -1,11 +1,21 @@
-// Public API barrel export
-// Fastify plugin will be exported in Plan 02
+/**
+ * @livermore/public-api
+ *
+ * Public API package for external clients.
+ * Provides IP-protected schemas, transformers, helpers, and Fastify plugin for public endpoints.
+ *
+ * CRITICAL: This package does NOT depend on @livermore/indicators to maintain
+ * hard IP isolation boundary. Proprietary indicator calculations are never exposed.
+ */
 
-// Re-export all schemas
+// Export all schemas
 export * from './schemas/index.js';
 
-// Re-export all transformers
+// Export all transformers
 export * from './transformers/index.js';
 
-// Re-export all helpers
+// Export all helpers
 export * from './helpers/index.js';
+
+// Export plugin
+export { publicApiPlugin } from './plugin.js';
