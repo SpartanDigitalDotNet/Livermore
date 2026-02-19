@@ -11,10 +11,10 @@ See: .planning/PROJECT.md (updated 2026-02-18)
 
 **Milestone:** v8.0 Perseus Web Public API
 **Phase:** 42 of 43 (WebSocket Bridge & Backpressure)
-**Plan:** 1 of 2 complete
-**Status:** Phase 42 Plan 01 complete, ready for Plan 02
+**Plan:** 2 of 2 complete
+**Status:** Phase 42 complete, ready for Phase 43
 
-**Last activity:** 2026-02-19 — Phase 42 Plan 01 complete (WS bridge engine)
+**Last activity:** 2026-02-19 — Phase 42 complete (WebSocket bridge engine + route wiring + AsyncAPI spec)
 
 Progress: [████░░░░░░] 8 of 13 milestones complete (61%)
 
@@ -55,6 +55,7 @@ See `.planning/MILESTONES.md` for full history.
 | Phase 41 P01 | 474 | 2 tasks | 11 files |
 | Phase 41 P02 | 264 | 1 task | 3 files |
 | Phase 42 P01 | 294 | 2 tasks | 6 files |
+| Phase 42 P02 | 540 | 2 tasks | 7 files |
 
 ## Tech Debt (Carried Forward)
 
@@ -128,6 +129,12 @@ Recent decisions affecting v8.0 work:
 - **Internal alertType in WHERE only**: `alertType='macdv'` filters DB query but never appears in response
 - **Bidirectional exchange cache**: alerts route caches name->id and id->name from same DB query
 
+**Phase 42-02 decisions:**
+- **Triple-slash reference for @fastify/websocket types**: Module augmentation needed in plugin scope for websocket route options
+- **Variable declaration reorder in server.ts**: activeExchangeId/Name moved before plugin registration
+- **Skip /stream in buildAuthHook**: WS auth via query param, not X-API-Key header
+- **Bridge conditional on exchangeId**: Idle mode (no exchange) has no WebSocket bridge
+
 **Phase 42-01 decisions:**
 - **bufferedAmount thresholds**: 64KB skip, 256KB terminate -- heuristic backpressure detection
 - **Pong handler in constructor**: Attached once to avoid listener accumulation
@@ -148,8 +155,8 @@ None.
 ### Last Session
 
 **Date:** 2026-02-19
-**Activity:** Executing Phase 42 Plan 01
-**Stopped At:** Completed 42-01-PLAN.md (WS bridge engine)
+**Activity:** Executing Phase 42 Plan 02
+**Stopped At:** Completed 42-02-PLAN.md (WS route wiring + AsyncAPI spec)
 
 ### Resume Context
 
@@ -209,8 +216,17 @@ Phase 42 Plan 01 delivered:
 - Message handlers for subscribe/unsubscribe with channel format validation
 - Per-API-key connection counting (max 5) for WS-06 enforcement
 
-**Next step:** Phase 42 Plan 02 (wire bridge into Fastify WebSocket route)
+**PHASE 42 COMPLETE**
+
+Phase 42 Plan 02 delivered:
+- /public/v1/stream WebSocket endpoint with query param API key auth (close codes 4001/4008)
+- Bridge lifecycle integrated via plugin onClose hook
+- Auth hook skips /stream (WS auth handled in-route)
+- AsyncAPI 3.1 spec documenting all message types with concrete JSON examples
+- Zero proprietary indicator names in any public-facing code or spec
+
+**Next step:** Phase 43 (pw-host mode)
 
 ---
 *State initialized: 2026-01-18*
-*Last updated: 2026-02-19 — Phase 42 Plan 01 complete (WS bridge engine)*
+*Last updated: 2026-02-19 — Phase 42 complete (WS bridge + route wiring + AsyncAPI spec)*
