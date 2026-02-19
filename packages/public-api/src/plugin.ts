@@ -9,7 +9,7 @@ import {
 } from 'fastify-type-provider-zod';
 import fastifySwagger from '@fastify/swagger';
 import fastifySwaggerUi from '@fastify/swagger-ui';
-import { candlesRoute, exchangesRoute, symbolsRoute } from './routes/index.js';
+import { candlesRoute, exchangesRoute, symbolsRoute, signalsRoute, alertsRoute } from './routes/index.js';
 
 /**
  * Sanitized error handler for the public API scope.
@@ -109,7 +109,7 @@ export const publicApiPlugin: FastifyPluginAsyncZod = async (instance) => {
         title: 'Livermore Public API',
         version: '1.0.0',
         description: `
-**Livermore Public API** provides high-quality cryptocurrency market data including OHLCV candles, exchange metadata, and trading pair information.
+**Livermore Public API** provides high-quality cryptocurrency market data including OHLCV candles, exchange metadata, trading pair information, trade signals, and alert history.
 
 This API is designed for programmatic access by:
 - **Algorithmic trading bots** requiring real-time price feeds
@@ -118,7 +118,7 @@ This API is designed for programmatic access by:
 - **Market analytics tools** performing technical analysis
 - **Charting applications** visualizing price action
 
-**Data sources:** All candle data is sourced from live exchange WebSocket feeds and cached for low-latency access. Exchange status reflects real-time connection health. Symbol metadata includes liquidity grading derived from 24-hour trading volume and order book depth.
+**Data sources:** All candle data is sourced from live exchange WebSocket feeds and cached for low-latency access. Exchange status reflects real-time connection health. Symbol metadata includes liquidity grading derived from 24-hour trading volume and order book depth. Trade signals provide real-time market analysis with generic direction and strength classifications. Alert history records historical signal trigger events.
 
 **Pagination:** All list endpoints support cursor-based pagination for efficient iteration through large result sets. Use the \`next_cursor\` value from the response metadata as the \`cursor\` query parameter for the next page.
 
@@ -148,6 +148,14 @@ This API is designed for programmatic access by:
           name: 'Symbols',
           description: 'Trading pair catalog endpoints',
         },
+        {
+          name: 'Signals',
+          description: 'Trade signal endpoints providing generic market analysis indicators with direction and strength classification',
+        },
+        {
+          name: 'Alerts',
+          description: 'Historical trade alert endpoints providing a chronological record of signal events',
+        },
       ],
     },
   });
@@ -155,6 +163,7 @@ This API is designed for programmatic access by:
   // Register Swagger UI for interactive API documentation
   await instance.register(fastifySwaggerUi, {
     routePrefix: '/docs',
+    indexPrefix: '/public/v1',
     uiConfig: {
       docExpansion: 'list',
       deepLinking: true,
@@ -169,6 +178,8 @@ This API is designed for programmatic access by:
   await typedInstance.register(candlesRoute, { prefix: '/candles' });
   await typedInstance.register(exchangesRoute, { prefix: '/exchanges' });
   await typedInstance.register(symbolsRoute, { prefix: '/symbols' });
+  await typedInstance.register(signalsRoute, { prefix: '/signals' });
+  await typedInstance.register(alertsRoute, { prefix: '/alerts' });
 
   // OpenAPI spec endpoint
   typedInstance.get('/openapi.json', {
