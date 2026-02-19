@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-02-18)
 
 **Core value:** Data accuracy and timely alerts
-**Current focus:** v8.0 Perseus Web Public API - Phase 42 (WebSocket Bridge & Backpressure)
+**Current focus:** v8.0 Perseus Web Public API - Phase 43 (Runtime Modes & Distributed Architecture)
 
 ## Current Position
 
 **Milestone:** v8.0 Perseus Web Public API
-**Phase:** 42 of 43 (WebSocket Bridge & Backpressure)
-**Plan:** 2 of 2 complete
-**Status:** Phase 42 complete, ready for Phase 43
+**Phase:** 43 of 43 (Runtime Modes & Distributed Architecture)
+**Plan:** 1 of 2 complete
+**Status:** Executing Phase 43
 
-**Last activity:** 2026-02-19 — Phase 42 complete (WebSocket bridge engine + route wiring + AsyncAPI spec)
+**Last activity:** 2026-02-19 — Phase 43 Plan 01 complete (RuntimeMode type system + mode-aware env validation)
 
 Progress: [████░░░░░░] 8 of 13 milestones complete (61%)
 
@@ -56,6 +56,7 @@ See `.planning/MILESTONES.md` for full history.
 | Phase 41 P02 | 264 | 1 task | 3 files |
 | Phase 42 P01 | 294 | 2 tasks | 6 files |
 | Phase 42 P02 | 540 | 2 tasks | 7 files |
+| Phase 43 P01 | 286 | 2 tasks | 3 files |
 
 ## Tech Debt (Carried Forward)
 
@@ -135,6 +136,11 @@ Recent decisions affecting v8.0 work:
 - **Skip /stream in buildAuthHook**: WS auth via query param, not X-API-Key header
 - **Bridge conditional on exchangeId**: Idle mode (no exchange) has no WebSocket bridge
 
+**Phase 43-01 decisions:**
+- **Zod .omit() for schema derivation**: PwHostEnvConfigSchema derived from EnvConfigSchema, stays in sync automatically
+- **Function overloads for validateEnv()**: Compile-time type narrowing based on mode parameter
+- **resolveMode() standalone function**: Separated from validateEnv() so mode is resolved once at startup
+
 **Phase 42-01 decisions:**
 - **bufferedAmount thresholds**: 64KB skip, 256KB terminate -- heuristic backpressure detection
 - **Pong handler in constructor**: Attached once to avoid listener accumulation
@@ -155,8 +161,8 @@ None.
 ### Last Session
 
 **Date:** 2026-02-19
-**Activity:** Executing Phase 42 Plan 02
-**Stopped At:** Completed 42-02-PLAN.md (WS route wiring + AsyncAPI spec)
+**Activity:** Executing Phase 43 Plan 01
+**Stopped At:** Completed 43-01-PLAN.md (RuntimeMode type system + mode-aware env validation)
 
 ### Resume Context
 
@@ -225,8 +231,17 @@ Phase 42 Plan 02 delivered:
 - AsyncAPI 3.1 spec documenting all message types with concrete JSON examples
 - Zero proprietary indicator names in any public-facing code or spec
 
-**Next step:** Phase 43 (pw-host mode)
+**PHASE 43 PLAN 01 COMPLETE**
+
+Phase 43 Plan 01 delivered:
+- RuntimeMode type ('exchange' | 'pw-host') in @livermore/schemas
+- resolveMode() reads LIVERMORE_MODE env var, defaults to 'exchange', throws on invalid
+- PwHostEnvConfigSchema derived via Zod .omit() (removes Coinbase, Clerk, Discord fields)
+- validateEnv() accepts optional RuntimeMode with TypeScript overloads for type-safe returns
+- Full backward compatibility: existing validateEnv() calls unchanged
+
+**Next step:** Phase 43 Plan 02 (server startup branching for pw-host mode)
 
 ---
 *State initialized: 2026-01-18*
-*Last updated: 2026-02-19 — Phase 42 complete (WS bridge + route wiring + AsyncAPI spec)*
+*Last updated: 2026-02-19 — Phase 43 Plan 01 complete (RuntimeMode type system + mode-aware env validation)*
