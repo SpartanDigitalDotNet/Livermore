@@ -129,8 +129,8 @@ Plans:
 **Plans:** 2 plans
 
 Plans:
-- [ ] 40-01-PLAN.md -- Zod schemas and whitelist transformers for signals and alerts
-- [ ] 40-02-PLAN.md -- Route handlers, plugin wiring, and OpenAPI documentation
+- [x] 40-01-PLAN.md -- Zod schemas and whitelist transformers for signals and alerts
+- [x] 40-02-PLAN.md -- Route handlers, plugin wiring, and OpenAPI documentation
 
 #### Phase 41: Authentication & Rate Limiting
 **Goal**: Secure public API with API key authentication and tiered rate limiting
@@ -192,11 +192,11 @@ Phases execute in numeric order: 34 → 35 → 36 → 37 → 38 → 39 → 40 �
 | 37. Admin UI -- Connect, Exchange Setup & Warmup Progress | v7.0 | 3/3 | Complete | 2026-02-13 |
 | 38. Binance Test Harness & Handoff | v7.0 | 0/2 | Not started | - |
 | 39. Public API Foundation & IP Protection | v8.0 | 3/3 | Complete | 2026-02-18 |
-| 40. Trade Signals with Generic Labeling | v8.0 | 0/? | Not started | - |
+| 40. Trade Signals with Generic Labeling | v8.0 | 2/2 | Complete | 2026-02-19 |
 | 41. Authentication & Rate Limiting | v8.0 | 0/? | Not started | - |
 | 42. WebSocket Bridge with Backpressure | v8.0 | 0/? | Not started | - |
 | 43. Runtime Modes & Distributed Architecture | v8.0 | 0/? | Not started | - |
 
 ---
 *Roadmap created: 2026-02-13*
-*Last updated: 2026-02-18 -- Phase 39 complete (3/3 plans, verified)*
+*Last updated: 2026-02-19 -- Phase 40 complete (2/2 plans, verified 6/6 must-haves)*

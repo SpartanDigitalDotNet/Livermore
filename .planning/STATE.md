@@ -65,6 +65,7 @@ See `.planning/MILESTONES.md` for full history.
 | Autostart hardcodes exchangeId=1 (Coinbase) | Medium | Autostart only supports Coinbase | v5.0 |
 | Routers hardcode TEST_USER_ID/TEST_EXCHANGE_ID | Medium | Tied to publicProcedure debt | v3.0 |
 | Legacy userId param in cache calls (candle/indicator only) | Low | Ticker keys migrated (v7.0 Phase 34); candle/indicator still have userId | v5.0 |
+| Swagger UI CSP inline style violation | Low | swagger-ui-bundle.js blocked by Content Security Policy 'style-src' directive; needs 'unsafe-inline' or nonce | v8.0 |
 
 ## Accumulated Context
 
