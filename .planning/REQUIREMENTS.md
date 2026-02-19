@@ -94,14 +94,44 @@ Deferred until v8.0 is live and user feedback validates need.
 
 ## Traceability
 
-_Filled by roadmap — maps REQ-IDs to phases._
+_Maps REQ-IDs to roadmap phases._
 
-| Requirement | Phase |
-|-------------|-------|
-| API-01..API-08 | TBD |
-| OAS-01..OAS-06 | TBD |
-| WS-01..WS-07 | TBD |
-| AAS-01..AAS-04 | TBD |
-| AUTH-01..AUTH-05 | TBD |
-| IP-01..IP-03 | TBD |
-| MODE-01..MODE-04 | TBD |
+| Requirement | Phase | Status |
+|-------------|-------|--------|
+| API-01 | Phase 39 | Pending |
+| API-02 | Phase 40 | Pending |
+| API-03 | Phase 40 | Pending |
+| API-04 | Phase 39 | Pending |
+| API-05 | Phase 39 | Pending |
+| API-06 | Phase 39 | Pending |
+| API-07 | Phase 39 | Pending |
+| API-08 | Phase 39 | Pending |
+| OAS-01 | Phase 39 | Pending |
+| OAS-02 | Phase 39 | Pending |
+| OAS-03 | Phase 39 | Pending |
+| OAS-04 | Phase 39 | Pending |
+| OAS-05 | Phase 39 | Pending |
+| OAS-06 | Phase 39 | Pending |
+| WS-01 | Phase 42 | Pending |
+| WS-02 | Phase 42 | Pending |
+| WS-03 | Phase 42 | Pending |
+| WS-04 | Phase 42 | Pending |
+| WS-05 | Phase 42 | Pending |
+| WS-06 | Phase 42 | Pending |
+| WS-07 | Phase 42 | Pending |
+| AAS-01 | Phase 42 | Pending |
+| AAS-02 | Phase 42 | Pending |
+| AAS-03 | Phase 42 | Pending |
+| AAS-04 | Phase 42 | Pending |
+| AUTH-01 | Phase 41 | Pending |
+| AUTH-02 | Phase 41 | Pending |
+| AUTH-03 | Phase 41 | Pending |
+| AUTH-04 | Phase 41 | Pending |
+| AUTH-05 | Phase 41 | Pending |
+| IP-01 | Phase 39 | Pending |
+| IP-02 | Phase 39 | Pending |
+| IP-03 | Phase 39 | Pending |
+| MODE-01 | Phase 43 | Pending |
+| MODE-02 | Phase 43 | Pending |
+| MODE-03 | Phase 43 | Pending |
+| MODE-04 | Phase 43 | Pending |

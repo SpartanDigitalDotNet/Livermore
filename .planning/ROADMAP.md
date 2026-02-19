@@ -1,24 +1,26 @@
-# Roadmap: Livermore v7.0 Smart Warmup & Binance Adapter
+# Roadmap: Livermore Trading Platform
 
-## Overview
+## Milestones
 
-v7.0 transforms warmup from brute-force backfill into a smart, observable process and brings Binance WebSocket streaming online for Kaia's instance. The roadmap starts with a surgical ticker key migration to align the last user-scoped keys with the exchange-scoped pattern established in v5.0, then builds the smart warmup engine that scans cached data before fetching, followed by the Binance WebSocket adapter (the REST client already exists from v5.0), Admin UI enhancements for exchange connection and warmup monitoring, and finally a test harness that validates the complete Binance pipeline end-to-end before Kaia handoff.
+- ✅ **v1.0 Coinbase Fee Analysis Spike** - Phases 1-3 (shipped 2026-01-19)
+- ✅ **v2.0 Data Pipeline Redesign** - Phases 4-10 (shipped 2026-01-24)
+- ✅ **v3.0 Admin UI + IAM Foundation** - Phases 11-16 (shipped 2026-01-30)
+- ✅ **v4.0 User Settings + Runtime Control** - Phases 17-22 (shipped 2026-02-06)
+- ✅ **v5.0 Distributed Exchange Architecture** - Phases 23-29 (shipped 2026-02-08)
+- 🚧 **v7.0 Smart Warmup & Binance Adapter** - Phases 30-38 (in progress)
+- 📋 **v8.0 Perseus Web Public API** - Phases 39-43 (planned)
 
 ## Phases
 
-**Phase Numbering:**
-- Integer phases (34, 35, 36, 37, 38): Planned v7.0 milestone work
-- Decimal phases (34.1, 34.2): Urgent insertions if needed (marked with INSERTED)
+<details>
+<summary>✅ v1.0-v5.0 (Phases 1-29) - SHIPPED</summary>
 
-Decimal phases appear between their surrounding integers in numeric order.
+See MILESTONES.md for details.
 
-- [x] **Phase 34: Ticker Key Migration** - Remove userId from ticker keys and pub/sub channels to complete exchange-scoped key alignment
-- [x] **Phase 35: Smart Warmup Engine** - Scan cached candle data first, build a schedule of what is missing, execute only the gaps, and publish real-time progress stats
-- [ ] **Phase 36: Binance WebSocket Adapter** - Implement IExchangeAdapter for Binance with WebSocket streaming, symbol normalization, and factory wiring
-- [x] **Phase 37: Admin UI -- Connect, Exchange Setup & Warmup Progress** - Network page Connect button with lock-check, Exchange Setup Modal for user_exchanges, and warmup progress subscription
-- [ ] **Phase 38: Binance Test Harness & Handoff** - Validate Binance REST warmup and WebSocket streaming end-to-end, then prepare Kaia handoff
+</details>
 
-## Phase Details
+<details>
+<summary>🚧 v7.0 Smart Warmup & Binance Adapter (Phases 30-38) - IN PROGRESS</summary>
 
 ### Phase 34: Ticker Key Migration
 **Goal**: Ticker keys and pub/sub channels are exchange-scoped (consistent with candle and indicator keys), with no user_id in the key pattern
@@ -90,19 +92,108 @@ Plans:
 - [ ] 38-01-PLAN.md -- Subscription Test Harness script (REST warmup + WebSocket streaming tests)
 - [ ] 38-02-PLAN.md -- Binance.us E2E test execution + Kaia handoff documentation
 
+</details>
+
+### 📋 v8.0 Perseus Web Public API (Planned)
+
+**Milestone Goal:** Expose Livermore's data through a public REST API and WebSocket endpoint with OpenAPI spec so the open-source Perseus Web client (and any AI agent) can connect without direct Redis/DB access.
+
+**Critical constraint:** MACD-V is proprietary IP — internal indicator names, formulas, and calculation details NEVER exposed through public endpoints.
+
+#### Phase 39: Public API Foundation & IP Protection
+**Goal**: Establish REST endpoints for non-proprietary data with field transformation layer and OpenAPI spec
+**Depends on**: Nothing (first phase of milestone)
+**Requirements**: API-01, API-04, API-05, API-06, API-07, API-08, OAS-01, OAS-02, OAS-03, OAS-04, OAS-05, OAS-06, IP-01, IP-02, IP-03
+**Success Criteria** (what must be TRUE):
+  1. External client can fetch OHLCV candle data for any symbol/timeframe/exchange from public REST endpoint
+  2. External client can fetch exchange metadata and symbol lists with liquidity grades
+  3. All responses use consistent JSON envelope with cursor pagination and ISO8601 timestamps
+  4. OpenAPI 3.1 spec serves at /public/v1/openapi.json with AI-optimized descriptions and concrete examples
+  5. No internal field names (macdV, signal, histogram, fastEMA, slowEMA, atr, informativeATR) appear in any public response or spec
+**Plans**: TBD
+
+Plans:
+- [ ] 39-01: TBD
+
+#### Phase 40: Trade Signals with Generic Labeling
+**Goal**: Expose trade signals and alert history with proprietary indicator details stripped
+**Depends on**: Phase 39
+**Requirements**: API-02, API-03
+**Success Criteria** (what must be TRUE):
+  1. External client can fetch generic trade signals (momentum_signal, trend_signal) for any symbol with direction and strength only
+  2. External client can fetch alert history with timestamp, symbol, exchange, timeframe, signal type, direction, and price
+  3. No indicator names (MACD-V), calculation parameters (EMA periods, ATR multipliers), or internal metric names appear in signal responses
+  4. OpenAPI spec documents signal endpoints with generic schema and clear examples
+**Plans**: TBD
+
+Plans:
+- [ ] 40-01: TBD
+
+#### Phase 41: Authentication & Rate Limiting
+**Goal**: Secure public API with API key authentication and tiered rate limiting
+**Depends on**: Phase 40
+**Requirements**: AUTH-01, AUTH-02, AUTH-03, AUTH-04, AUTH-05
+**Success Criteria** (what must be TRUE):
+  1. External client can authenticate requests via X-API-Key header with UUID key
+  2. Unauthenticated requests to /public/v1/* are rejected with 401 error
+  3. All public API requests are rate limited (300 req/min) with 429 response when exceeded
+  4. Admin tRPC routes exempt from rate limiting
+  5. Admin can generate, view, and regenerate API keys via Admin UI
+  6. Public API errors are sanitized with no stack traces or internal details exposed
+**Plans**: TBD
+
+Plans:
+- [ ] 41-01: TBD
+
+#### Phase 42: WebSocket Bridge with Backpressure
+**Goal**: Real-time streaming of candle closes and trade signals via WebSocket with connection management
+**Depends on**: Phase 41
+**Requirements**: WS-01, WS-02, WS-03, WS-04, WS-05, WS-06, WS-07, AAS-01, AAS-02, AAS-03, AAS-04
+**Success Criteria** (what must be TRUE):
+  1. External client can connect to /public/v1/stream with API key authentication
+  2. Client can subscribe to candle and signal channels (candles:BTC-USD:1h, signals:ETH-USD:15m) via JSON message
+  3. Client receives real-time candle close events when Redis pub/sub fires
+  4. Client receives real-time trade signal events with generic labels (no internal indicator details)
+  5. Slow or disconnected clients are detected via ping/pong heartbeat and removed automatically
+  6. Per-API-key connection limit enforced (max 5 concurrent connections)
+  7. AsyncAPI 3.1 spec documents all WebSocket message schemas with concrete examples
+**Plans**: TBD
+
+Plans:
+- [ ] 42-01: TBD
+
+#### Phase 43: Runtime Modes & Distributed Architecture
+**Goal**: Enable headless pw-host mode for dedicated public API instances separate from exchange data ingest
+**Depends on**: Phase 42
+**Requirements**: MODE-01, MODE-02, MODE-03, MODE-04
+**Success Criteria** (what must be TRUE):
+  1. Server can start in pw-host mode (LIVERMORE_MODE=pw-host) without exchange adapter initialization
+  2. In pw-host mode, server serves public API from Redis cache without running warmup or indicator calculations
+  3. In exchange mode, server runs full data pipeline and optionally serves public API
+  4. Health endpoint reports runtime mode and mode-appropriate status (exchange: WebSocket connected; pw-host: Redis connected)
+**Plans**: TBD
+
+Plans:
+- [ ] 43-01: TBD
+
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 34 -> 35 -> 36 -> 37 -> 38
+Phases execute in numeric order: 34 → 35 → 36 → 37 → 38 → 39 → 40 → 41 → 42 → 43
 
-| Phase | Plans Complete | Status | Completed |
-|-------|---------------|--------|-----------|
-| 34. Ticker Key Migration | 2/2 | Complete | 2026-02-13 |
-| 35. Smart Warmup Engine | 2/2 | Complete | 2026-02-13 |
-| 36. Binance WebSocket Adapter | 2/2 | Complete | 2026-02-13 |
-| 37. Admin UI -- Connect, Exchange Setup & Warmup Progress | 3/3 | Complete | 2026-02-13 |
-| 38. Binance Test Harness & Handoff | 0/2 | Not started | - |
+| Phase | Milestone | Plans Complete | Status | Completed |
+|-------|-----------|----------------|--------|-----------|
+| 34. Ticker Key Migration | v7.0 | 2/2 | Complete | 2026-02-13 |
+| 35. Smart Warmup Engine | v7.0 | 2/2 | Complete | 2026-02-13 |
+| 36. Binance WebSocket Adapter | v7.0 | 2/2 | Complete | 2026-02-13 |
+| 37. Admin UI -- Connect, Exchange Setup & Warmup Progress | v7.0 | 3/3 | Complete | 2026-02-13 |
+| 38. Binance Test Harness & Handoff | v7.0 | 0/2 | Not started | - |
+| 39. Public API Foundation & IP Protection | v8.0 | 0/? | Not started | - |
+| 40. Trade Signals with Generic Labeling | v8.0 | 0/? | Not started | - |
+| 41. Authentication & Rate Limiting | v8.0 | 0/? | Not started | - |
+| 42. WebSocket Bridge with Backpressure | v8.0 | 0/? | Not started | - |
+| 43. Runtime Modes & Distributed Architecture | v8.0 | 0/? | Not started | - |
 
 ---
 *Roadmap created: 2026-02-13*
-*Last updated: 2026-02-13 -- Phase 38 plans created (Binance Test Harness & Handoff)*
+*Last updated: 2026-02-18 -- v8.0 Perseus Web Public API phases added (39-43)*

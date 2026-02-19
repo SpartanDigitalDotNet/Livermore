@@ -2,19 +2,33 @@
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-02-13)
+See: .planning/PROJECT.md (updated 2026-02-18)
 
 **Core value:** Data accuracy and timely alerts
-**Current focus:** v8.0 Perseus Web Public API
+**Current focus:** v8.0 Perseus Web Public API - Phase 39 (Public API Foundation & IP Protection)
 
 ## Current Position
 
 **Milestone:** v8.0 Perseus Web Public API
-**Phase:** Not started (defining requirements)
-**Plan:** —
-**Status:** Defining requirements
+**Phase:** 39 of 43 (Public API Foundation & IP Protection)
+**Plan:** Ready to plan
+**Status:** Roadmap complete, awaiting phase planning
 
-**Last activity:** 2026-02-18 — Milestone v8.0 started
+**Last activity:** 2026-02-18 — v8.0 roadmap created (5 phases, 37 requirements)
+
+Progress: [████░░░░░░] 8 of 13 milestones complete (61%)
+
+## Performance Metrics
+
+**Velocity:**
+- Total plans completed: 84+ (across v1.0-v7.0)
+- Average duration: Varies by phase complexity
+- Total execution time: ~45 hours (across 7 milestones)
+
+**Recent milestones:**
+- v7.0: 7 phases, 2 days (2026-02-13)
+- v6.0: 6 phases, 2 days (2026-02-10)
+- v5.0: 7 phases, 2 days (2026-02-08)
 
 ## Milestones
 
@@ -27,6 +41,7 @@ See: .planning/PROJECT.md (updated 2026-02-13)
 | v5.0 | Distributed Exchange Architecture | Archived | 2026-02-08 |
 | v6.0 | Perseus Network | Archived | 2026-02-10 |
 | v7.0 | Smart Warmup & Binance Adapter | Archived | 2026-02-13 |
+| v8.0 | Perseus Web Public API | **Active** | — |
 
 See `.planning/MILESTONES.md` for full history.
 
@@ -62,34 +77,14 @@ See `.planning/MILESTONES.md` for full history.
 ### Decisions
 
 Decisions are logged in PROJECT.md Key Decisions table.
-Recent decisions affecting current work:
 
-- exchangeName bug fix: control-channel.service.ts line 428 was hardcoding "coinbase" -- fixed to use DB value
-- Ticker keys fully migrated to exchange-scoped: cache layer (34-01) and all 5 consumer call sites (34-02) complete
-- Removed unused userId param from getCurrentPrice() in position-sync.service.ts during ticker migration
-- BinanceAdapter WebSocket class created with kline x-field close detection and miniTicker streaming
-- Used /ws bare endpoint with SUBSCRIBE method frames for dynamic stream management (no reconnect needed for subscription changes)
-- wsUrl injected from options (not hardcoded) so same BinanceAdapter works for binance.com and binance.us
-- Exchange Candle Status Scan approach: check largest to smallest timeframe per symbol
-- Smart warmup scans cached data first, only fetches what is missing (not multi-exchange simultaneous)
-- SCAN_TIMEFRAME_ORDER: 1d -> 1m (largest to smallest per WARM-01)
-- MIN_CANDLE_THRESHOLD: 60 candles determines sufficient vs insufficient pairs
-- Schedule persisted as JSON to exchange:<id>:warm-up-schedule:symbols for external observability
-- SmartWarmupService replaces StartupBackfillService for startup only; ad-hoc backfill unchanged
-- Warmup stats persisted without TTL so Admin UI can read after warmup completes
-- Batch size 5 with 1s delay matching existing rate limiting pattern
-- BinanceRestClient created in factory (not adapter) to keep exchange-core free from binance-client dependency
-- Factory wsUrl/restUrl sourced from exchanges DB table -- binance.com vs binance.us is data-driven
-- [Phase 37]: Use trpcClient directly for imperative calls instead of hooks
-- [Phase 37]: Show ConnectButton for offline, idle, and stopped states only
-- [Phase 37-02]: is_default orchestration pattern: unset all other defaults before setting new default (prevents multiple defaults per user)
-- [Phase 37-02]: ExchangeSetupModal supports both create (existing flow) and edit mode (pre-populated, calls updateExchange)
-- [Phase 37-02]: Edit mode skips exchange selection step and is dismissable (vs non-dismissable create mode)
-- [Phase 37-03]: Use conditional refetchInterval based on warmup status (2s active, 30s complete)
-- [Phase 38-01]: Use raw WebSocket (ws library) for 2s streaming test instead of full BinanceAdapter (simpler, no state)
-- [Phase 38-01]: Test harness validates both REST (TST-01) and WebSocket (TST-02) with real exchange data before Kaia handoff
-- [Phase 38-02]: KAIA-HANDOFF.md structured with 7 sections: Overview, Environment Variables, Exchange Config, First-Run Steps, Verification, Troubleshooting, Test Results
-- [Phase 38-02]: Test harness executed against binance_us -- both TST-01 (REST) and TST-02 (WebSocket) PASSED on 2026-02-13
+Recent decisions affecting v8.0 work:
+
+- **IP protection first**: Phase 39 establishes DTO transformation layer before any proprietary data is exposed (can't retrofit after fields are public)
+- **REST before WebSocket**: Simpler protocol establishes data contracts first (Phases 39-41 before 42)
+- **Auth deferred to Phase 41**: Allows REST endpoint development without blocking on API key infrastructure
+- **Runtime modes last**: Phase 43 (pw-host mode) not required until production deployment
+- **5-phase structure**: Derived from requirements (not imposed template), aligns with research recommendations
 
 ### Pending Todos
 
@@ -104,24 +99,24 @@ None.
 ### Last Session
 
 **Date:** 2026-02-18
-**Activity:** Starting v8.0 Perseus Web Public API milestone
-**Stopped At:** Defining requirements
+**Activity:** Creating v8.0 roadmap
+**Stopped At:** Roadmap complete, requirements traced to phases
 
 ### Resume Context
 
-**v8.0 PERSEUS WEB PUBLIC API — MILESTONE STARTED**
+**v8.0 ROADMAP COMPLETE**
 
-Key context:
-- v7.0 complete (phases 34-38, shipped 2026-02-13)
-- Liquidity scoring shipped on Binance-Wireup branch (post-v7.0)
-- v8.0 branch: `public-api`
-- Perseus Web (PW) is open-source client in separate repo
-- Livermore exposes public REST API + WebSocket for PW consumption
-- "Headless" mode: Livermore instances that serve PW without exchange connections
-- OpenAPI spec as contract between repos (zod-to-openapi server, openapi-typescript client)
-- AsyncAPI for WebSocket message schemas
-- NATS deferred to future milestone
+Phase structure (5 phases, starting at 39):
+- **Phase 39**: Public API Foundation & IP Protection (16 requirements)
+- **Phase 40**: Trade Signals with Generic Labeling (2 requirements)
+- **Phase 41**: Authentication & Rate Limiting (5 requirements)
+- **Phase 42**: WebSocket Bridge with Backpressure (11 requirements)
+- **Phase 43**: Runtime Modes & Distributed Architecture (4 requirements)
+
+**Coverage:** 37/37 requirements mapped (100%)
+
+**Next step:** `/gsd:plan-phase 39` to decompose Phase 39 into executable plans
 
 ---
 *State initialized: 2026-01-18*
-*Last updated: 2026-02-18 — Milestone v8.0 started (Perseus Web Public API)*
+*Last updated: 2026-02-18 — v8.0 roadmap created, Phase 39 ready to plan*

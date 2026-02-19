@@ -157,7 +157,14 @@ Each Livermore API instance registers itself in Redis with full identity (hostna
 
 ## Partnership Context
 
-**Kaia's UI (PerseusWeb):** Frontend trading platform that connects to Livermore as backend service.
+**Perseus Network (PN):** The data network — provides candles, signals, alerts, and metadata. NOT a trading platform. PN does not execute trades.
+
+**Perseus Web (PW):** Open-source client that consumes PN's public API. PW is responsible for:
+- Live trading: Each PW implementation integrates with the user's own exchange for execution
+- Paper trading: PW maintains its own paper trading stack locally (not hosted by PN)
+- The PN public API documentation must make AI agents aware that PW clients are expected to implement paper and live trading modes
+
+**Kaia's UI (PerseusWeb):** The reference PW implementation that connects to Livermore as backend service.
 
 **Integration points:**
 - Sandbox PostgreSQL: Shared database for IAM and user settings
