@@ -179,8 +179,8 @@ Plans:
 **Plans:** 2 plans
 
 Plans:
-- [ ] 43-01-PLAN.md -- RuntimeMode type, mode-aware env validation, resolveMode()
-- [ ] 43-02-PLAN.md -- server.ts mode-gated startup, pw-host health endpoint
+- [x] 43-01-PLAN.md -- RuntimeMode type, mode-aware env validation, resolveMode()
+- [x] 43-02-PLAN.md -- server.ts mode-gated startup, pw-host health endpoint
 
 ## Progress
 
@@ -198,8 +198,8 @@ Phases execute in numeric order: 34 → 35 → 36 → 37 → 38 → 39 → 40 �
 | 40. Trade Signals with Generic Labeling | v8.0 | 2/2 | Complete | 2026-02-19 |
 | 41. Authentication & Rate Limiting | v8.0 | 2/2 | Complete | 2026-02-19 |
 | 42. WebSocket Bridge with Backpressure | v8.0 | 2/2 | Complete | 2026-02-19 |
-| 43. Runtime Modes & Distributed Architecture | v8.0 | 0/? | Not started | - |
+| 43. Runtime Modes & Distributed Architecture | v8.0 | 2/2 | Complete | 2026-02-19 |
 
 ---
 *Roadmap created: 2026-02-13*
-*Last updated: 2026-02-19 -- Phase 42 complete (WebSocket bridge + AsyncAPI 3.1 spec)*
+*Last updated: 2026-02-19 -- Phase 43 complete (Runtime modes + pw-host headless mode)*
