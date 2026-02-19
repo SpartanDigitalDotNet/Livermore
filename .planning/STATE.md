@@ -11,10 +11,10 @@ See: .planning/PROJECT.md (updated 2026-02-18)
 
 **Milestone:** v8.0 Perseus Web Public API
 **Phase:** 39 of 43 (Public API Foundation & IP Protection)
-**Plan:** 2 of 3 (In Progress)
+**Plan:** 3 of 3 (Next Up)
 **Status:** Executing Phase 39 plans
 
-**Last activity:** 2026-02-19 — Completed Plan 39-01 (Public API Foundation & IP Protection)
+**Last activity:** 2026-02-19 — Completed Plan 39-02 (REST Endpoints)
 
 Progress: [████░░░░░░] 8 of 13 milestones complete (61%)
 
@@ -44,6 +44,7 @@ Progress: [████░░░░░░] 8 of 13 milestones complete (61%)
 | v8.0 | Perseus Web Public API | **Active** | — |
 
 See `.planning/MILESTONES.md` for full history.
+| Phase 39 P02 | 364 | 2 tasks | 5 files |
 
 ## Tech Debt (Carried Forward)
 
@@ -91,6 +92,9 @@ Recent decisions affecting v8.0 work:
 - **String decimals for prices**: API uses string format (not numbers) to prevent precision loss, aligns with API-08 requirement
 - **Opaque Base64 cursors**: Pagination cursors encode internal values (hides implementation details)
 - **Zero indicators dependency**: @livermore/public-api does NOT depend on @livermore/indicators - hard IP isolation boundary
+- [Phase 39]: Direct Redis access (not CandleCacheStrategy) for candle route to avoid userId dependency
+- [Phase 39]: In-memory exchange name -> ID caching (exchanges rarely change)
+- [Phase 39]: Liquidity score thresholds: >=0.8=high, >=0.5=medium, else low
 
 ### Pending Todos
 
@@ -106,21 +110,23 @@ None.
 
 **Date:** 2026-02-19
 **Activity:** Executing Phase 39 Plan 01
-**Stopped At:** Completed 39-01-PLAN.md - Public API Foundation & IP Protection
+**Stopped At:** Completed 39-02-PLAN.md (REST Endpoints)
 
 ### Resume Context
 
-**Phase 39 Plan 01 COMPLETE**
+**Phase 39 Plans 01-02 COMPLETE**
 
-Created @livermore/public-api package with:
-- Public Zod schemas (candle, exchange, symbol, error, envelope)
-- DTO transformers with explicit field whitelisting
-- Cursor-based pagination helpers
-- Zero proprietary field exposure verified
+Plan 01 created @livermore/public-api package with schemas, transformers, and pagination helpers.
 
-**Phase 39 Progress:** Plan 1 of 3 complete
+Plan 02 implemented three REST endpoints:
+- GET /public/v1/candles/:exchange/:symbol/:timeframe (Redis read with cursor pagination)
+- GET /public/v1/exchanges (DB query with Redis status check)
+- GET /public/v1/symbols (DB query with liquidity grading)
+- Fastify plugin with OpenAPI 3.1 spec, Swagger UI, sanitized error handler
 
-**Next step:** Execute Plan 39-02 (REST Endpoints) or Plan 39-03 (OpenAPI Spec)
+**Phase 39 Progress:** Plan 2 of 3 complete
+
+**Next step:** Execute Plan 39-03 (Server Integration - register plugin in apps/api/src/server.ts)
 
 ---
 *State initialized: 2026-01-18*
