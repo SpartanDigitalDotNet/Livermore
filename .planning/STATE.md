@@ -11,10 +11,10 @@ See: .planning/PROJECT.md (updated 2026-02-18)
 
 **Milestone:** v8.0 Perseus Web Public API
 **Phase:** 40 of 43 (Trade Signals with Generic Labeling)
-**Plan:** Ready to plan
-**Status:** Phase 39 complete and verified, Phase 40 awaiting planning
+**Plan:** 1 of 2 complete
+**Status:** Phase 40 Plan 01 complete, Plan 02 ready
 
-**Last activity:** 2026-02-19 — Phase 39 complete (3/3 plans, verified 8/8 must-haves)
+**Last activity:** 2026-02-19 — Phase 40 Plan 01 complete (schemas + transformers)
 
 Progress: [████░░░░░░] 8 of 13 milestones complete (61%)
 
@@ -50,6 +50,7 @@ See `.planning/MILESTONES.md` for full history.
 | Phase 39 P01 | 298 | 2 tasks | 9 files |
 | Phase 39 P02 | 364 | 2 tasks | 5 files |
 | Phase 39 P03 | 281 | 1 task | 3 files |
+| Phase 40 P01 | 223 | 2 tasks | 6 files |
 
 ## Tech Debt (Carried Forward)
 
@@ -101,6 +102,11 @@ Recent decisions affecting v8.0 work:
 - [Phase 39]: In-memory exchange name -> ID caching (exchanges rarely change)
 - [Phase 39]: Liquidity score thresholds: >=0.8=high, >=0.5=medium, else low
 
+**Phase 40-01 decisions:**
+- **Local interface copies for IP isolation**: CachedIndicator and AlertHistoryRow defined locally in transformers, no imports from @livermore/cache or @livermore/database
+- **Strength thresholds**: >=150 extreme, >=80 strong, >=30 moderate, <30 weak (consistent across signals and alerts)
+- **Conservative alert direction fallback**: Unrecognized trigger labels default to bearish
+
 ### Pending Todos
 
 None.
@@ -114,8 +120,8 @@ None.
 ### Last Session
 
 **Date:** 2026-02-19
-**Activity:** Executing Phase 39 Plan 01
-**Stopped At:** Completed 39-02-PLAN.md (REST Endpoints)
+**Activity:** Executing Phase 40 Plan 01
+**Stopped At:** Completed 40-01-PLAN.md (Schemas & Transformers)
 
 ### Resume Context
 
@@ -137,8 +143,8 @@ Phase 39 delivered:
 
 **Model profile:** Switched to `quality` (Opus for executors) per user preference
 
-**Next step:** `/gsd:plan-phase 40` — Trade Signals with Generic Labeling
+**Next step:** Execute 40-02-PLAN.md -- Signal and Alert REST endpoint routes
 
 ---
 *State initialized: 2026-01-18*
-*Last updated: 2026-02-19 — Phase 39 complete and verified, model profile set to quality*
+*Last updated: 2026-02-19 — Phase 40 Plan 01 complete (schemas + transformers)*
