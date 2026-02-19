@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-02-18)
 
 **Core value:** Data accuracy and timely alerts
-**Current focus:** v8.0 Perseus Web Public API - Phase 40 (Trade Signals with Generic Labeling)
+**Current focus:** v8.0 Perseus Web Public API - Phase 41 (Authentication & Rate Limiting)
 
 ## Current Position
 
 **Milestone:** v8.0 Perseus Web Public API
-**Phase:** 40 of 43 (Trade Signals with Generic Labeling)
-**Plan:** 2 of 2 complete
-**Status:** Phase 40 complete, ready for Phase 41
+**Phase:** 41 of 43 (Authentication & Rate Limiting)
+**Plan:** 1 of 2 complete
+**Status:** Executing Phase 41
 
-**Last activity:** 2026-02-19 — Phase 40 Plan 02 complete (signal + alert REST endpoints)
+**Last activity:** 2026-02-19 — Phase 41 Plan 01 complete (auth middleware, rate limiting, API key management)
 
 Progress: [████░░░░░░] 8 of 13 milestones complete (61%)
 
@@ -52,6 +52,7 @@ See `.planning/MILESTONES.md` for full history.
 | Phase 39 P03 | 281 | 1 task | 3 files |
 | Phase 40 P01 | 223 | 2 tasks | 6 files |
 | Phase 40 P02 | 241 | 2 tasks | 4 files |
+| Phase 41 P01 | 474 | 2 tasks | 11 files |
 
 ## Tech Debt (Carried Forward)
 
@@ -109,6 +110,13 @@ Recent decisions affecting v8.0 work:
 - **Strength thresholds**: >=150 extreme, >=80 strong, >=30 moderate, <30 weak (consistent across signals and alerts)
 - **Conservative alert direction fallback**: Unrecognized trigger labels default to bearish
 
+**Phase 41-01 decisions:**
+- **In-memory Map cache for API key validation**: 60s TTL avoids DB hit per request; single-instance makes distributed cache unnecessary
+- **Negative cache entries for invalid keys**: Prevents repeated DB hits from bad actors
+- **Fire-and-forget last_used_at update**: Non-blocking, informational only
+- **CORS delegator pattern**: Single registration with route-scoped origin logic
+- **Redis hash tag {rl}: for rate limit namespace**: Ensures cluster slot compatibility
+
 **Phase 40-02 decisions:**
 - **Signals not paginated**: Fixed set of 4 timeframes per symbol, static meta with has_more: false
 - **Internal alertType in WHERE only**: `alertType='macdv'` filters DB query but never appears in response
@@ -127,8 +135,8 @@ None.
 ### Last Session
 
 **Date:** 2026-02-19
-**Activity:** Executing Phase 40 Plan 02
-**Stopped At:** Completed 40-02-PLAN.md (Signal + Alert REST Endpoints)
+**Activity:** Executing Phase 41 Plan 01
+**Stopped At:** Completed 41-01-PLAN.md (Auth middleware, rate limiting, API key management)
 
 ### Resume Context
 
@@ -160,8 +168,18 @@ Phase 40 delivered:
 - OpenAPI spec with Signals and Alerts tags, all 5 route handlers registered
 - Zero proprietary indicator names in any response body or OpenAPI spec
 
-**Next step:** Phase 41 -- API Authentication & Rate Limiting
+**PHASE 41 PLAN 01 COMPLETE**
+
+Phase 41 Plan 01 delivered:
+- `api_keys` database table with Drizzle schema and partial index
+- API key validation middleware with 60s in-memory cache
+- Rate limiting at 300 req/min per API key via Redis (@fastify/rate-limit)
+- tRPC CRUD router for API key management (list/create/regenerate/deactivate)
+- Route-scoped CORS (permissive for public API, restrictive for admin)
+- OpenAPI X-API-Key security scheme in spec
+
+**Next step:** Phase 41 Plan 02
 
 ---
 *State initialized: 2026-01-18*
-*Last updated: 2026-02-19 — Phase 40 complete (trade signals with generic labeling)*
+*Last updated: 2026-02-19 — Phase 41 Plan 01 complete (auth + rate limiting)*
