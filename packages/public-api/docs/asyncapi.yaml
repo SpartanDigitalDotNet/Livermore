@@ -1,0 +1,498 @@
+asyncapi: 3.1.0
+
+info:
+  title: Livermore Streaming API
+  version: 1.0.0
+  description: |
+    Real-time cryptocurrency market data streaming via WebSocket.
+    Provides candle close events and trade signals with generic labels.
+
+    **Authentication:** Connect with API key via query parameter:
+    `wss://host/public/v1/stream?apiKey=YOUR_KEY`
+
+    **Protocol:** Send JSON messages to subscribe/unsubscribe to channels.
+    Channel format: `candles:{symbol}:{timeframe}` or `signals:{symbol}:{timeframe}`
+
+    **Connection limits:** Maximum 5 concurrent WebSocket connections per API key.
+
+    **Heartbeat:** Server sends WebSocket ping frames every 30 seconds.
+    Clients that fail to respond with pong are automatically disconnected.
+
+    **Backpressure:** Slow clients with high send buffer are automatically disconnected.
+
+servers:
+  production:
+    host: "{host}"
+    pathname: /public/v1/stream
+    protocol: wss
+    description: WebSocket streaming endpoint
+    bindings:
+      ws:
+        query:
+          type: object
+          properties:
+            apiKey:
+              type: string
+              description: API key for authentication
+          required:
+            - apiKey
+
+channels:
+  candles:
+    address: "candles:{symbol}:{timeframe}"
+    description: Real-time candle close events for a given symbol and timeframe
+    parameters:
+      symbol:
+        description: Trading pair symbol (e.g. BTC-USD, ETH-USD)
+      timeframe:
+        description: Candle timeframe
+        enum:
+          - 1m
+          - 5m
+          - 15m
+          - 1h
+          - 4h
+          - 1d
+    messages:
+      candleClose:
+        $ref: "#/components/messages/candleClose"
+
+  signals:
+    address: "signals:{symbol}:{timeframe}"
+    description: Real-time trade signal events for a given symbol and timeframe
+    parameters:
+      symbol:
+        description: Trading pair symbol (e.g. BTC-USD, ETH-USD)
+      timeframe:
+        description: Signal timeframe
+        enum:
+          - 1m
+          - 5m
+          - 15m
+          - 1h
+          - 4h
+          - 1d
+    messages:
+      tradeSignal:
+        $ref: "#/components/messages/tradeSignal"
+
+  clientCommands:
+    address: /
+    description: Client-to-server command channel for subscribe/unsubscribe actions
+    messages:
+      subscribe:
+        $ref: "#/components/messages/subscribe"
+      unsubscribe:
+        $ref: "#/components/messages/unsubscribe"
+
+  serverResponses:
+    address: /
+    description: Server-to-client response channel for confirmations and errors
+    messages:
+      subscribed:
+        $ref: "#/components/messages/subscribed"
+      unsubscribed:
+        $ref: "#/components/messages/unsubscribed"
+      error:
+        $ref: "#/components/messages/error"
+
+operations:
+  subscribe:
+    action: receive
+    channel:
+      $ref: "#/channels/clientCommands"
+    summary: Subscribe to data channels
+    description: |
+      Client sends a subscribe message to start receiving events on the specified channels.
+      Each channel must follow the format `candles:{symbol}:{timeframe}` or `signals:{symbol}:{timeframe}`.
+      Maximum 20 channels per subscribe message.
+    messages:
+      - $ref: "#/channels/clientCommands/messages/subscribe"
+
+  unsubscribe:
+    action: receive
+    channel:
+      $ref: "#/channels/clientCommands"
+    summary: Unsubscribe from data channels
+    description: |
+      Client sends an unsubscribe message to stop receiving events on the specified channels.
+    messages:
+      - $ref: "#/channels/clientCommands/messages/unsubscribe"
+
+  receiveCandle:
+    action: send
+    channel:
+      $ref: "#/channels/candles"
+    summary: Receive candle close events
+    description: |
+      Server sends candle close events when a candle period completes.
+      Only sent for channels the client has subscribed to.
+    messages:
+      - $ref: "#/channels/candles/messages/candleClose"
+
+  receiveSignal:
+    action: send
+    channel:
+      $ref: "#/channels/signals"
+    summary: Receive trade signal events
+    description: |
+      Server sends trade signal events when a new signal is triggered.
+      Signals include generic direction and strength classifications.
+      Only sent for channels the client has subscribed to.
+    messages:
+      - $ref: "#/channels/signals/messages/tradeSignal"
+
+  sendConfirmation:
+    action: send
+    channel:
+      $ref: "#/channels/serverResponses"
+    summary: Send subscription confirmations and errors
+    description: |
+      Server sends subscribed/unsubscribed confirmations and error messages.
+    messages:
+      - $ref: "#/channels/serverResponses/messages/subscribed"
+      - $ref: "#/channels/serverResponses/messages/unsubscribed"
+      - $ref: "#/channels/serverResponses/messages/error"
+
+components:
+  messages:
+    subscribe:
+      name: subscribe
+      title: Subscribe
+      summary: Subscribe to one or more data channels
+      contentType: application/json
+      payload:
+        $ref: "#/components/schemas/SubscribeMessage"
+      examples:
+        - name: Subscribe to candles and signals
+          payload:
+            action: subscribe
+            channels:
+              - "candles:BTC-USD:1h"
+              - "signals:ETH-USD:15m"
+
+    unsubscribe:
+      name: unsubscribe
+      title: Unsubscribe
+      summary: Unsubscribe from one or more data channels
+      contentType: application/json
+      payload:
+        $ref: "#/components/schemas/UnsubscribeMessage"
+      examples:
+        - name: Unsubscribe from candles
+          payload:
+            action: unsubscribe
+            channels:
+              - "candles:BTC-USD:1h"
+
+    subscribed:
+      name: subscribed
+      title: Subscribed Confirmation
+      summary: Server confirms successful channel subscriptions
+      contentType: application/json
+      payload:
+        $ref: "#/components/schemas/SubscribedMessage"
+      examples:
+        - name: Subscription confirmed
+          payload:
+            type: subscribed
+            channels:
+              - "candles:BTC-USD:1h"
+              - "signals:ETH-USD:15m"
+
+    unsubscribed:
+      name: unsubscribed
+      title: Unsubscribed Confirmation
+      summary: Server confirms channel unsubscriptions
+      contentType: application/json
+      payload:
+        $ref: "#/components/schemas/UnsubscribedMessage"
+      examples:
+        - name: Unsubscription confirmed
+          payload:
+            type: unsubscribed
+            channels:
+              - "candles:BTC-USD:1h"
+
+    candleClose:
+      name: candleClose
+      title: Candle Close Event
+      summary: Emitted when a candle period closes with final OHLCV data
+      contentType: application/json
+      payload:
+        $ref: "#/components/schemas/CandleCloseMessage"
+      examples:
+        - name: BTC-USD 1h candle close
+          payload:
+            type: candle_close
+            channel: "candles:BTC-USD:1h"
+            data:
+              timestamp: "2026-02-19T12:00:00.000Z"
+              open: "42350.5"
+              high: "42450.75"
+              low: "42300.25"
+              close: "42400"
+              volume: "123.456"
+
+    tradeSignal:
+      name: tradeSignal
+      title: Trade Signal Event
+      summary: Emitted when a new trade signal is triggered
+      contentType: application/json
+      payload:
+        $ref: "#/components/schemas/TradeSignalMessage"
+      examples:
+        - name: BTC-USD 15m bullish signal
+          payload:
+            type: trade_signal
+            channel: "signals:BTC-USD:15m"
+            data:
+              symbol: "BTC-USD"
+              exchange: "coinbase"
+              timeframe: "15m"
+              signal_type: "momentum_signal"
+              direction: "bullish"
+              strength: "strong"
+              price: "42350.5"
+              timestamp: "2026-02-19T12:00:00.000Z"
+
+    error:
+      name: error
+      title: Error Message
+      summary: Server reports an error to the client
+      contentType: application/json
+      payload:
+        $ref: "#/components/schemas/ErrorMessage"
+      examples:
+        - name: Invalid channel format
+          payload:
+            type: error
+            code: INVALID_CHANNEL
+            message: "Unknown channel format: foo:bar"
+        - name: Invalid JSON message
+          payload:
+            type: error
+            code: INVALID_MESSAGE
+            message: "Invalid message format"
+
+  schemas:
+    SubscribeMessage:
+      type: object
+      required:
+        - action
+        - channels
+      properties:
+        action:
+          type: string
+          const: subscribe
+          description: Action type
+        channels:
+          type: array
+          items:
+            type: string
+          minItems: 1
+          maxItems: 20
+          description: |
+            Array of channel names to subscribe to.
+            Format: `candles:{symbol}:{timeframe}` or `signals:{symbol}:{timeframe}`
+
+    UnsubscribeMessage:
+      type: object
+      required:
+        - action
+        - channels
+      properties:
+        action:
+          type: string
+          const: unsubscribe
+          description: Action type
+        channels:
+          type: array
+          items:
+            type: string
+          minItems: 1
+          maxItems: 20
+          description: Array of channel names to unsubscribe from
+
+    SubscribedMessage:
+      type: object
+      required:
+        - type
+        - channels
+      properties:
+        type:
+          type: string
+          const: subscribed
+          description: Message type
+        channels:
+          type: array
+          items:
+            type: string
+          description: Channels successfully subscribed to
+
+    UnsubscribedMessage:
+      type: object
+      required:
+        - type
+        - channels
+      properties:
+        type:
+          type: string
+          const: unsubscribed
+          description: Message type
+        channels:
+          type: array
+          items:
+            type: string
+          description: Channels successfully unsubscribed from
+
+    CandleCloseMessage:
+      type: object
+      required:
+        - type
+        - channel
+        - data
+      properties:
+        type:
+          type: string
+          const: candle_close
+          description: Message type
+        channel:
+          type: string
+          description: "Channel this event belongs to (e.g. candles:BTC-USD:1h)"
+        data:
+          $ref: "#/components/schemas/CandleData"
+
+    TradeSignalMessage:
+      type: object
+      required:
+        - type
+        - channel
+        - data
+      properties:
+        type:
+          type: string
+          const: trade_signal
+          description: Message type
+        channel:
+          type: string
+          description: "Channel this event belongs to (e.g. signals:BTC-USD:15m)"
+        data:
+          $ref: "#/components/schemas/SignalData"
+
+    ErrorMessage:
+      type: object
+      required:
+        - type
+        - code
+        - message
+      properties:
+        type:
+          type: string
+          const: error
+          description: Message type
+        code:
+          type: string
+          enum:
+            - INVALID_MESSAGE
+            - INVALID_CHANNEL
+            - PARSE_ERROR
+            - RATE_LIMITED
+          description: Error code identifying the type of error
+        message:
+          type: string
+          description: Human-readable error description
+
+    CandleData:
+      type: object
+      description: OHLCV candle data with string decimal values to prevent precision loss
+      required:
+        - timestamp
+        - open
+        - high
+        - low
+        - close
+        - volume
+      properties:
+        timestamp:
+          type: string
+          format: date-time
+          description: Candle close timestamp in ISO 8601 format
+        open:
+          type: string
+          description: Opening price as string decimal
+        high:
+          type: string
+          description: Highest price as string decimal
+        low:
+          type: string
+          description: Lowest price as string decimal
+        close:
+          type: string
+          description: Closing price as string decimal
+        volume:
+          type: string
+          description: Trading volume as string decimal
+
+    SignalData:
+      type: object
+      description: Trade signal data with generic direction and strength classifications
+      required:
+        - symbol
+        - exchange
+        - timeframe
+        - signal_type
+        - direction
+        - strength
+        - price
+        - timestamp
+      properties:
+        symbol:
+          type: string
+          description: "Trading pair symbol (e.g. BTC-USD)"
+        exchange:
+          type: string
+          description: "Source exchange name (e.g. coinbase)"
+        timeframe:
+          type: string
+          description: Signal timeframe
+          enum:
+            - 1m
+            - 5m
+            - 15m
+            - 1h
+            - 4h
+            - 1d
+        signal_type:
+          type: string
+          description: Type of signal
+          enum:
+            - momentum_signal
+        direction:
+          $ref: "#/components/schemas/Direction"
+        strength:
+          $ref: "#/components/schemas/Strength"
+        price:
+          type: string
+          description: Price at signal trigger as string decimal
+        timestamp:
+          type: string
+          format: date-time
+          description: Signal trigger timestamp in ISO 8601 format
+
+    Direction:
+      type: string
+      description: Signal direction classification
+      enum:
+        - bullish
+        - bearish
+        - neutral
+
+    Strength:
+      type: string
+      description: Signal strength classification
+      enum:
+        - weak
+        - moderate
+        - strong
+        - extreme
