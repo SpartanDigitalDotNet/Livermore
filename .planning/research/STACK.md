@@ -1,591 +1,751 @@
-# Stack Research: v6.0 Perseus Network - Distributed Instance Coordination
+# Stack Research: v8.0 Perseus Web Public API
 
-**Project:** Livermore Trading Platform - Instance Registration, Heartbeat, Activity Logging
-**Researched:** 2026-02-10
-**Confidence:** HIGH (verified against installed ioredis 5.4.2 type definitions and Redis official docs)
+**Project:** Livermore Trading Platform - Public REST/WebSocket API Layer
+**Researched:** 2026-02-18
+**Confidence:** HIGH (verified against installed Fastify 5.2.2, Zod 3.25.76, ioredis 5.4.2, @fastify/websocket 11.0.1)
 
 ## Executive Summary
 
-v6.0 Perseus Network requires distributed instance registration, heartbeat health monitoring, and network activity logging. The good news: the existing stack (ioredis 5.4.2 on Azure Managed Redis with OSS Cluster mode) already has full support for every Redis primitive needed. No new Redis client library is required. Redis Streams (XADD, XRANGE, XTRIM with MINID) are natively supported by ioredis 5.4.2 with complete TypeScript type definitions. The key additions are: (1) a lightweight state machine for instance lifecycle, (2) public IP detection for instance identity, and (3) a disciplined approach to Redis key design for cluster compatibility.
+v8.0 Perseus Web (PW) adds a public API layer for external clients to access real-time trading signals and market data. The existing Fastify + tRPC + Clerk stack serves the admin UI perfectly, and the public API runs **alongside** it (not replacing it). Key additions:
 
-**Key Decision:** Build the state machine in-house rather than importing a library. The instance lifecycle has exactly 5 states and 7 transitions -- XState is extreme overkill, and the micro-libraries (typescript-fsm, typestate) add dependencies for what amounts to ~80 lines of typed code.
+1. **OpenAPI 3.1 spec generation** from existing Zod schemas (zero schema duplication)
+2. **API key authentication** via Bearer tokens (parallel to Clerk JWTs for admin)
+3. **WebSocket bridge** to broadcast Redis pub/sub events to external clients (pattern already exists for `/ws/alerts`)
+4. **Runtime mode flag** to run Fastify without `listen()` for testing/serverless
+5. **Rate limiting** with Redis backing (distributed enforcement across instances)
+6. **AsyncAPI 3.1 documentation** for WebSocket event streams
 
----
+**Critical constraint:** MACD-V indicator details are proprietary IP and MUST NEVER be exposed publicly. Public API returns generic "trade signals" (bullish/bearish, no numeric values).
 
-## Recommended Stack
-
-### Core Infrastructure (Already Installed -- No Changes)
-
-| Technology | Version | Purpose | Status |
-|------------|---------|---------|--------|
-| ioredis | 5.4.2 (pinned) | Redis client with Cluster + Streams support | INSTALLED |
-| Redis (Azure Managed) | 6.x+ (OSS Cluster) | Coordination bus, streams, TTL-based heartbeat | PRODUCTION |
-| TypeScript | 5.9.3 | Type safety for state machine, stream entries | INSTALLED |
-| Zod | 3.25.x | Schema validation for stream entries, registration payloads | INSTALLED |
-| Pino | 9.x/10.x | Structured logging | INSTALLED |
-
-### New Dependencies
-
-| Technology | Version | Purpose | Rationale |
-|------------|---------|---------|-----------|
-| **None required** | -- | -- | Everything builds on existing stack |
-
-**This is a zero-new-dependency milestone.** All capabilities come from ioredis primitives already available.
-
-### Public IP Detection (No Library)
-
-**Recommendation: Use Node.js built-in `https` module to query a single service.**
-
-Do NOT install `public-ip` (sindresorhus). Reasons:
-- v7+ and v8.0.0 are **ESM-only** (pure ESM package). The Livermore monorepo builds with tsup to both ESM and CJS (`--format esm,cjs`). Importing a pure-ESM package from CJS output causes runtime failures.
-- The package's DNS-based detection (OpenDNS, Google DNS) is overkill for a server that needs its IP once at startup.
-- Zero-dependency alternatives like `node-public-ip` have 1 weekly download and are effectively abandoned.
-
-**Instead, use a 10-line utility function:**
-
-```typescript
-import https from 'node:https';
-
-/**
- * Detect public IPv4 address by querying a lightweight HTTP service.
- * Falls back gracefully if detection fails (non-critical for operation).
- */
-export async function detectPublicIp(timeoutMs = 5000): Promise<string | null> {
-  return new Promise((resolve) => {
-    const req = https.get('https://api.ipify.org', { timeout: timeoutMs }, (res) => {
-      let data = '';
-      res.on('data', (chunk) => { data += chunk; });
-      res.on('end', () => resolve(data.trim() || null));
-    });
-    req.on('error', () => resolve(null));
-    req.on('timeout', () => { req.destroy(); resolve(null); });
-  });
-}
-```
-
-**Why ipify.org:**
-- Free, no API key required
-- Returns plain-text IPv4 address (no JSON parsing needed)
-- High availability, used by millions of services
-- Single HTTPS call, no DNS tricks
-
-**Fallback chain (if ipify fails):**
-- `https://icanhazip.com` (Cloudflare-owned)
-- `https://ifconfig.me/ip`
-- Return `null` (public IP is informational, not critical)
-
-**Confidence:** HIGH -- ipify.org is a well-established service. The implementation uses only Node.js built-in `https`.
+**Stack decision:** This is a **5-library addition** (all official Fastify ecosystem plugins). Zero custom protocols, zero heavy frameworks. Everything integrates with the existing Fastify instance, Zod schemas, ioredis cluster, and WebSocket setup.
 
 ---
 
-## Redis Streams: ioredis API Reference
+## Recommended Stack Additions
 
-**Verified:** All method signatures confirmed present in `ioredis@5.4.2` type definitions at `node_modules/.pnpm/ioredis@5.4.2/.../RedisCommander.d.ts`.
+### Core Technologies (NEW for v8.0)
 
-### XADD -- Add Entry to Stream
+| Technology | Version | Purpose | Why Recommended |
+|------------|---------|---------|-----------------|
+| **@fastify/swagger** | ^9.7.0 | Generate OpenAPI 3.1 spec from route schemas | Official Fastify plugin, published 3 days ago (Feb 2026). Auto-generates docs from Zod schemas via type providers. Requires Fastify ^5.x (current: 5.2.2, compatible). Supports both OpenAPI v2 and v3.1. |
+| **@fastify/swagger-ui** | ^5.2.0 | Serve interactive Swagger UI at `/docs` | Official companion to @fastify/swagger. Provides embeddable API testing interface with "Try it out" functionality. No external tools needed for API exploration. |
+| **fastify-type-provider-zod** | ^4.0.2 | Bridge Zod schemas to OpenAPI via @fastify/swagger | Enables reuse of existing Zod validation schemas (`@livermore/schemas`) for OpenAPI generation. Provides `jsonSchemaTransform` and type-safe compilers. Supports Zod ^3.x (current: 3.25.76, compatible). |
+| **@fastify/bearer-auth** | ^10.1.1 | API key authentication via Bearer tokens | Official Fastify plugin. Constant-time comparison prevents timing attacks. Runs as `onRequest` hook (before routing, before tRPC). Integrates with OpenAPI security schemes. Supports async key validation (database lookup). |
+| **@fastify/rate-limit** | ^10.3.0 | Rate limiting with Redis backing | Official Fastify plugin. Supports ioredis cluster (current: 5.4.2, compatible). Distributed rate limiting across instances. Per-route limits configurable. `skipOnError: true` for fail-open behavior if Redis is down. |
 
-```typescript
-// Auto-generated ID (timestamp-based)
-const entryId = await redis.xadd(
-  'perseus:activity',         // stream key
-  '*',                        // auto-generate ID
-  'instanceId', instanceId,   // field-value pairs
-  'event', 'REGISTERED',
-  'exchange', 'coinbase',
-  'timestamp', Date.now().toString()
-);
-// Returns: "1707580800000-0" (timestamp-sequence)
+**Total new dependencies:** 5 packages (all official Fastify ecosystem, actively maintained)
 
-// With MAXLEN trimming on write (approximate)
-const entryId = await redis.xadd(
-  'perseus:activity',
-  'MAXLEN', '~', '100000',    // keep ~100K entries max
-  '*',
-  'instanceId', instanceId,
-  'event', 'HEARTBEAT'
-);
-```
+### Supporting Libraries (NEW)
 
-**Type signature (from RedisCommander.d.ts):**
-```typescript
-xadd(...args: [key: RedisKey, ...args: RedisValue[]]): Result<string | null, Context>;
-```
+| Library | Version | Purpose | When to Use |
+|---------|---------|---------|-------------|
+| **@asyncapi/cli** | ^2.21.0 | Generate AsyncAPI documentation for WebSocket events | Dev dependency only. Run as CLI tool during build: `asyncapi generate fromTemplate asyncapi.yaml @asyncapi/html-template`. Latest version (11 days ago) supports AsyncAPI 3.1 spec with WebSocket bindings. |
 
-### XRANGE -- Read Range of Entries
+**Total dev dependencies:** 1 package (CLI tool, not runtime)
 
-```typescript
-// Read all entries
-const entries = await redis.xrange('perseus:activity', '-', '+');
-// Returns: [["1707580800000-0", ["instanceId", "abc", "event", "REGISTERED"]], ...]
+### No Additional WebSocket Libraries Needed
 
-// Read entries in a time window (last 24 hours)
-const since = (Date.now() - 86400000).toString();
-const entries = await redis.xrange('perseus:activity', since, '+');
+**Existing `@fastify/websocket ^11.0.1` is sufficient.** You're already using it for `/ws/alerts` and `/ws/candle-pulse` (see `apps/api/src/server.ts` lines 48-429). The bridge pattern (Set of clients + Redis pub/sub → broadcast) is already implemented.
 
-// Read with COUNT limit
-const entries = await redis.xrange('perseus:activity', '-', '+', 'COUNT', '100');
-```
-
-**Type signature:**
-```typescript
-xrange(
-  key: RedisKey,
-  start: string | Buffer | number,
-  end: string | Buffer | number,
-  callback?: Callback<[id: string, fields: string[]][]>
-): Result<[id: string, fields: string[]][], Context>;
-
-xrange(
-  key: RedisKey,
-  start: string | Buffer | number,
-  end: string | Buffer | number,
-  countToken: "COUNT",
-  count: number | string,
-  callback?: Callback<[id: string, fields: string[]][]>
-): Result<[id: string, fields: string[]][], Context>;
-```
-
-**Return format:** Array of `[id, [field1, value1, field2, value2, ...]]` tuples. The fields array is flat (not key-value pairs), so parsing requires stepping by 2.
-
-### XREAD -- Blocking Read (Consumer Pattern)
-
-```typescript
-// Non-blocking read from a position
-const result = await redis.xread('COUNT', '10', 'STREAMS', 'perseus:activity', lastId);
-
-// Blocking read (for real-time consumers)
-const result = await redis.xread('BLOCK', 5000, 'STREAMS', 'perseus:activity', '$');
-// Blocks up to 5 seconds waiting for new entries
-```
-
-**Important for Cluster Mode:** XREAD with multiple streams requires all stream keys to hash to the same slot. Use hash tags if reading multiple streams atomically.
-
-### XTRIM -- Retention Management with MINID
-
-```typescript
-// Remove all entries older than 90 days (MINID strategy)
-const ninetyDaysAgo = Date.now() - (90 * 24 * 60 * 60 * 1000);
-const trimmed = await redis.xtrim('perseus:activity', 'MINID', ninetyDaysAgo.toString());
-// Returns: number of entries removed
-
-// Approximate trimming (more efficient, recommended for periodic cleanup)
-const trimmed = await redis.xtrim('perseus:activity', 'MINID', '~', ninetyDaysAgo.toString());
-
-// With LIMIT (process in batches to avoid blocking)
-const trimmed = await redis.xtrim(
-  'perseus:activity',
-  'MINID', '~', ninetyDaysAgo.toString(),
-  'LIMIT', '1000'
-);
-```
-
-**Type signatures (verified in RedisCommander.d.ts):**
-```typescript
-xtrim(key: RedisKey, minid: "MINID", threshold: string | Buffer | number,
-      callback?: Callback<number>): Result<number, Context>;
-xtrim(key: RedisKey, minid: "MINID", approximately: "~", threshold: string | Buffer | number,
-      callback?: Callback<number>): Result<number, Context>;
-xtrim(key: RedisKey, minid: "MINID", approximately: "~", threshold: string | Buffer | number,
-      countToken: "LIMIT", count: number | string,
-      callback?: Callback<number>): Result<number, Context>;
-```
-
-**MINID works because Redis Stream IDs are timestamp-based.** When using auto-generated IDs (`*`), the ID is `<millisecond-timestamp>-<sequence>`. XTRIM MINID treats the threshold as a stream ID, removing all entries with IDs numerically less than the threshold. Passing a millisecond timestamp as the threshold effectively means "remove everything older than this time."
-
-**Confidence:** HIGH -- verified against installed ioredis 5.4.2 type definitions and Redis official documentation.
-
-### XLEN -- Stream Length
-
-```typescript
-const length = await redis.xlen('perseus:activity');
-// Returns: number
-```
-
-### XINFO -- Stream Metadata
-
-```typescript
-const info = await redis.xinfo('STREAM', 'perseus:activity');
-// Returns stream metadata (first/last entry ID, length, etc.)
-```
+**For public API:** Extend the existing pattern with authentication (`?api_key=xxx` query parameter on handshake) and sanitized payloads (no MACD-V internals).
 
 ---
 
-## Heartbeat with TTL-Based Dead Instance Detection
+## Installation
 
-### Pattern: SET with EX + Periodic Renewal
+```bash
+# Core OpenAPI generation and documentation
+pnpm add @fastify/swagger@^9.7.0 @fastify/swagger-ui@^5.2.0 fastify-type-provider-zod@^4.0.2
 
-The standard Redis heartbeat pattern uses `SET key value EX ttl` and periodic renewal. If an instance dies, the key expires automatically, and the absence of the key indicates a dead instance.
+# API key authentication
+pnpm add @fastify/bearer-auth@^10.1.1
 
-```typescript
-// Instance heartbeat (every 15 seconds, with 45-second TTL)
-// TTL should be 3x the heartbeat interval for tolerance
-const HEARTBEAT_INTERVAL_MS = 15_000;
-const HEARTBEAT_TTL_SECONDS = 45;
+# Rate limiting with Redis backing
+pnpm add @fastify/rate-limit@^10.3.0
 
-// Write heartbeat
-await redis.set(
-  `perseus:heartbeat:${instanceId}`,
-  JSON.stringify({ lastBeat: Date.now(), state: 'running', exchange: 'coinbase' }),
-  'EX', HEARTBEAT_TTL_SECONDS
-);
-
-// Check if instance is alive
-const heartbeat = await redis.get(`perseus:heartbeat:${instanceId}`);
-if (!heartbeat) {
-  // Instance is dead (key expired)
-}
-
-// Check TTL remaining
-const ttl = await redis.ttl(`perseus:heartbeat:${instanceId}`);
-// Returns: seconds remaining, -2 if key doesn't exist, -1 if no expiry
+# AsyncAPI documentation generator (dev dependency - CLI tool)
+pnpm add -D @asyncapi/cli@^2.21.0
 ```
 
-### Dead Instance Detection Strategy
-
-Two complementary approaches:
-
-**1. Passive Detection (TTL Expiry):** When key expires, the instance is dead. Any consumer checking `GET` returns null.
-
-**2. Active Scanning (Periodic Sweep):** A coordinator periodically scans all `perseus:heartbeat:*` keys to build network state. Use `SCAN` (not `KEYS`) in production:
-
-```typescript
-// Cluster-safe scanning of heartbeat keys
-async function* scanHeartbeatKeys(redis: RedisClient): AsyncGenerator<string> {
-  let cursor = '0';
-  do {
-    const [nextCursor, keys] = await redis.scan(cursor, 'MATCH', 'perseus:heartbeat:*', 'COUNT', '100');
-    cursor = nextCursor;
-    for (const key of keys) yield key;
-  } while (cursor !== '0');
-}
-```
-
-**Why not Redis Keyspace Notifications?**
-Keyspace notifications (`__keyevent@0__:expired`) are unreliable in cluster mode and add pub/sub overhead. Periodic scanning is simpler and more predictable for a small number of instances (2-10).
-
-### Why 15s Interval / 45s TTL
-
-| Parameter | Value | Rationale |
-|-----------|-------|-----------|
-| Heartbeat interval | 15 seconds | Frequent enough for timely detection, infrequent enough to avoid Redis load |
-| TTL | 45 seconds (3x interval) | Tolerates 2 missed heartbeats before declaring dead |
-| Detection latency | 30-45 seconds | Acceptable for network visibility (not trading-critical) |
-| Redis operations | ~4/min per instance | Negligible load on Azure Managed Redis |
-
-**Confidence:** HIGH -- this is a well-established distributed systems pattern.
+**Total install time:** < 30 seconds (small packages, minimal dependencies)
 
 ---
 
-## State Machine: Build In-House
+## Integration with Existing Stack
 
-### Why Not Use a Library
+### 1. OpenAPI Generation from Existing Zod Schemas
 
-| Library | Size | Why Not |
-|---------|------|---------|
-| XState v5 | ~47 KB min | Massive overkill for 5 states. Designed for complex UI interactions, not server lifecycle. |
-| typescript-fsm | 1 KB | Decent but adds npm dependency for ~80 lines of code. Async support via promises is adequate but we can do better with our own types. |
-| typestate | ~3 KB | Last meaningful update 2021. No async transition support. |
-| robot | 1.2 KB | Functional API is elegant but React-focused. |
-| fiume | new | Zero stars, no adoption evidence. |
-
-**Recommendation:** Write a typed state machine in ~80-100 lines. The instance lifecycle is simple and stable:
-
-```
-States: IDLE -> REGISTERING -> RUNNING -> DRAINING -> DEAD
-```
-
-Benefits of in-house:
-- Perfect TypeScript integration with Livermore's patterns (Zod schemas, pino logging)
-- Zero new dependencies
-- Full control over async transitions (heartbeat setup, stream logging)
-- Testable without library-specific test utilities
-- The state machine will never grow complex enough to justify XState
-
-### Recommended Implementation Pattern
+**Goal:** Reuse Zod schemas from `@livermore/schemas` for both validation AND OpenAPI documentation (zero duplication).
 
 ```typescript
-/** Instance lifecycle states */
-type InstanceState = 'idle' | 'registering' | 'running' | 'draining' | 'dead';
+// apps/api/src/server.ts
+import swagger from '@fastify/swagger';
+import swaggerUi from '@fastify/swagger-ui';
+import {
+  serializerCompiler,
+  validatorCompiler,
+  jsonSchemaTransform
+} from 'fastify-type-provider-zod';
 
-/** Events that trigger state transitions */
-type InstanceEvent = 'REGISTER' | 'REGISTERED' | 'DRAIN' | 'DRAINED' | 'ERROR' | 'HEARTBEAT_LOST';
+// Set Zod as the type provider for Fastify routes
+fastify.setValidatorCompiler(validatorCompiler);
+fastify.setSerializerCompiler(serializerCompiler);
 
-/** Transition definition */
-interface Transition {
-  from: InstanceState;
-  event: InstanceEvent;
-  to: InstanceState;
-  action?: () => Promise<void>;
-}
+// Register OpenAPI spec generator
+await fastify.register(swagger, {
+  openapi: {
+    openapi: '3.1.0',
+    info: {
+      title: 'Perseus Web API',
+      description: 'Real-time cryptocurrency trading signals and market data',
+      version: '8.0.0',
+    },
+    servers: [
+      { url: 'http://localhost:3000', description: 'Development' },
+      { url: 'https://api.livermore.io', description: 'Production' }
+    ],
+    components: {
+      securitySchemes: {
+        BearerAuth: {
+          type: 'http',
+          scheme: 'bearer',
+          bearerFormat: 'API_KEY',
+          description: 'API key in Bearer token format (generate in user settings)'
+        }
+      }
+    }
+  },
+  transform: jsonSchemaTransform, // Converts Zod schemas to OpenAPI JSON Schema
+});
 
-const TRANSITIONS: Transition[] = [
-  { from: 'idle',        event: 'REGISTER',       to: 'registering' },
-  { from: 'registering', event: 'REGISTERED',     to: 'running' },
-  { from: 'registering', event: 'ERROR',          to: 'dead' },
-  { from: 'running',     event: 'DRAIN',          to: 'draining' },
-  { from: 'running',     event: 'ERROR',          to: 'dead' },
-  { from: 'running',     event: 'HEARTBEAT_LOST', to: 'dead' },
-  { from: 'draining',    event: 'DRAINED',        to: 'dead' },
-];
-```
-
-This is explicit, type-safe, and requires no library. Illegal transitions are caught at runtime by checking the transition table.
-
-**Confidence:** HIGH -- straightforward engineering decision.
-
----
-
-## Redis Key Patterns for Instance Registration
-
-### Namespace Design
-
-All Perseus Network keys use the `perseus:` prefix to avoid collision with existing Livermore keys (`candles:`, `indicator:`, `ticker:`, `channel:`, `livermore:`).
-
-### Key Schema
-
-| Key Pattern | Type | TTL | Purpose |
-|-------------|------|-----|---------|
-| `perseus:instance:{instanceId}` | Hash | None (managed by lifecycle) | Instance registration record |
-| `perseus:heartbeat:{instanceId}` | String | 45s (auto-renewing) | Heartbeat liveness signal |
-| `perseus:activity` | Stream | XTRIM MINID ~90 days | Network activity log |
-| `perseus:network:state` | String (JSON) | None | Aggregated network state snapshot |
-
-### Instance ID Generation
-
-Use `{hostname}:{exchangeId}:{pid}:{startupTimestamp}` format:
-
-```typescript
-const instanceId = `${os.hostname()}:${exchangeId}:${process.pid}:${Date.now()}`;
-// Example: "DESKTOP-ABC:1:12345:1707580800000"
-```
-
-This is:
-- Unique across instances (PID + timestamp)
-- Human-readable for debugging
-- Contains exchange ID for filtering
-- Deterministic (same instance always generates same ID pattern)
-
-### Instance Registration Hash
-
-```typescript
-// Registration uses HSET for structured data
-await redis.hset(`perseus:instance:${instanceId}`, {
-  instanceId,
-  hostname: os.hostname(),
-  exchangeId: exchangeId.toString(),
-  exchangeName: 'coinbase',
-  publicIp: publicIp || 'unknown',
-  privateIp: getPrivateIp(),
-  pid: process.pid.toString(),
-  version: packageVersion,
-  state: 'running',
-  registeredAt: new Date().toISOString(),
-  lastStateChange: new Date().toISOString(),
+// Serve Swagger UI at /docs (publicly accessible for documentation)
+await fastify.register(swaggerUi, {
+  routePrefix: '/docs',
+  uiConfig: {
+    docExpansion: 'list',
+    deepLinking: true
+  },
+  staticCSP: true
 });
 ```
 
-**Why HSET instead of SET with JSON:**
-- Individual field reads without deserializing (`HGET perseus:instance:abc state`)
-- Atomic field updates (`HSET perseus:instance:abc state draining`)
-- Smaller operations for heartbeat-like field updates
-- Native Redis data structure, no JSON parse overhead
-
-### Azure Cluster Considerations
-
-**Hash Slot Routing:** In Azure Redis with OSS Cluster mode, keys are distributed across slots via CRC16 hashing. This matters for:
-
-1. **No multi-key operations across different instances:** `perseus:instance:abc` and `perseus:instance:def` will likely hash to different slots. Use `deleteKeysClusterSafe()` (already in codebase) for bulk cleanup.
-
-2. **Stream is a single key:** `perseus:activity` is one key on one slot. All XADD/XRANGE/XTRIM operations go to the same node. For a small network (2-10 instances), this is fine and actually desirable (no cross-slot coordination).
-
-3. **Hash tags are NOT recommended here:** Using `{perseus}:instance:abc` would force ALL Perseus keys to the same slot. This defeats cluster distribution and creates a hot spot. The keys are small and operations are infrequent, so natural distribution is fine.
-
-4. **SCAN for discovery:** Use `SCAN` with `MATCH perseus:instance:*` for listing instances. In cluster mode, ioredis Cluster automatically scans all nodes when using the `scanStream()` method.
-
-**Confidence:** HIGH -- consistent with existing codebase patterns (`deleteKeysClusterSafe`, single-key operations).
-
----
-
-## Activity Stream Entry Schema
-
-### Entry Structure
-
-Each stream entry uses flat field-value pairs (Redis Streams requirement):
+**Route definition with Zod schema:**
 
 ```typescript
-interface ActivityEntry {
-  instanceId: string;      // Which instance
-  event: string;           // Event type: REGISTERED, STATE_CHANGE, HEARTBEAT_LOST, DEREGISTERED, ERROR
-  exchange: string;        // Exchange name
-  exchangeId: string;      // Exchange ID
-  fromState?: string;      // Previous state (for STATE_CHANGE)
-  toState?: string;        // New state (for STATE_CHANGE)
-  reason?: string;         // Why (for ERROR, DEREGISTERED)
-  publicIp?: string;       // Instance public IP
-  hostname?: string;       // Instance hostname
-  ts: string;              // ISO timestamp
-}
+// apps/api/src/routes/public/candles.ts
+import { z } from 'zod';
+
+const CandleQuerySchema = z.object({
+  symbol: z.string().describe('Trading pair (e.g., BTC-USD)'),
+  timeframe: z.enum(['1m', '5m', '15m', '1h', '4h', '1d']).describe('Candle timeframe'),
+  limit: z.number().int().min(1).max(1000).default(100).describe('Number of candles to return')
+});
+
+const CandleResponseSchema = z.array(z.object({
+  timestamp: z.number().describe('Unix timestamp (milliseconds)'),
+  open: z.number(),
+  high: z.number(),
+  low: z.number(),
+  close: z.number(),
+  volume: z.number()
+}));
+
+// Fastify route with automatic OpenAPI generation
+fastify.get('/api/v1/candles', {
+  schema: {
+    querystring: CandleQuerySchema,
+    response: {
+      200: CandleResponseSchema
+    },
+    tags: ['Market Data'],
+    security: [{ BearerAuth: [] }]  // Requires API key
+  }
+}, async (request, reply) => {
+  const { symbol, timeframe, limit } = request.query;
+  // ... fetch candles from Redis ...
+  return candles;
+});
 ```
 
-### Retention Strategy: XTRIM MINID for 90-Day Window
+**Why this works:** `fastify-type-provider-zod` provides:
+- `validatorCompiler`: Validates incoming requests against Zod schemas
+- `serializerCompiler`: Validates outgoing responses against Zod schemas
+- `jsonSchemaTransform`: Converts Zod schemas to OpenAPI-compatible JSON Schema
+
+**Result:** One schema definition → runtime validation + type safety + OpenAPI docs. Zero duplication.
+
+**Confidence:** HIGH — verified against `fastify-type-provider-zod@4.0.2` documentation and `@fastify/swagger@9.7.0` release notes.
+
+### 2. API Key Authentication (Parallel to Clerk)
+
+**Architecture:** Two authentication systems coexist:
+- `/trpc/*` → Clerk JWT authentication (admin UI, existing)
+- `/api/v1/*` → Bearer token API key authentication (external clients, new)
+- `/webhooks/*` → No auth (server-to-server with signature verification, existing)
 
 ```typescript
+// apps/api/src/middleware/api-key-auth.ts
+import bearerAuth from '@fastify/bearer-auth';
+import { getDbClient } from '@livermore/database';
+import { eq } from 'drizzle-orm';
+import { users } from '@livermore/database/schema';
+
 /**
- * Trim activity stream to retain only the last 90 days.
- * Called periodically (e.g., daily via cron or setInterval).
+ * Validate API key by looking up in users.api_key column.
+ * Constant-time comparison prevents timing attacks.
  *
- * Uses approximate trimming (~) for efficiency -- Redis may keep
- * a few extra entries beyond the cutoff, which is acceptable.
+ * @param key - API key from Authorization: Bearer <key> header
+ * @returns Promise<boolean> - true if valid, false otherwise
  */
-async function trimActivityStream(redis: RedisClient): Promise<number> {
-  const RETENTION_DAYS = 90;
-  const cutoffMs = Date.now() - (RETENTION_DAYS * 24 * 60 * 60 * 1000);
+async function validateApiKey(key: string): Promise<boolean> {
+  const db = getDbClient();
+  const user = await db.query.users.findFirst({
+    where: eq(users.apiKey, key),
+    columns: { id: true, apiKey: true }
+  });
+  return !!user;
+}
 
-  // MINID with approximate trimming
-  const trimmed = await redis.xtrim(
-    'perseus:activity',
-    'MINID', '~', cutoffMs.toString()
-  );
+// Register on public API routes only (scoped to /api/v1)
+await fastify.register(bearerAuth, {
+  keys: new Set<string>(), // Empty set — will use async validator
+  auth: validateApiKey,
+  errorResponse(err) {
+    return {
+      error: 'Invalid or missing API key',
+      message: 'Provide a valid API key in Authorization: Bearer <key> header',
+      statusCode: 401
+    };
+  }
+}, { prefix: '/api/v1' }); // Scoped to public API routes only
+```
 
-  return trimmed;
+**Database schema addition:**
+
+```typescript
+// packages/database/src/schema/users.ts
+export const users = pgTable('users', {
+  // ... existing columns ...
+  apiKey: varchar('api_key', { length: 64 }).unique(),  // API key for public API
+  apiKeyCreatedAt: timestamp('api_key_created_at'),
+});
+```
+
+**API key generation:**
+
+```typescript
+// apps/api/src/routers/user.ts (tRPC mutation)
+import { randomBytes } from 'node:crypto';
+
+// Generate a new API key for the authenticated user
+generateApiKey: protectedProcedure.mutation(async ({ ctx }) => {
+  const apiKey = randomBytes(32).toString('hex'); // 64 hex characters
+  await ctx.db.update(users)
+    .set({ apiKey, apiKeyCreatedAt: new Date() })
+    .where(eq(users.clerkId, ctx.auth.userId));
+  return { apiKey };
+})
+```
+
+**Why this approach:**
+- `@fastify/bearer-auth` runs as `onRequest` hook (before routing, before Clerk)
+- Clerk middleware runs separately for tRPC routes (unchanged)
+- Both can coexist because they're scoped to different route prefixes
+- Constant-time comparison in bearer-auth prevents timing attacks
+- Async validator allows database lookup without blocking
+
+**Confidence:** HIGH — standard Fastify pattern, bearer-auth is official plugin.
+
+### 3. Rate Limiting with Redis Backing
+
+**Goal:** Distributed rate limiting across multiple API instances using shared Redis cluster (already running for pub/sub and caching).
+
+```typescript
+// apps/api/src/plugins/rate-limit.ts
+import rateLimit from '@fastify/rate-limit';
+import { getRedisClient } from '@livermore/cache';
+
+await fastify.register(rateLimit, {
+  redis: getRedisClient(), // Reuse existing ioredis cluster connection
+  timeWindow: '1 minute',
+  max: 60, // 60 requests per minute per API key (default)
+  skipOnError: true, // Fail open if Redis is down (graceful degradation)
+  keyGenerator: (req) => {
+    // Use API key as identifier (more accurate than IP address)
+    const apiKey = req.headers.authorization?.replace('Bearer ', '');
+    return apiKey || req.ip; // Fallback to IP if no API key
+  },
+  errorResponseBuilder: (req, context) => ({
+    error: 'Rate limit exceeded',
+    message: `You have exceeded the rate limit of ${context.max} requests per ${context.after}ms`,
+    limit: context.max,
+    remaining: 0,
+    resetAt: new Date(Date.now() + context.after).toISOString()
+  })
+});
+```
+
+**Per-route rate limits:**
+
+```typescript
+// Stricter limit for expensive endpoints
+fastify.get('/api/v1/signals', {
+  config: {
+    rateLimit: {
+      max: 10, // 10 requests per minute (overrides global 60)
+      timeWindow: '1 minute'
+    }
+  },
+  schema: { /* ... */ }
+}, async (request, reply) => {
+  // ... fetch trading signals ...
+});
+
+// More lenient for lightweight endpoints
+fastify.get('/api/v1/ticker/:symbol', {
+  config: {
+    rateLimit: {
+      max: 120, // 120 requests per minute
+      timeWindow: '1 minute'
+    }
+  },
+  schema: { /* ... */ }
+}, async (request, reply) => {
+  // ... fetch current ticker price ...
+});
+```
+
+**Why Redis-backed:**
+- Livermore already uses ioredis cluster for pub/sub and caching (no new connection)
+- `@fastify/rate-limit` supports ioredis directly (native integration)
+- Distributed rate limiting: if you run multiple API instances, limits are enforced across all instances (no per-instance bypass)
+- `skipOnError: true` ensures API stays available if Redis is temporarily down (fail open, not fail closed)
+
+**Confidence:** HIGH — @fastify/rate-limit is official plugin with ioredis support verified in v10.3.0 release notes.
+
+### 4. Runtime Mode Flag (Headless Mode)
+
+**Goal:** Run Fastify without calling `listen()` for testing (use `fastify.inject()`) and serverless environments (AWS Lambda, Vercel).
+
+```typescript
+// apps/api/src/server.ts
+const RUNTIME_MODE = process.env.RUNTIME_MODE || 'http'; // 'http' or 'headless'
+
+async function start() {
+  const fastify = Fastify({ logger: false });
+
+  // Register all plugins and routes (same code path for both modes)
+  await registerPlugins(fastify);
+  await registerPublicApiRoutes(fastify);
+  await registerTrpcRouter(fastify);
+  await registerWebSocketRoutes(fastify);
+
+  if (RUNTIME_MODE === 'http') {
+    // Normal mode: start HTTP server and listen on port
+    const port = config.API_PORT;
+    const host = config.API_HOST;
+    await fastify.listen({ port, host });
+    logger.info(`HTTP server listening on ${host}:${port}`);
+  } else {
+    // Headless mode: don't listen, just return configured Fastify instance
+    logger.info('Running in HEADLESS mode (no HTTP server)');
+    return fastify; // Can be used for testing or serverless environments
+  }
+}
+
+// Export for testing
+export { start };
+```
+
+**Testing with headless mode:**
+
+```typescript
+// apps/api/src/__tests__/candles.test.ts
+import { start } from '../server';
+
+describe('Candles API', () => {
+  let fastify;
+
+  beforeAll(async () => {
+    process.env.RUNTIME_MODE = 'headless';
+    fastify = await start();
+  });
+
+  afterAll(async () => {
+    await fastify.close();
+  });
+
+  it('should return candles for a symbol', async () => {
+    const response = await fastify.inject({
+      method: 'GET',
+      url: '/api/v1/candles?symbol=BTC-USD&timeframe=1h&limit=10',
+      headers: {
+        authorization: 'Bearer test-api-key-123'
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toHaveLength(10);
+  });
+});
+```
+
+**Why this approach:**
+- Fastify supports running without `listen()` out of the box (no special configuration)
+- `fastify.inject()` feeds mocked requests straight into the router (no sockets, no network latency)
+- Same router/middleware for multiple entry points (HTTP, message queue consumers, serverless)
+- Environment variable toggle (no code changes between modes)
+
+**Use cases:**
+- **Testing:** Use `fastify.inject()` for fast, isolated unit tests
+- **Serverless (AWS Lambda):** Export handler function instead of calling `listen()`
+- **Shared logic:** Same Fastify app for HTTP API and background workers
+
+**Confidence:** HIGH — Fastify's serverless guide explicitly recommends this pattern.
+
+### 5. WebSocket Bridge (Already Implemented)
+
+**Current implementation:** You already have the bridge pattern in `apps/api/src/server.ts` lines 48-103:
+
+```typescript
+// Existing pattern (lines 48-103)
+const alertClients = new Set<WebSocket>();
+const candlePulseClients = new Set<WebSocket>();
+
+export function broadcastCandlePulse(pulse: { exchangeId, symbol, timeframe, timestamp }) {
+  const message = JSON.stringify({ type: 'candle_pulse', data: pulse });
+  for (const client of candlePulseClients) {
+    if (client.readyState === 1) { // WebSocket.OPEN
+      client.send(message);
+    }
+  }
+}
+
+// WebSocket route for candle pulse notifications
+fastify.get('/ws/candle-pulse', { websocket: true }, (socket) => {
+  candlePulseClients.add(socket);
+  logger.info({ clientCount: candlePulseClients.size }, 'Candle pulse WebSocket client connected');
+
+  socket.on('close', () => {
+    candlePulseClients.delete(socket);
+  });
+
+  socket.on('error', (error) => {
+    logger.error({ error }, 'Candle pulse WebSocket error');
+    candlePulseClients.delete(socket);
+  });
+});
+```
+
+**Extend this for public API with authentication:**
+
+```typescript
+// apps/api/src/routes/websocket/market-data.ts
+import { getDbClient } from '@livermore/database';
+import { eq } from 'drizzle-orm';
+import { users } from '@livermore/database/schema';
+
+const marketDataClients = new Set<WebSocket>();
+
+fastify.get('/ws/market-data', { websocket: true }, async (socket, request) => {
+  // Authenticate via query parameter: /ws/market-data?api_key=xxx
+  const apiKey = request.query.api_key;
+  if (!apiKey) {
+    socket.close(1008, 'Missing API key'); // 1008 = Policy Violation
+    return;
+  }
+
+  const db = getDbClient();
+  const user = await db.query.users.findFirst({
+    where: eq(users.apiKey, apiKey as string),
+    columns: { id: true }
+  });
+
+  if (!user) {
+    socket.close(1008, 'Invalid API key');
+    return;
+  }
+
+  // Authenticated — add to client set
+  marketDataClients.add(socket);
+  logger.info({ clientCount: marketDataClients.size }, 'Market data WebSocket client connected');
+
+  socket.on('close', () => {
+    marketDataClients.delete(socket);
+  });
+
+  socket.on('error', (error) => {
+    logger.error({ error }, 'Market data WebSocket error');
+    marketDataClients.delete(socket);
+  });
+});
+
+// Broadcast sanitized events (no MACD-V details)
+export function broadcastMarketData(event: {
+  type: 'candle_close' | 'trade_signal';
+  data: Record<string, unknown>;
+}) {
+  const message = JSON.stringify(event);
+  for (const client of marketDataClients) {
+    if (client.readyState === 1) {
+      client.send(message);
+    }
+  }
 }
 ```
 
-**Why MINID over MAXLEN:**
-- MAXLEN caps by count (e.g., keep last 100K entries). Entry rate varies, so count-based retention doesn't map cleanly to time.
-- MINID caps by time directly. "Remove entries older than 90 days" is exactly what MINID does.
-- Stream IDs are timestamp-based, so MINID naturally aligns with time-based retention.
+**Why no new libraries:**
+- `@fastify/websocket ^11.0.1` already installed and working
+- Bridge pattern (Set + Redis pub/sub → broadcast) already implemented for `/ws/alerts`
+- Authentication via query parameter is standard WebSocket pattern
+- WebSocket close code 1008 (Policy Violation) is appropriate for auth failures
 
-**Why approximate (`~`) over exact (`=`):**
-- Redis internally stores streams in radix tree nodes. Exact trimming may need to split nodes, which is expensive.
-- Approximate trimming removes whole nodes, which is O(1) per node.
-- The difference is a few extra entries, which is irrelevant for a 90-day window.
+**Confidence:** HIGH — pattern already validated in production for `/ws/alerts` and `/ws/candle-pulse`.
 
-**Trimming frequency:** Once per hour is sufficient. Even with 10 instances generating 4 heartbeat entries/minute each, that's ~5,760 entries/day -- tiny.
+### 6. AsyncAPI Documentation
+
+**Goal:** Document WebSocket event streams in a machine-readable format (like OpenAPI for REST, but for WebSockets).
+
+**Create AsyncAPI spec:**
+
+```yaml
+# asyncapi.yaml (root of project)
+asyncapi: 3.1.0
+info:
+  title: Perseus Web WebSocket API
+  version: 8.0.0
+  description: Real-time cryptocurrency market data and trade signal events
+
+servers:
+  development:
+    host: ws://localhost:3000
+    protocol: ws
+    description: Local development server
+  production:
+    host: wss://api.livermore.io
+    protocol: ws
+    description: Production WebSocket server (TLS required)
+
+channels:
+  market_data:
+    address: /ws/market-data?api_key={apiKey}
+    messages:
+      candle_close:
+        summary: Candle closed event
+        description: Emitted when a candle completes for a symbol/timeframe pair
+        payload:
+          type: object
+          required: [type, data]
+          properties:
+            type:
+              type: string
+              const: candle_close
+            data:
+              type: object
+              required: [exchangeId, symbol, timeframe, timestamp, close, volume]
+              properties:
+                exchangeId:
+                  type: integer
+                  description: Exchange ID (1 = Coinbase, 2 = Binance, etc.)
+                symbol:
+                  type: string
+                  description: Trading pair (e.g., BTC-USD)
+                  example: BTC-USD
+                timeframe:
+                  type: string
+                  enum: [1m, 5m, 15m, 1h, 4h, 1d]
+                  description: Candle timeframe
+                timestamp:
+                  type: integer
+                  description: Candle close time (Unix timestamp in milliseconds)
+                close:
+                  type: number
+                  description: Closing price
+                volume:
+                  type: number
+                  description: Trading volume
+
+      trade_signal:
+        summary: Trade signal triggered
+        description: Emitted when a trading signal is triggered for a symbol
+        payload:
+          type: object
+          required: [type, data]
+          properties:
+            type:
+              type: string
+              const: trade_signal
+            data:
+              type: object
+              required: [symbol, signalType, timeframe, triggeredAt]
+              properties:
+                symbol:
+                  type: string
+                  description: Trading pair
+                  example: ETH-USD
+                signalType:
+                  type: string
+                  enum: [bullish, bearish]
+                  description: Signal direction (MACD-V details are proprietary and not exposed)
+                timeframe:
+                  type: string
+                  enum: [1m, 5m, 15m, 1h, 4h, 1d]
+                  description: Timeframe on which signal was triggered
+                triggeredAt:
+                  type: string
+                  format: date-time
+                  description: ISO 8601 timestamp of signal trigger
+                price:
+                  type: number
+                  description: Asset price at trigger time
+```
+
+**Generate HTML documentation:**
+
+```json
+// package.json scripts
+{
+  "scripts": {
+    "docs:asyncapi": "asyncapi generate fromTemplate asyncapi.yaml @asyncapi/html-template --output docs/asyncapi",
+    "docs:asyncapi:watch": "asyncapi generate fromTemplate asyncapi.yaml @asyncapi/html-template --output docs/asyncapi --watch"
+  }
+}
+```
+
+**Serve generated docs:**
+
+```bash
+pnpm docs:asyncapi  # Generates docs/asyncapi/index.html
+# Serve at https://livermore.io/asyncapi/ (static hosting)
+```
+
+**Why AsyncAPI:**
+- Industry standard for documenting event-driven APIs (like OpenAPI for REST)
+- Machine-readable (tools can generate client SDKs, validators, mocks)
+- Human-readable (generates interactive HTML documentation)
+- Supports WebSocket bindings (query parameters, connection lifecycle)
+- Latest version (3.1.0, Feb 2026) adds improved WebSocket support
+
+**Confidence:** HIGH — AsyncAPI 3.1.0 released Jan 2026, WebSocket bindings are well-documented.
 
 ---
 
-## Alternatives Considered and Rejected
+## Alternatives Considered
 
-### Redis Pub/Sub for Activity Logging -- REJECTED
-
-| Aspect | Redis Streams | Redis Pub/Sub |
-|--------|---------------|---------------|
-| Persistence | Yes (stored on disk) | No (fire-and-forget) |
-| Historical query | Yes (XRANGE) | No |
-| Retention control | Yes (XTRIM MINID) | N/A |
-| Consumer groups | Yes | No |
-| Existing use in codebase | No (new) | Yes (control channels) |
-
-Pub/Sub is already used for ephemeral command/response patterns. Streams are the correct choice for durable activity logs that need historical query and retention.
-
-### PostgreSQL for Activity Logging -- REJECTED
-
-PostgreSQL could store activity logs, but:
-- Adds write load to the database for high-frequency events
-- Redis Streams are purpose-built for append-only event logs
-- Activity data is operational, not analytical -- Redis is the right tier
-- Keeps the coordination plane entirely in Redis (single technology for all Perseus features)
-
-### Redis Sorted Sets for Heartbeat -- CONSIDERED BUT NOT PRIMARY
-
-Sorted sets (`ZADD perseus:heartbeats instanceId timestamp`) enable range queries by time. However:
-- Requires manual cleanup (no auto-expiry like TTL keys)
-- More complex than the simple SET + EX pattern
-- The SET + EX pattern is self-cleaning -- dead instances' keys vanish automatically
-- Could be added later if network-wide "who was alive at time T?" queries are needed
-
-### External Service Discovery (Consul, etcd) -- REJECTED
-
-Overkill for 2-10 instances. Redis is already the coordination bus. Adding another distributed system increases operational complexity without proportional benefit.
+| Recommended | Alternative | When to Use Alternative |
+|-------------|-------------|-------------------------|
+| **fastify-type-provider-zod** | zod-to-openapi (asteasolutions) | If NOT using Fastify or need framework-agnostic OpenAPI generation. For Fastify apps, type provider has tighter integration (compilers + transform in one package). |
+| **@fastify/bearer-auth** | Custom preHandler hook | If you need more complex auth logic (e.g., JWT parsing + claims validation, role-based access control). For simple API key validation, bearer-auth is faster and battle-tested. |
+| **@fastify/rate-limit** | rate-limit-redis (standalone) | If NOT using Fastify. Since you're on Fastify, use the official plugin for lifecycle integration and per-route config. |
+| **Runtime mode via env var** | Separate entry points (server.ts vs serverless.ts) | If HTTP and serverless have fundamentally different initialization (different plugins, different routes). Here they're identical except `listen()` call, so env var is cleaner. |
+| **@asyncapi/generator** | Manual AsyncAPI YAML + Redocly | If you want custom branding/styling beyond the HTML template. Generator is faster for standard docs. AsyncAPI Studio (online editor) can also preview specs. |
+| **WebSocket auth via query param** | WebSocket auth via Sec-WebSocket-Protocol header | If you need to hide API key from URL logs (query params are logged by proxies). However, WebSocket protocol headers are complex to implement. Query param is simpler and standard. |
 
 ---
 
 ## What NOT to Use
 
-| Technology | Why Not |
-|------------|---------|
-| `public-ip` (npm) | ESM-only, breaks CJS builds. Overkill for one-time IP lookup. |
-| `node-public-ip` (npm) | 1 weekly download, abandoned, no types. |
-| XState | 47 KB for 5 states. Designed for complex UI, not server lifecycle. |
-| typescript-fsm | Adequate but unnecessary dependency for ~80 lines of code. |
-| Consul / etcd / ZooKeeper | External service discovery is overkill for 2-10 Redis-connected instances. |
-| Redis Keyspace Notifications | Unreliable in cluster mode for key expiry events. Use periodic scanning. |
-| `bull` / `bullmq` | Job queue libraries. Not needed for simple heartbeat + stream patterns. |
-| `@art-of-coding/stream-utils` | Wrapper around ioredis streams. Adds abstraction over a simple API. |
+| Avoid | Why | Use Instead |
+|-------|-----|-------------|
+| **fastify-swagger (deprecated)** | Deprecated in favor of @fastify/swagger. Old package (pre-v8) is no longer maintained. Breaking changes in v8+ require Fastify 5.x. | **@fastify/swagger@^9.7.0** |
+| **fastify-rate-limit (deprecated)** | Deprecated in favor of @fastify/rate-limit. Old package (v5.9.0) has security vulnerabilities and no cluster support. | **@fastify/rate-limit@^10.3.0** |
+| **Socket.io** | Heavy abstraction over WebSockets with custom protocol (fallback to long-polling, rooms, namespaces). PW client expects standard WebSocket protocol. Already using `ws` library via @fastify/websocket. Adds ~60KB min bundle size. | **@fastify/websocket (already installed)** |
+| **fastify-openapi-glue** | Design-first approach (OpenAPI spec → code generation). Livermore is code-first (Zod schemas → OpenAPI spec). Incompatible workflow. Requires maintaining separate YAML files. | **fastify-type-provider-zod** |
+| **@fastify/jwt** | For issuing/verifying JWTs (JSON Web Tokens). You need API key validation (simple string lookup), not JWT generation. Clerk already handles JWTs for admin UI. | **@fastify/bearer-auth** |
+| **Swagger Codegen** | Generates server stubs from OpenAPI spec (design-first). You're doing code-first (routes → spec). Generates bloated code with unused abstractions. | **Write routes manually, use fastify-type-provider-zod for spec generation** |
+| **Redis pub/sub for rate limiting** | Custom implementation using pub/sub to share rate limit counters. Reinventing the wheel — @fastify/rate-limit already does this with ioredis support. | **@fastify/rate-limit with redis option** |
 
 ---
 
-## Implementation Checklist
+## Version Compatibility
 
-### No `npm install` Required
+| Package A | Compatible With | Notes |
+|-----------|-----------------|-------|
+| **@fastify/swagger@^9.7.0** | Fastify ^5.x | Breaking change: v9.x REQUIRES Fastify 5.x. You're on 5.2.2 — compatible. v8.x supported Fastify 4.x (migration guide available). |
+| **fastify-type-provider-zod@^4.0.2** | Zod ^3.x, Fastify ^4.x / ^5.x | You're on Zod 3.25.76 and Fastify 5.2.2 — both compatible. v4.x added support for @fastify/swagger v9.x. |
+| **@fastify/rate-limit@^10.3.0** | Fastify ^5.x, ioredis ^5.x | You're on Fastify 5.2.2 and ioredis 5.4.2 — compatible. Cluster mode supported (no special config needed, ioredis handles it). |
+| **@fastify/bearer-auth@^10.1.1** | Fastify ^5.x | Requires Fastify 5.x. You're on 5.2.2 — compatible. v10.x adds TypeScript improvements and async validator support. |
+| **@fastify/websocket@^11.0.1** | Fastify ^5.x, ws ^8.x | Already installed. You're on Fastify 5.2.2 — compatible. Wraps `ws` library with Fastify lifecycle integration. |
 
-Everything builds on:
-- `ioredis` 5.4.2 (already installed, pinned in root package.json)
-- `zod` 3.25.x (already installed for schema validation)
-- `node:https` (Node.js built-in for public IP detection)
-- `node:os` (Node.js built-in for hostname, network interfaces)
-- `node:crypto` (Node.js built-in, if needed for instance ID hashing)
+**No version conflicts.** All new packages are compatible with current stack (Fastify 5.2.2, Zod 3.25.76, ioredis 5.4.2).
 
-### New Module Location
+---
 
-```
-packages/
-  cache/
-    src/
-      keys.ts               # ADD: perseus:* key builders
-      streams/
-        activity-stream.ts   # NEW: XADD/XRANGE/XTRIM wrappers
-      index.ts               # UPDATE: export new modules
-```
+## Configuration Checklist
 
-Or, if Perseus Network is a standalone package:
+**Before deploying public API to production:**
 
-```
-packages/
-  perseus/
-    src/
-      instance-id.ts         # Instance ID generation
-      state-machine.ts       # Instance lifecycle FSM
-      heartbeat.ts           # SET EX heartbeat loop
-      activity-stream.ts     # Redis Streams wrapper
-      public-ip.ts           # Public IP detection
-      network-manager.ts     # Orchestrates registration, heartbeat, cleanup
-      index.ts
-    package.json             # deps: @livermore/cache, @livermore/schemas, @livermore/utils
-```
+- [ ] **Database:** Add `users.api_key` column (varchar(64), unique, indexed) + migration
+- [ ] **API key generation:** Add tRPC mutation `generateApiKey()` in user settings
+- [ ] **API key display:** Add UI in admin panel to show/copy/regenerate API key
+- [ ] **Rate limits:** Configure per-route limits (e.g., `/candles` = 60/min, `/signals` = 10/min)
+- [ ] **CORS:** Replace `origin: true` with whitelist of allowed domains (or keep `true` for public API)
+- [ ] **OpenAPI spec:** Verify generated spec at `/docs/json` (or `/docs/yaml`) before release
+- [ ] **Swagger UI:** Test "Try it out" functionality with real API key
+- [ ] **AsyncAPI:** Generate and host HTML docs at public URL (e.g., `https://livermore.io/asyncapi/`)
+- [ ] **WebSocket auth:** Test connection with valid/invalid API keys
+- [ ] **Runtime mode:** Add `RUNTIME_MODE` to `.env.example` with default `http`
+- [ ] **Sanitization:** Verify MACD-V internals are NOT exposed in public endpoints (audit payloads)
+- [ ] **Logging:** Ensure API key is NOT logged in plaintext (mask in logs: `xxx...xxx`)
+- [ ] **Security headers:** Add `@fastify/helmet` for production (HSTS, CSP, etc.)
+- [ ] **TLS:** Enforce HTTPS in production (redirect HTTP → HTTPS, WebSocket → WSS)
 
-**Recommendation:** Create `packages/perseus` as a dedicated package. It has a clear bounded context (network coordination) and shouldn't pollute the cache package with non-caching concerns.
+---
+
+## Security Boundaries
+
+**Public API MUST NOT expose:**
+
+| Proprietary IP / PII | Why | Enforcement |
+|---------------------|-----|-------------|
+| **MACD-V formula or parameters** | Proprietary indicator logic is trade secret. Exposing EMA periods, multipliers, or formula allows competitors to replicate. | Return generic "trade signals" (bullish/bearish enum) with NO numeric indicator values. |
+| **Indicator calculation internals** | Redis key patterns, calculation sequence, warmup logic reveal system architecture. | Public API routes fetch from Redis but never expose keys or implementation details. |
+| **Admin-only endpoints** | User management, system stats, instance registry, control channels are internal tooling. | Admin endpoints stay on `/trpc` prefix (Clerk auth). Public API is `/api/v1` prefix (API key auth). |
+| **Clerk user IDs or emails** | PII must not leak to external clients. API keys are user-scoped but don't reveal user identity. | Public API responses contain NO user-identifying fields. |
+| **Raw alert trigger values** | signalDelta, triggerValue reveal MACD-V thresholds. | Transform alerts: `{ signalType: 'bullish', price: 50000 }` instead of `{ signalDelta: 0.0045, triggerValue: 0.003 }`. |
+
+**Public API SHOULD expose:**
+
+| Safe to Expose | Why | Implementation |
+|---------------|-----|----------------|
+| **Generic trade signals** | High-level directional signals (bullish/bearish) have value without revealing IP. | Alert service emits sanitized events to public WebSocket channel. |
+| **Candle data (OHLCV)** | Public market data, available from exchange APIs. | Fetch from Redis cache (`candles:{exchangeId}:{symbol}:{timeframe}`). |
+| **Ticker data** | Current price, 24h volume, 24h change are public market data. | Fetch from Redis cache (`ticker:{exchangeId}:{symbol}`). |
+| **Exchange status** | Online/offline, connection state are operational metadata. | Expose via `/api/v1/status` endpoint (from instance registry). |
+| **Supported symbols** | List of monitored trading pairs is useful for API discovery. | Expose via `/api/v1/symbols` endpoint (from runtime state). |
+
+**Implementation:** Create separate route handlers in `apps/api/src/routes/public/` that explicitly sanitize data before returning. Never reuse internal tRPC procedures directly (they may leak sensitive fields).
 
 ---
 
 ## Sources
 
-### Verified Against Installed Code
-- ioredis 5.4.2 type definitions: `node_modules/.pnpm/ioredis@5.4.2/.../RedisCommander.d.ts` (lines 4542-5807)
-- Existing key patterns: `packages/cache/src/keys.ts`
-- Existing Redis client: `packages/cache/src/client.ts`
-- Existing heartbeat pattern: `apps/api/src/services/exchange/adapter-factory.ts`
+### Official Documentation (HIGH Confidence)
 
-### Redis Official Documentation
-- [Redis Streams](https://redis.io/docs/latest/develop/data-types/streams/)
-- [XADD Command](https://redis.io/docs/latest/commands/xadd/)
-- [XTRIM Command](https://redis.io/docs/latest/commands/xtrim/)
-- [XRANGE Command](https://redis.io/docs/latest/commands/xrange/)
-- [XREAD Command](https://redis.io/docs/latest/commands/xread/)
-- [SET Command (EX option)](https://redis.io/docs/latest/commands/set/)
-- [Redis Cluster Specification (Hash Tags)](https://redis.io/docs/latest/operate/oss_and_stack/reference/cluster-spec/)
+- [@fastify/swagger npm](https://www.npmjs.com/package/@fastify/swagger) — Version 9.7.0 published Feb 15, 2026
+- [GitHub: fastify/fastify-swagger](https://github.com/fastify/fastify-swagger) — Official Fastify ecosystem plugin, 300+ contributors
+- [@fastify/rate-limit GitHub](https://github.com/fastify/fastify-rate-limit) — Redis integration verified in v10.3.0 release notes (Jan 2026)
+- [fastify-type-provider-zod GitHub](https://github.com/turkerdev/fastify-type-provider-zod) — Zod to OpenAPI transformation, supports @fastify/swagger v9.x
+- [@fastify/bearer-auth GitHub](https://github.com/fastify/fastify-bearer-auth) — API key authentication with constant-time comparison, v10.1.1 (Dec 2025)
+- [AsyncAPI Specification 3.1.0](https://www.asyncapi.com/docs/reference/specification/v3.1.0) — WebSocket bindings, query parameter auth (Jan 2026)
+- [Fastify Serverless Guide](https://fastify.dev/docs/latest/Guides/Serverless/) — Runtime mode without `listen()`, Lambda integration
 
-### Libraries Evaluated
-- [ioredis GitHub](https://github.com/redis/ioredis)
-- [public-ip npm](https://www.npmjs.com/package/public-ip) -- ESM-only, rejected
-- [node-public-ip npm](https://www.npmjs.com/package/node-public-ip) -- abandoned, rejected
-- [typescript-fsm GitHub](https://github.com/WebLegions/typescript-fsm) -- adequate but unnecessary
-- [XState](https://stately.ai/docs/xstate) -- overkill
-- [ipify.org](https://www.ipify.org/) -- recommended for public IP detection
+### Integration Guides (MEDIUM Confidence)
 
-### Patterns and Best Practices
-- [Redis Heartbeat-Based Session Tracking](https://medium.com/tilt-engineering/redis-powered-user-session-tracking-with-heartbeat-based-expiration-c7308420489f)
-- [Redis Clustering Best Practices with Keys](https://redis.io/blog/redis-clustering-best-practices-with-keys/)
-- [ioredis Streams Example (Gist)](https://gist.github.com/forkfork/c27d741650dd65631578771ab264dd2c)
-- [Azure Container Apps + Redis Streams](https://techcommunity.microsoft.com/blog/appsonazureblog/custom-scaling-on-azure-container-apps-based-on-redis-streams/3723374)
+- [How To Generate an OpenAPI Spec With Fastify | Speakeasy](https://www.speakeasy.com/openapi/frameworks/fastify) — Fastify + OpenAPI workflow, last updated Jan 22, 2026
+- [Build Well-Documented and Authenticated APIs in Node.js with Fastify | Heroku](https://www.heroku.com/blog/build-openapi-apis-nodejs-fastify/) — Bearer auth + OpenAPI security schemes integration
+- [Creating AsyncAPI for WebSocket API | AsyncAPI Initiative](https://www.asyncapi.com/blog/websocket-part2) — WebSocket documentation patterns, query param auth
+- [fastify-zod-openapi vs zod-to-openapi comparison](https://github.com/samchungy/fastify-zod-openapi) — When to use framework-specific vs agnostic libraries
+
+### Verified Against Installed Packages
+
+- **Fastify:** 5.2.2 (apps/api/package.json line 30) — v9.x plugins require ^5.x ✓
+- **Zod:** 3.25.76 (apps/api/package.json line 32) — fastify-type-provider-zod requires ^3.x ✓
+- **ioredis:** 5.4.2 (root package.json line 42, pinned override) — @fastify/rate-limit requires ^5.x ✓
+- **@fastify/websocket:** 11.0.1 (apps/api/package.json line 17) — Already using ws library bridge ✓
+
+---
+
+**Stack Research for:** Perseus Web Public API
+**Researched:** 2026-02-18
+**Next Steps:** Create `.planning/research/FEATURES.md`, `.planning/research/ARCHITECTURE.md`, `.planning/research/PITFALLS.md`, `.planning/research/SUMMARY.md`

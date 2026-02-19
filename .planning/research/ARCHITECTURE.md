@@ -1,763 +1,819 @@
-# Architecture Research: v6.0 Perseus Network
+# Architecture Research: Public API Integration
 
-**Researched:** 2026-02-10
-**Confidence:** HIGH (based on codebase analysis + Redis documentation)
-**Mode:** Integration research for distributed instance coordination
+**Domain:** Public REST API + OpenAPI + WebSocket bridge for trading platform
+**Researched:** 2026-02-18
+**Confidence:** HIGH
 
 ## Executive Summary
 
-The v6.0 Perseus Network adds instance identity, heartbeat liveness, network activity logging, and an Admin "Network" view to the existing Livermore architecture. The key architectural challenge is that these features must integrate with three existing systems: (1) the API server lifecycle in `server.ts` and `ControlChannelService`, (2) the Redis Cluster connection via ioredis, and (3) the Admin UI's tRPC polling pattern.
+This architecture research addresses how to integrate public REST API routes with OpenAPI specification, WebSocket pub/sub bridge, and runtime mode switching into the existing Livermore trading platform. The platform currently uses Fastify + tRPC for admin-only access with Clerk authentication, Redis pub/sub for internal event distribution, and a single "exchange" runtime mode that connects to exchanges and serves API requests.
 
-The research answers six specific integration questions and recommends a component structure that maps cleanly onto the existing codebase with minimal refactoring.
+v8.0 "Perseus Web" adds public `/public/v1/*` REST routes alongside existing tRPC routes, a WebSocket bridge for external clients to consume Redis pub/sub events, and a "pw-host" (headless) runtime mode where instances serve API requests without connecting to exchanges. The architecture maintains the existing stack (Fastify 5.x, ioredis 5.4.2, tRPC 11.x) with two new libraries: `@trpc/server` with trpc-openapi for OpenAPI generation, and `fastify-zod-openapi` for schema-driven route registration.
 
-**Central finding:** The existing `ExchangeAdapterFactory.setConnectionStatus()` in `adapter-factory.ts` already writes to `exchange:status:{exchangeId}` but has three documented bugs: heartbeat never updates, error never populates, and connectionState sticks on `idle` when instance is down. v6.0 replaces this prototype with a proper `InstanceRegistryService` that owns the full lifecycle.
+**Key architectural decisions:**
+- Public REST routes registered via `fastify-zod-openapi` plugin, coexist with tRPC at different path prefixes (`/public/v1/*` vs `/trpc/*`)
+- OpenAPI spec generated from Zod schemas using `zod-openapi` library with `.openapi()` metadata decorators
+- WebSocket bridge (`/public/ws/market-data`) as separate Fastify WebSocket route that subscribes to Redis pub/sub and fans out to N external clients
+- Runtime mode controlled by `RUNTIME_MODE` env var (`exchange` | `pw-host`), determines which services start
+- Data transformation layer via DTO pattern: internal schemas → public schemas, strips proprietary fields (indicator formulas, internal IDs)
+- All public API code in new `packages/public-api` package with public schemas in `packages/schemas/src/public/`
 
-## Current Architecture (v5.0)
-
-### Relevant Components
+## System Overview
 
 ```
-apps/api/src/
-  server.ts                              -- Startup orchestration
-  services/
-    control-channel.service.ts           -- Redis pub/sub command handling
-    runtime-state.ts                     -- In-memory state (not persisted)
-    exchange/
-      adapter-factory.ts                 -- Creates adapters, writes exchange:status:{id}
+┌─────────────────────────────────────────────────────────────────────┐
+│                         External Clients                             │
+│   ┌──────────────┐  ┌──────────────┐  ┌──────────────┐             │
+│   │ HTTP Clients │  │ WebSocket    │  │  Admin UI    │             │
+│   │ (REST API)   │  │ Subscribers  │  │  (tRPC)      │             │
+│   └──────┬───────┘  └──────┬───────┘  └──────┬───────┘             │
+└──────────┼──────────────────┼──────────────────┼────────────────────┘
+           │                  │                  │
+           │                  │                  │
+┌──────────┼──────────────────┼──────────────────┼────────────────────┐
+│          │  Fastify Server (apps/api)          │                    │
+│          │                  │                  │                    │
+│   ┌──────▼──────┐  ┌────────▼────────┐  ┌──────▼──────┐            │
+│   │  Public API │  │  WebSocket      │  │   tRPC      │            │
+│   │  Routes     │  │  Bridge         │  │   Router    │            │
+│   │ /public/v1/*│  │ /public/ws/*    │  │  /trpc/*    │            │
+│   └──────┬──────┘  └────────┬────────┘  └──────┬──────┘            │
+│          │                  │                  │                    │
+│   ┌──────▼──────────────────▼──────────────────▼──────┐            │
+│   │          Data Transformation Layer                 │            │
+│   │  (DTOs: Internal Schemas → Public Schemas)         │            │
+│   └──────┬──────────────────┬──────────────────┬──────┘            │
+│          │                  │                  │                    │
+├──────────┼──────────────────┼──────────────────┼────────────────────┤
+│          │  Service Layer (Runtime Mode Switch)         │           │
+│          │                  │                  │                    │
+│   ┏━━━━━━▼━━━━━━━━━━━━━━━━━▼━━━━━━━━━━━━━━━━━▼━━━━━━┓            │
+│   ┃  IF RUNTIME_MODE=exchange:                        ┃            │
+│   ┃  ┌────────────────┐  ┌─────────────────┐          ┃            │
+│   ┃  │  Exchange      │  │  Indicator      │          ┃            │
+│   ┃  │  Adapters      │  │  Calculation    │          ┃            │
+│   ┃  │  (WS Ingest)   │  │  Service        │          ┃            │
+│   ┃  └────────┬───────┘  └────────┬────────┘          ┃            │
+│   ┗━━━━━━━━━━━┼━━━━━━━━━━━━━━━━━━┼━━━━━━━━━━━━━━━━━━━┛            │
+│               │                   │                                 │
+│   ┏━━━━━━━━━━━▼━━━━━━━━━━━━━━━━━▼━━━━━━━━━━━━━━━━━━━┓            │
+│   ┃  IF RUNTIME_MODE=pw-host:                         ┃            │
+│   ┃  (Exchange adapters NOT started)                  ┃            │
+│   ┃  (Read-only access to cached data)                ┃            │
+│   ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛            │
+│                                                                      │
+├──────────────────────────────────────────────────────────────────────┤
+│                      Data Layer                                      │
+│   ┌──────────────┐  ┌──────────────┐  ┌──────────────┐             │
+│   │  PostgreSQL  │  │  Redis       │  │  Redis       │             │
+│   │  (Drizzle)   │  │  (Cache)     │  │  (Pub/Sub)   │             │
+│   └──────────────┘  └──────────────┘  └──────────────┘             │
+└──────────────────────────────────────────────────────────────────────┘
 
-packages/cache/src/
-  client.ts                              -- ioredis Cluster singleton
-  keys.ts                                -- Key builder functions
-
-apps/admin/src/
-  pages/ControlPanel.tsx                 -- Polls control.getStatus (tRPC)
-  components/control/RuntimeStatus.tsx   -- Renders status badge
+Data Flow:
+  Exchange Mode:    Exchange WS → Redis Cache → Pub/Sub → WS Bridge → External Clients
+  PW-Host Mode:     (No exchange ingest) → Redis Cache (read-only) → Public API → Clients
 ```
 
-### Current Status Tracking (Broken)
+## Component Responsibilities
 
-The existing `ExchangeConnectionStatus` in `adapter-factory.ts` (lines 12-19):
+| Component | Responsibility | Implementation |
+|-----------|----------------|----------------|
+| **Public API Routes** | Expose REST endpoints for market data, candles, indicators | `packages/public-api/src/routes/` with Fastify route handlers, registered via `fastify-zod-openapi` |
+| **OpenAPI Generator** | Generate OpenAPI v3 spec from Zod schemas | `zod-openapi` library with `.openapi()` metadata on schemas, spec served at `/public/v1/openapi.json` |
+| **WebSocket Bridge** | Subscribe to Redis pub/sub, fan out to N external clients | Fastify WebSocket route at `/public/ws/market-data`, manages client Set, handles backpressure |
+| **Data Transformation Layer** | Transform internal schemas to public schemas, strip proprietary data | DTO functions in `packages/public-api/src/transformers/`, map internal → public |
+| **Runtime Mode Manager** | Control which services start based on env var | Conditional service initialization in `apps/api/src/server.ts`, checks `RUNTIME_MODE` |
+| **Public Schema Package** | Define public-facing Zod schemas for API contracts | `packages/schemas/src/public/` with OpenAPI metadata, separate from internal schemas |
+| **Rate Limiting Middleware** | Protect public endpoints from abuse | Fastify rate-limit plugin, applied selectively to `/public/*` routes |
 
+## Recommended Project Structure
+
+```
+apps/
+├── api/
+│   ├── src/
+│   │   ├── server.ts                  # [MODIFIED] Add runtime mode switch
+│   │   ├── routers/                   # Existing tRPC routers (unchanged)
+│   │   └── services/                  # Existing services (unchanged)
+
+packages/
+├── public-api/                         # [NEW] Public API package
+│   ├── src/
+│   │   ├── routes/
+│   │   │   ├── candles.route.ts       # GET /public/v1/candles/:symbol
+│   │   │   ├── indicators.route.ts    # GET /public/v1/indicators/:symbol
+│   │   │   ├── symbols.route.ts       # GET /public/v1/symbols
+│   │   │   └── index.ts               # Route registration function
+│   │   ├── websocket/
+│   │   │   ├── market-data-bridge.ts  # WebSocket bridge for Redis pub/sub
+│   │   │   └── backpressure.ts        # Backpressure handling utilities
+│   │   ├── transformers/
+│   │   │   ├── candle.transformer.ts  # Internal Candle → Public Candle
+│   │   │   ├── indicator.transformer.ts # Strip proprietary fields
+│   │   │   └── index.ts
+│   │   ├── middleware/
+│   │   │   ├── rate-limit.ts          # Rate limiting config
+│   │   │   └── error-handler.ts       # Public error responses
+│   │   └── index.ts                   # Package exports
+│   └── package.json
+
+├── schemas/
+│   ├── src/
+│   │   ├── public/                     # [NEW] Public API schemas
+│   │   │   ├── candle.schema.ts       # Public candle schema with .openapi()
+│   │   │   ├── indicator.schema.ts    # Public indicator schema (no formulas)
+│   │   │   ├── symbol.schema.ts       # Public symbol metadata
+│   │   │   ├── websocket.schema.ts    # WebSocket message schemas
+│   │   │   └── index.ts
+│   │   ├── market/                     # Existing internal schemas
+│   │   ├── indicators/                 # Existing internal schemas
+│   │   └── index.ts                   # [MODIFIED] Export public schemas
+
+├── cache/                              # Existing (unchanged)
+├── database/                           # Existing (unchanged)
+├── utils/                              # [MODIFIED] Add runtime mode utilities
+│   ├── src/
+│   │   ├── runtime-mode.ts            # Runtime mode detection, validation
+│   │   └── index.ts
+```
+
+### Structure Rationale
+
+- **`packages/public-api/`**: Isolates all public-facing API code from internal admin tRPC routes. Follows monorepo best practice: public API is a separate bounded context with its own entry point. Prevents accidental import of internal schemas into public routes.
+
+- **`packages/schemas/src/public/`**: Public schemas live alongside internal schemas but in separate directory. Allows shared base types (e.g., `Timeframe`) while preventing leakage of proprietary fields. OpenAPI metadata (`.openapi()`) only added to public schemas.
+
+- **`apps/api/src/server.ts` modifications**: Runtime mode switch implemented in single location at startup. Clean separation: `if (mode === 'exchange')` starts exchange adapters, `if (mode === 'pw-host')` skips them. Public API routes registered unconditionally (work in both modes).
+
+## Architectural Patterns
+
+### Pattern 1: Coexisting REST + tRPC Routes
+
+**What:** Register both tRPC plugin and REST routes on the same Fastify instance at different path prefixes.
+
+**When to use:** When adding public REST API to existing tRPC-based admin application.
+
+**Trade-offs:**
+- **Pro:** No separate server process, shared Fastify plugins (CORS, WebSocket, rate limiting)
+- **Pro:** tRPC and REST share same database/Redis connections, service instances
+- **Con:** Single process means public load can impact admin UI performance (mitigate with separate pw-host instances)
+
+**Example:**
 ```typescript
-interface ExchangeConnectionStatus {
-  exchangeId: number;
-  exchangeName: string;
-  connectionState: 'idle' | 'connecting' | 'connected' | 'disconnected' | 'error';
-  connectedAt: string | null;
-  lastHeartbeat: string | null;
-  error: string | null;
-}
+// apps/api/src/server.ts
+import { registerPublicRoutes } from '@livermore/public-api';
+
+const fastify = Fastify();
+
+// Register tRPC for admin (existing)
+await fastify.register(fastifyTRPCPlugin, {
+  prefix: '/trpc',
+  trpcOptions: { router: appRouter, createContext },
+});
+
+// Register public REST routes (new)
+await fastify.register(async (instance) => {
+  await instance.register(fastifyZodOpenApi, {
+    openapi: {
+      info: { title: 'Livermore Public API', version: '1.0.0' },
+      servers: [{ url: 'https://api.livermore.trade' }],
+    },
+  });
+
+  // Register all public routes
+  await registerPublicRoutes(instance, { redis, db });
+});
+
+// Serve OpenAPI spec
+fastify.get('/public/v1/openapi.json', async () => {
+  return fastify.openapiDocument;
+});
 ```
 
-**Bugs documented in PROJECT.md:**
-1. `updateHeartbeat()` is defined on `ExchangeAdapterFactory` (line 231) but **never called** from any adapter or service.
-2. `error` field only populated in the `adapter.on('error')` handler, but adapter errors are transient and the field is never cleared or updated correctly.
-3. `connectionState` stuck on `idle` when instance dies because the key has **no TTL** -- it persists forever in Redis with stale data.
+### Pattern 2: OpenAPI Generation from Zod Schemas
 
-### Current Startup Lifecycle
+**What:** Use `zod-openapi` to add OpenAPI metadata to Zod schemas, generate spec automatically.
 
-```
-start()
-  |
-  +-- parseCliArgs()
-  +-- validateEnv()
-  +-- Fastify.register(cors, websocket, clerkPlugin, tRPC)
-  +-- Pre-flight: getDbClient(), getRedisClient(), subscriber.duplicate()
-  +-- if --autostart:
-  |     fetchSymbols -> backfill -> indicatorService.start() -> warmup
-  |     -> boundaryRestService.start() -> coinbaseAdapter.connect() -> alertService.start()
-  |     -> initRuntimeState({ connectionState: 'connected' })
-  +-- else:
-  |     initRuntimeState({ connectionState: 'idle' })
-  +-- Build ServiceRegistry (globalServiceRegistry)
-  +-- ControlChannelService initialized lazily on first authenticated request
-  +-- Fastify.listen()
-```
+**When to use:** When you want single source of truth for validation AND documentation.
 
-**Key observation:** There is no "registration" step. The instance starts, optionally connects to an exchange, and the only external evidence of its existence is the `exchange:status:{id}` key written by `setupConnectionTracking()` in the adapter factory.
+**Trade-offs:**
+- **Pro:** Runtime validation and API docs stay in sync automatically
+- **Pro:** TypeScript types inferred from same schema (validation + types + docs from one definition)
+- **Con:** OpenAPI metadata decorators add verbosity to schema definitions
+- **Con:** Not all Zod features map cleanly to OpenAPI (e.g., `.transform()`, `.refine()`)
 
-### Current Admin UI Data Flow
-
-```
-Admin UI (ControlPanel.tsx)
-  |
-  +-- useQuery(trpc.control.getStatus) -- polls every 5s (1s during startup)
-  |     Returns: { isPaused, mode, uptime, exchangeConnected, connectionState, startup }
-  |     Source: getRuntimeState() -- in-memory, single-instance only
-  |
-  +-- useMutation(trpc.control.executeCommand)
-        Publishes command via Redis pub/sub to ControlChannelService
-```
-
-**Problem for v6.0:** `getRuntimeState()` is in-memory. The Admin UI only sees the instance it's directly connected to via HTTP. To see multiple instances (Perseus Network view), we need Redis-persisted state that any Admin can query.
-
-## Proposed Architecture (v6.0)
-
-### Component Diagram
-
-```
-                        ┌──────────────────────────────────┐
-                        |          Admin UI                 |
-                        |  ┌────────────────────────────┐  |
-                        |  | Network Page (NEW)         |  |
-                        |  | - Instance cards           |  |
-                        |  | - Activity feed            |  |
-                        |  └────────────────────────────┘  |
-                        └───────────┬──────────────────────┘
-                                    | tRPC queries
-                                    v
-┌───────────────────────────────────────────────────────────────────────┐
-|                     API Server (any instance)                         |
-|  ┌─────────────────────────────────────────────────────────────────┐ |
-|  | network.router.ts (NEW)                                         | |
-|  | - getInstances: reads exchange:*:instance from Redis            | |
-|  | - getNetworkLog: reads logs:network:* Redis Streams             | |
-|  └─────────────────────────────────────────────────────────────────┘ |
-|  ┌─────────────────────────────────────────────────────────────────┐ |
-|  | InstanceRegistryService (NEW)                                   | |
-|  | - register(): writes instance key with full identity + TTL      | |
-|  | - heartbeat(): refreshes TTL every 15s via setInterval          | |
-|  | - deregister(): deletes key on graceful shutdown                 | |
-|  | - logEvent(): XADD to Redis Stream                              | |
-|  └─────────────────────────────────────────────────────────────────┘ |
-|  ┌─────────────────────────────────────────────────────────────────┐ |
-|  | StateMachineService (NEW)                                       | |
-|  | - Manages: idle -> starting -> warming -> active -> stopping    | |
-|  | - Fires: registry.updateState() + registry.logEvent()           | |
-|  | - Integrates with: ControlChannelService, server.ts             | |
-|  └─────────────────────────────────────────────────────────────────┘ |
-└───────────────────────────────────────────────────────────────────────┘
-                         |                          |
-                         v                          v
-                 ┌───────────────┐          ┌───────────────────┐
-                 | Redis Cluster  |          | Redis Cluster      |
-                 | (Status Keys)  |          | (Stream Keys)      |
-                 |                |          |                    |
-                 | exchange:1:    |          | logs:network:      |
-                 |   instance     |          |   coinbase         |
-                 | (TTL: 60s)    |          | (MAXLEN ~10000)    |
-                 |                |          |                    |
-                 | exchange:2:    |          | logs:network:      |
-                 |   instance     |          |   binance          |
-                 | (TTL: 60s)    |          | (MAXLEN ~10000)    |
-                 └───────────────┘          └───────────────────┘
-```
-
-### New Redis Key Patterns
-
-**Instance Status Key:**
-```
-exchange:{exchange_id}:instance
-```
-
-This replaces the existing `exchange:status:{exchangeId}` pattern. The rename from `status` to `instance` is deliberate -- `status` is the prototype name and carries stale semantics. The new key holds the full identity payload.
-
-**Hash tag consideration for Redis Cluster:** Each instance key is a single key operating on a single hash slot, so there are no cross-slot concerns. `exchange:1:instance` and `exchange:2:instance` hash to different slots, which is fine because we never operate on them atomically together. The `network.router` reads them individually.
-
-**Activity Log Streams:**
-```
-logs:network:{exchange_name}
-```
-
-For example: `logs:network:coinbase`, `logs:network:binance`.
-
-Each is a separate Redis Stream. No cross-slot issue because XADD/XRANGE/XLEN are single-key operations.
-
-**Retention:** Use `XADD ... MAXLEN ~ 10000` (approximate trimming with `~` for performance). At ~50 events/day (state transitions + periodic snapshots), this gives approximately 200 days of history. The `~` prefix tells Redis to trim efficiently without guaranteed exact count.
-
-**Why MAXLEN instead of MINID:** MINID requires computing a 90-day-old timestamp on every write, adding complexity. MAXLEN ~ 10000 achieves the same goal (bounded retention) with simpler code. If exact 90-day retention becomes important later, switch to MINID.
-
-### Instance Status Payload
-
+**Example:**
 ```typescript
-interface InstanceStatus {
-  // Identity
-  exchangeId: number;
-  exchangeName: string;
-  hostname: string;          // os.hostname()
-  ipAddress: string;         // Public IP via external service
-  adminEmail: string;        // From user_exchanges or env
-  adminDisplayName: string;  // From users table
+// packages/schemas/src/public/candle.schema.ts
+import { z } from 'zod';
+import { extendZodWithOpenApi } from 'zod-openapi';
 
-  // State
-  connectionState: InstanceState;
-  symbolCount: number;
-  monitoredSymbols: string[];
+extendZodWithOpenApi(z);
 
-  // Timestamps
-  registeredAt: string;      // ISO string, set once at registration
-  connectedAt: string | null;
-  lastHeartbeat: string;     // ISO string, updated every heartbeat
-  lastError: string | null;
-
-  // Metadata
-  version: string;           // package.json version
-  uptime: number;            // seconds since process start
-}
-
-type InstanceState = 'idle' | 'starting' | 'warming' | 'active' | 'stopping' | 'stopped';
-```
-
-### State Machine
-
-```
-idle ──► starting ──► warming ──► active ──► stopping ──► stopped
-  ▲                                  │                       │
-  └──────────────────────────────────┘                       │
-  └──────────────────────────────────────────────────────────┘
-         (via 'start' command)            (graceful shutdown
-                                           or 'stop' command)
-
-  error can occur during: starting, warming, active
-  on error: state stays the same, lastError populated, logEvent fired
-```
-
-**State transitions and where they fire from:**
-
-| Transition | Trigger | Source File |
-|------------|---------|-------------|
-| `idle` (initial) | Server starts without `--autostart` | `server.ts` line ~414 |
-| `idle -> starting` | `start` command received | `control-channel.service.ts` handleStart() line ~437 |
-| `starting -> warming` | Backfill complete, indicators starting | `control-channel.service.ts` handleStart() line ~527 |
-| `warming -> active` | All services started, WebSocket connected | `control-channel.service.ts` handleStart() line ~571 |
-| `active -> stopping` | `stop` command received or SIGINT/SIGTERM | `control-channel.service.ts` handleStop() or `server.ts` shutdown() |
-| `stopping -> stopped` | All services stopped | `control-channel.service.ts` handleStop() line ~636 |
-| `stopping -> idle` | Stop complete, instance remains running | `control-channel.service.ts` handleStop() |
-| `idle -> starting -> warming -> active` | `--autostart` flag | `server.ts` autostart path line ~257-410 |
-
-**Note:** The existing `ConnectionState` type in `runtime-state.ts` uses `'idle' | 'connecting' | 'connected' | 'disconnected' | 'error'`. The v6.0 state machine uses `'idle' | 'starting' | 'warming' | 'active' | 'stopping' | 'stopped'` for the persisted instance state. The in-memory `ConnectionState` can map to the persisted state or be replaced entirely. Recommend replacing the in-memory state with the persisted state to avoid dual state tracking.
-
-## Integration Points (Answers to Specific Questions)
-
-### 1. Where Does Instance Registration Happen?
-
-**Answer: Early in `start()`, after pre-flight checks pass, before any exchange connection.**
-
-```
-start()
-  validateEnv()
-  Fastify.register(...)
-  Pre-flight: DB + Redis checks
-  >>> InstanceRegistryService.register() <<<    <-- HERE
-  >>> heartbeat interval starts <<<              <-- HERE
-  if --autostart: ...
-  else: idle mode
-  ...
-  Fastify.listen()
-```
-
-**Rationale:** Registration should happen as soon as Redis is available. The instance announces "I exist, I'm idle" immediately. State transitions to `starting`, `warming`, `active` happen later as the exchange connects.
-
-**Specific code change:** In `server.ts`, after line 239 (`logger.info('Pre-flight checks passed')`), create `InstanceRegistryService` and call `register()`.
-
-**For autostart path:** The state transitions are:
-1. `register()` -> state `idle` (immediately after pre-flight)
-2. Before backfill -> state `starting`
-3. After backfill, during warmup -> state `warming`
-4. After all services started -> state `active`
-
-**For idle path:** The instance registers with state `idle` and stays there until a `start` command arrives.
-
-### 2. How Does Heartbeat Interact with Redis Connection?
-
-**Answer: `SET ... EX` on the instance key, using the existing main Redis client (not the subscriber), refreshing TTL every 15 seconds.**
-
-```typescript
-// In InstanceRegistryService
-private heartbeatInterval: NodeJS.Timeout | null = null;
-
-async startHeartbeat(): Promise<void> {
-  this.heartbeatInterval = setInterval(async () => {
-    try {
-      const key = instanceKey(this.exchangeId);
-      const status = await this.buildStatus();
-      // SET with EX atomically writes and sets TTL
-      await this.redis.set(key, JSON.stringify(status), 'EX', 60);
-    } catch (err) {
-      logger.error({ err }, 'Heartbeat failed');
-    }
-  }, 15_000); // 15 second interval
-}
-```
-
-**Why SET EX instead of separate SET + EXPIRE:**
-- Atomic operation -- no window where key exists without TTL
-- Single round-trip to Redis
-- Works identically on regular Redis and ioredis Cluster mode
-- `SET` is a single-key operation, no cross-slot concerns
-
-**TTL design: 60s TTL with 15s heartbeat interval.**
-- If instance misses 3 consecutive heartbeats (45s of failure), key expires at 60s.
-- This is a standard "dead man's switch" pattern.
-- On graceful shutdown, key is explicitly deleted (no need to wait for TTL).
-
-**Redis connection:** Uses the **main** Redis client (`getRedisClient()`), not the subscriber. The subscriber is in pub/sub mode and cannot execute regular commands. The main client handles `SET`, `GET`, `DEL`, `XADD` alongside its other duties. ioredis Cluster mode handles routing to the correct shard transparently.
-
-**Important:** The existing code already creates a `subscriberRedis = redis.duplicate()` for pub/sub (server.ts line 233). The heartbeat uses the main `redis` client, which is not in pub/sub mode and can execute any command.
-
-### 3. Where Do State Transitions Fire From?
-
-**Answer: From `ControlChannelService` handlers (for command-driven transitions) and `server.ts` (for startup/shutdown transitions). The `StateMachineService` centralizes the transition logic.**
-
-**Current state management is scattered:**
-- `server.ts` calls `initRuntimeState()` at lines 403 and 414
-- `ControlChannelService.updateConnectionState()` at line 648 calls `updateRuntimeState()`
-- `ExchangeAdapterFactory.setupConnectionTracking()` at line 177 writes to Redis directly
-
-**v6.0 consolidation:**
-
-```typescript
-class StateMachineService {
-  constructor(
-    private registry: InstanceRegistryService,
-    private validTransitions: Map<InstanceState, InstanceState[]>
-  ) {}
-
-  async transition(newState: InstanceState, metadata?: { error?: string }): Promise<void> {
-    const current = this.currentState;
-    if (!this.validTransitions.get(current)?.includes(newState)) {
-      throw new Error(`Invalid transition: ${current} -> ${newState}`);
-    }
-    this.currentState = newState;
-    await this.registry.updateState(newState, metadata);
-    await this.registry.logEvent('state_change', { from: current, to: newState });
-  }
-}
-```
-
-**Integration with existing code:**
-
-| Location | Current Code | v6.0 Change |
-|----------|-------------|-------------|
-| `server.ts` line 403 | `initRuntimeState({ connectionState: 'connected' })` | `stateMachine.transition('active')` |
-| `server.ts` line 414 | `initRuntimeState({ connectionState: 'idle' })` | `stateMachine.transition('idle')` |
-| `control-channel.service.ts` line 437 | `this.updateConnectionState('connecting')` | `stateMachine.transition('starting')` |
-| `control-channel.service.ts` line 571 | `this.updateConnectionState('connected')` | `stateMachine.transition('active')` |
-| `control-channel.service.ts` line 635 | `this.updateConnectionState('idle')` | `stateMachine.transition('idle')` |
-| `server.ts` shutdown handler line 485 | No state tracking | `stateMachine.transition('stopping')` then `registry.deregister()` |
-| `adapter-factory.ts` line 177-226 | `setupConnectionTracking()` writes to Redis | **Remove.** State machine owns all state. Adapter events feed into state machine, not directly to Redis. |
-
-**The warmup state is new.** Currently, `handleStart()` goes from `connecting` straight to `connected`. In v6.0, the warmup phase (indicator warmup, line 532-546 in control-channel.service.ts) is explicitly surfaced as `warming` state.
-
-### 4. How Does the Admin UI Read Instance Status and Stream Logs?
-
-**Answer: tRPC polling via a new `network.router.ts`, same pattern as the existing `control.getStatus`. No WebSocket or Redis subscription needed for the initial implementation.**
-
-**Why polling, not WebSocket or Redis subscription:**
-
-1. **Existing pattern:** The Admin UI already polls `control.getStatus` every 5s. Adding another polling endpoint is consistent and requires zero infrastructure changes.
-2. **Any instance can serve the data:** Since instance status is in Redis, any API instance the Admin connects to can read all instances' status. There's no need for the Admin to connect to each instance directly.
-3. **WebSocket adds complexity for marginal benefit:** Instance status changes every 15s (heartbeat). Polling every 5s is sufficient. Real-time WebSocket would save a few seconds of latency but adds WebSocket connection management for the Network page.
-4. **SSE (tRPC subscriptions) are promising for v6.1:** tRPC v11 supports SSE subscriptions natively. For v6.0, polling is simpler and proven. For v6.1, consider migrating the activity feed to SSE for true real-time.
-
-**New tRPC Router:**
-
-```typescript
-// apps/api/src/routers/network.router.ts
-
-export const networkRouter = router({
-  // Get all registered instances
-  getInstances: protectedProcedure.query(async ({ ctx }) => {
-    // Scan for exchange:*:instance keys
-    // Read each key's JSON value
-    // Return array of InstanceStatus
+export const PublicCandleSchema = z.object({
+  symbol: z.string().openapi({
+    example: 'BTC-USD',
+    description: 'Trading pair symbol'
   }),
+  timestamp: z.number().int().positive().openapi({
+    example: 1708291200000,
+    description: 'Candle open time (Unix milliseconds)'
+  }),
+  open: z.number().positive().openapi({ example: 50123.45 }),
+  high: z.number().positive().openapi({ example: 50250.00 }),
+  low: z.number().positive().openapi({ example: 50050.00 }),
+  close: z.number().positive().openapi({ example: 50200.00 }),
+  volume: z.number().nonnegative().openapi({ example: 123.456 }),
+  timeframe: z.enum(['1m', '5m', '15m', '1h', '4h', '1d']).openapi({
+    description: 'Candle duration'
+  }),
+}).openapi('Candle');
 
-  // Get network activity log (paginated)
-  getNetworkLog: protectedProcedure
-    .input(z.object({
-      exchange: z.string().optional(),  // Filter by exchange
-      limit: z.number().default(50),
-      cursor: z.string().optional(),    // Redis Stream ID for pagination
-    }))
-    .query(async ({ input }) => {
-      // XREVRANGE on logs:network:{exchange} or all streams
-      // Return entries with cursor for next page
+// Route definition with OpenAPI metadata
+export const getCandlesRoute = {
+  method: 'GET' as const,
+  url: '/public/v1/candles/:symbol',
+  schema: {
+    params: z.object({
+      symbol: z.string().openapi({ example: 'BTC-USD' }),
     }),
-});
+    querystring: z.object({
+      timeframe: z.enum(['1m', '5m', '15m', '1h', '4h', '1d']).default('1h'),
+      limit: z.number().int().min(1).max(500).default(100),
+    }),
+    response: {
+      200: z.array(PublicCandleSchema),
+    },
+  },
+};
 ```
 
-**Admin UI pattern:**
+### Pattern 3: Redis Pub/Sub to WebSocket Fan-Out with Backpressure
 
+**What:** Subscribe to Redis pub/sub channels, broadcast to N WebSocket clients, handle backpressure when clients can't keep up.
+
+**When to use:** When external clients need real-time updates from internal pub/sub events.
+
+**Trade-offs:**
+- **Pro:** Decouples external clients from internal architecture (they don't need Redis access)
+- **Pro:** WebSocket bridge can run on multiple pw-host instances behind load balancer
+- **Con:** Memory pressure from buffering messages for slow clients
+- **Con:** Requires backpressure handling (pause client, drop messages, or disconnect)
+
+**Example:**
 ```typescript
-// apps/admin/src/pages/Network.tsx
-const { data: instances } = useQuery({
-  ...trpc.network.getInstances.queryOptions(),
-  refetchInterval: 5000, // 5s polling, same as ControlPanel
-});
+// packages/public-api/src/websocket/market-data-bridge.ts
+import type { RedisClient } from '@livermore/cache';
+import type { WebSocket } from 'ws';
 
-const { data: activityLog } = useQuery({
-  ...trpc.network.getNetworkLog.queryOptions({ limit: 50 }),
-  refetchInterval: 10000, // 10s for activity log (less urgent)
-});
-```
+interface BridgeClient {
+  socket: WebSocket;
+  subscribedChannels: Set<string>;
+  isPaused: boolean;
+  bufferSize: number;
+}
 
-**Reading instance keys in Redis Cluster:**
+const MAX_BUFFER_SIZE = 100; // Max queued messages per client
 
-The `getInstances` query needs to find all `exchange:*:instance` keys. In Redis Cluster, `KEYS` is problematic (scans a single node). Options:
+export class MarketDataBridge {
+  private clients = new Map<WebSocket, BridgeClient>();
+  private subscriberRedis: RedisClient;
 
-1. **Known exchange IDs from database:** Query the `exchanges` table for active exchanges, then `GET exchange:{id}:instance` for each. This is the correct approach -- we know exactly which exchanges exist from the DB.
-2. **SCAN with pattern:** Works but requires scanning all nodes in Cluster. Unnecessary complexity when we know the exchange IDs.
+  constructor(subscriberRedis: RedisClient) {
+    this.subscriberRedis = subscriberRedis;
 
-**Recommendation:** Option 1. Query `exchanges` table, then `GET` each instance key. An exchange with no key (TTL expired) is a dead instance.
+    // Subscribe to all candle close events (pattern subscription)
+    this.subscriberRedis.psubscribe('channel:candle:close:*', (err) => {
+      if (err) throw err;
+    });
 
-### 5. How to Enforce One-Instance-Per-Exchange?
+    // Handle incoming pub/sub messages
+    this.subscriberRedis.on('pmessage', (pattern, channel, message) => {
+      this.fanOutMessage(channel, message);
+    });
+  }
 
-**Answer: Check-before-start pattern with advisory TTL, not a distributed lock.**
+  addClient(socket: WebSocket, subscriptions: string[]): void {
+    const client: BridgeClient = {
+      socket,
+      subscribedChannels: new Set(subscriptions),
+      isPaused: false,
+      bufferSize: 0,
+    };
 
-**The constraint:** "One instance per exchange" means only one Livermore API should actively serve `exchangeId=1` (Coinbase) at any time. If Mike starts a second Coinbase instance while one is already running, it should be rejected.
+    this.clients.set(socket, client);
 
-**Implementation:**
+    // Handle backpressure: pause when buffer fills
+    socket.on('drain', () => {
+      client.isPaused = false;
+      client.bufferSize = 0;
+    });
 
-```typescript
-// In handleStart() of ControlChannelService, before any exchange work:
+    socket.on('close', () => {
+      this.clients.delete(socket);
+    });
+  }
 
-async enforceOneInstance(exchangeId: number): Promise<void> {
-  const key = instanceKey(exchangeId);
-  const existing = await this.redis.get(key);
+  private fanOutMessage(channel: string, message: string): void {
+    // Transform internal event to public format
+    const publicMessage = this.transformToPublicFormat(channel, message);
 
-  if (existing) {
-    const status = JSON.parse(existing) as InstanceStatus;
-    // Check if the existing instance is this instance (re-start scenario)
-    if (status.hostname === os.hostname() && status.registeredAt === this.registeredAt) {
-      return; // Same instance, allow re-start
+    for (const [socket, client] of this.clients) {
+      // Check if client subscribed to this channel
+      if (!this.matchesSubscription(channel, client.subscribedChannels)) {
+        continue;
+      }
+
+      // Skip if socket not ready
+      if (socket.readyState !== 1) continue; // WebSocket.OPEN
+
+      // Backpressure handling
+      if (client.isPaused || client.bufferSize >= MAX_BUFFER_SIZE) {
+        // Option 1: Drop message (for high-frequency data)
+        continue;
+
+        // Option 2: Disconnect slow client (uncomment to enable)
+        // socket.close(1008, 'Client too slow');
+        // continue;
+      }
+
+      // Send message
+      const success = socket.send(publicMessage);
+
+      // Track buffer if send returned false (TCP buffer full)
+      if (success === false) {
+        client.isPaused = true;
+        client.bufferSize++;
+      }
     }
-    // Another instance is active
-    throw new Error(
-      `Exchange ${exchangeId} is already served by ${status.hostname} ` +
-      `(${status.adminDisplayName}). Stop that instance first.`
-    );
+  }
+
+  private transformToPublicFormat(channel: string, message: string): string {
+    // Parse internal event, transform to public schema
+    const event = JSON.parse(message);
+
+    // Example: strip internal fields
+    const publicEvent = {
+      type: 'candle_close',
+      data: {
+        symbol: event.symbol,
+        timestamp: event.timestamp,
+        // ... public fields only
+      },
+    };
+
+    return JSON.stringify(publicEvent);
+  }
+
+  private matchesSubscription(channel: string, subscriptions: Set<string>): boolean {
+    // Example: client subscribes to "BTC-USD:1h", channel is "channel:candle:close:BTC-USD:1h"
+    for (const sub of subscriptions) {
+      if (channel.includes(sub)) return true;
+    }
+    return false;
   }
 }
 ```
 
-**Why check-before-start, not a distributed lock:**
+### Pattern 4: Runtime Mode Switching
 
-1. **Simplicity:** A Redis `SET NX` check is one command. A distributed lock (Redlock) requires multiple Redis nodes, lock renewal, and failure handling.
-2. **TTL handles crashes:** If instance A crashes, its key expires in 60s. Instance B can then start. No lock cleanup needed.
-3. **No race condition concern:** Starting an exchange takes 30-60 seconds (backfill, warmup). The check happens at the beginning. Even if two instances race, the key's TTL ensures the loser's heartbeat will see the winner's key and can self-terminate.
-4. **Matches the constraint semantics:** The requirement says "one instance per exchange," not "exclusive lock." The check is advisory -- it prevents accidental double-start, not malicious contention.
+**What:** Control which services start at runtime based on environment variable, without separate codebases.
 
-**Edge case -- stale key from crash:** If instance A crashes and instance B starts within 60s (before TTL expires), the check will reject B. This is acceptable -- wait 60s for the dead instance's TTL to expire, then start. If faster recovery is needed, add a `force-start` command that deletes the stale key.
+**When to use:** When you need different startup behavior (exchange ingest vs API-only) from same binary.
 
-### 6. Redis Key Patterns for Azure Managed Redis with Cluster Mode
+**Trade-offs:**
+- **Pro:** Single codebase, easier deployments, shared bug fixes
+- **Pro:** Can test both modes locally without separate builds
+- **Con:** Conditional logic in startup sequence increases complexity
+- **Con:** Easy to accidentally start wrong services if mode detection breaks
 
-**Answer: All v6.0 keys are single-key operations. No cross-slot concerns.**
-
-**Key patterns:**
-
-| Key | Operation | Cross-Slot? |
-|-----|-----------|-------------|
-| `exchange:{id}:instance` | SET, GET, DEL | No (single key) |
-| `logs:network:{exchange_name}` | XADD, XREVRANGE, XLEN | No (single key) |
-| `livermore:commands:{sub}` | PUBLISH, SUBSCRIBE | No (single key) |
-| `livermore:responses:{sub}` | PUBLISH, SUBSCRIBE | No (single key) |
-
-**The `getInstances` query reads multiple keys but does so sequentially (one GET per known exchange ID), not in a single multi-key command. No CROSSSLOT risk.**
-
-**Hash tag consideration:** Not needed. Hash tags (`{tag}`) are only useful when you need multi-key atomic operations (MGET, transactions). Since all v6.0 operations are single-key, natural hashing is fine.
-
-**Azure Managed Redis specifics:**
-- OSS Cluster mode distributes keys across shards automatically
-- ioredis Cluster handles `MOVED` and `ASK` redirections transparently
-- `SET ... EX` (heartbeat) works identically to standalone Redis
-- `XADD` (stream writes) works identically to standalone Redis
-- `XREVRANGE` (stream reads) works identically to standalone Redis
-
-**Existing precedent in codebase:** The `deleteKeysClusterSafe()` function in `client.ts` (line 178) already handles cross-slot concerns by deleting keys one at a time. The v6.0 keys don't need this because they're never bulk-operated.
-
-## Component Boundaries
-
-### What Talks to What
-
-```
-┌─────────────────────────────────────────────────────────────────────────┐
-|                         New Components (v6.0)                            |
-|                                                                          |
-|  InstanceRegistryService                                                |
-|    - Writes to: exchange:{id}:instance (SET EX)                         |
-|    - Writes to: logs:network:{name} (XADD)                             |
-|    - Reads from: exchange:{id}:instance (GET, for self-check)           |
-|    - Depends on: Redis client, os module, public-ip fetch               |
-|                                                                          |
-|  StateMachineService                                                    |
-|    - Calls: InstanceRegistryService.updateState()                       |
-|    - Calls: InstanceRegistryService.logEvent()                          |
-|    - Called by: ControlChannelService, server.ts                        |
-|    - Replaces: runtime-state.ts updateRuntimeState() for state machine  |
-|                                                                          |
-|  network.router.ts                                                      |
-|    - Reads from: exchanges table (DB), exchange:{id}:instance (Redis)   |
-|    - Reads from: logs:network:{name} (Redis Streams XREVRANGE)          |
-|    - Called by: Admin UI (tRPC polling)                                  |
-|                                                                          |
-|  Network.tsx (Admin page)                                               |
-|    - Calls: trpc.network.getInstances                                   |
-|    - Calls: trpc.network.getNetworkLog                                  |
-|    - Displays: Instance cards, activity feed                            |
-└─────────────────────────────────────────────────────────────────────────┘
-```
-
-### Data Flow: Status Read
-
-```
-Admin UI (Network page)
-  |
-  +-- useQuery(trpc.network.getInstances) -- polls every 5s
-  |     |
-  |     +-- network.router.getInstances
-  |           |
-  |           +-- SELECT id, name FROM exchanges WHERE is_active = true
-  |           +-- For each exchange:
-  |                 GET exchange:{id}:instance
-  |                 Parse JSON -> InstanceStatus
-  |                 If key missing -> instance is dead (TTL expired)
-  |           +-- Return InstanceStatus[]
-  |
-  +-- useQuery(trpc.network.getNetworkLog) -- polls every 10s
-        |
-        +-- network.router.getNetworkLog
-              |
-              +-- XREVRANGE logs:network:{exchange} + - COUNT 50
-              +-- Return entries[]
-```
-
-### Data Flow: State Transition
-
-```
-ControlChannelService.handleStart()
-  |
-  +-- stateMachine.transition('starting')
-  |     |
-  |     +-- registry.updateState('starting')
-  |     |     |
-  |     |     +-- SET exchange:{id}:instance <json> EX 60
-  |     |
-  |     +-- registry.logEvent('state_change', { from: 'idle', to: 'starting' })
-  |           |
-  |           +-- XADD logs:network:{name} MAXLEN ~ 10000 * event state_change ...
-  |
-  +-- ... backfill ...
-  |
-  +-- stateMachine.transition('warming')
-  +-- ... warmup ...
-  +-- stateMachine.transition('active')
-```
-
-### Data Flow: Heartbeat
-
-```
-setInterval (every 15s)
-  |
-  +-- registry.heartbeat()
-        |
-        +-- Build current InstanceStatus (state, symbolCount, uptime, etc.)
-        +-- SET exchange:{id}:instance <json> EX 60
-```
-
-### Data Flow: Graceful Shutdown
-
-```
-process.on('SIGINT' / 'SIGTERM')
-  |
-  +-- stateMachine.transition('stopping')
-  +-- ... stop services in reverse order ...
-  +-- registry.deregister()
-  |     |
-  |     +-- DEL exchange:{id}:instance
-  |     +-- XADD logs:network:{name} ... event deregistered
-  +-- clearInterval(heartbeatInterval)
-  +-- redis.quit()
-```
-
-## Files That Need Changes
-
-### New Files
-
-| File | Purpose |
-|------|---------|
-| `apps/api/src/services/instance-registry.service.ts` | Instance registration, heartbeat, deregistration, logging |
-| `apps/api/src/services/state-machine.service.ts` | State transition validation and orchestration |
-| `apps/api/src/routers/network.router.ts` | tRPC endpoints for Network view |
-| `packages/cache/src/keys.ts` | New key functions: `instanceKey()`, `networkLogKey()` |
-| `packages/schemas/src/network/instance.schema.ts` | Zod schemas for InstanceStatus, NetworkLogEntry |
-| `apps/admin/src/pages/Network.tsx` | Network view page |
-| `apps/admin/src/components/network/InstanceCard.tsx` | Instance status card component |
-| `apps/admin/src/components/network/ActivityFeed.tsx` | Activity log feed component |
-
-### Modified Files
-
-| File | Change |
-|------|--------|
-| `apps/api/src/server.ts` | Add registry.register() after pre-flight, wire state transitions, add shutdown deregister |
-| `apps/api/src/services/control-channel.service.ts` | Replace updateConnectionState() calls with stateMachine.transition() |
-| `apps/api/src/services/runtime-state.ts` | Add state machine fields OR replace entirely with persisted state |
-| `apps/api/src/services/exchange/adapter-factory.ts` | Remove setupConnectionTracking() and setConnectionStatus() -- state machine owns this now |
-| `apps/api/src/services/types/service-registry.ts` | Add registry and stateMachine to ServiceRegistry |
-| `apps/api/src/routers/index.ts` | Add networkRouter to appRouter |
-| `apps/api/src/routers/control.router.ts` | getStatus reads from registry instead of in-memory state (or alongside) |
-| `apps/admin/src/App.tsx` | Add Network nav link and route |
-| `packages/schemas/src/index.ts` | Export new network schemas |
-| `packages/cache/src/index.ts` | Export new key functions |
-
-### Removed/Deprecated Code
-
-| Code | Reason |
-|------|--------|
-| `ExchangeConnectionStatus` interface in `adapter-factory.ts` | Replaced by `InstanceStatus` |
-| `connectionStatusKey()` in `adapter-factory.ts` | Replaced by `instanceKey()` in `keys.ts` |
-| `setupConnectionTracking()` in `adapter-factory.ts` | State machine handles all state |
-| `updateHeartbeat()` in `adapter-factory.ts` | Replaced by `InstanceRegistryService.heartbeat()` |
-| `getConnectionStatus()` in `adapter-factory.ts` | Replaced by `network.router.getInstances` |
-| `setConnectionStatus()` in `adapter-factory.ts` | Replaced by `InstanceRegistryService.updateState()` |
-
-## Suggested Build Order
-
-Based on dependency analysis, the recommended phase structure:
-
-### Phase 1: Instance Registry Foundation
-
-**Dependencies:** None (uses existing Redis client)
-**Creates:** The core service that all other phases depend on
-
-1. Add `instanceKey()` and `networkLogKey()` to `packages/cache/src/keys.ts`
-2. Create `InstanceStatus` Zod schema in `packages/schemas/src/network/`
-3. Create `InstanceRegistryService` in `apps/api/src/services/`
-   - `register()`: Detect hostname, fetch public IP, write to Redis with TTL
-   - `heartbeat()`: SET EX refresh on interval
-   - `deregister()`: DEL key, stop interval
-   - `logEvent()`: XADD to stream with MAXLEN trimming
-   - `updateState()`: Update state field and re-write key
-4. Wire into `server.ts`: register after pre-flight, deregister in shutdown handler
-5. Start heartbeat interval
-
-**Verification:** Start API, check Redis for `exchange:1:instance` key with TTL. Stop API, verify key deleted. Wait 60s after kill -9, verify key expired.
-
-### Phase 2: State Machine
-
-**Dependencies:** Phase 1 (needs registry for state persistence)
-**Creates:** Validated state transitions, replaces scattered updateRuntimeState calls
-
-1. Create `StateMachineService` with valid transition map
-2. Integrate with `ControlChannelService.handleStart()` -- replace `updateConnectionState()` calls
-3. Integrate with `ControlChannelService.handleStop()`
-4. Integrate with `server.ts` autostart path
-5. Integrate with `server.ts` shutdown handler
-6. Remove `setupConnectionTracking()` from `adapter-factory.ts`
-7. Preserve backward compatibility: `getRuntimeState()` still works for existing `control.getStatus`
-
-**Verification:** Start with `--autostart`, observe state transitions: idle -> starting -> warming -> active. Send `stop` command, observe: active -> stopping -> idle. Check Redis Stream for logged events.
-
-### Phase 3: Network Router + One-Instance Enforcement
-
-**Dependencies:** Phase 1 (reads instance keys), Phase 2 (reads state)
-**Creates:** API endpoints for Admin UI to consume, instance uniqueness check
-
-1. Create `network.router.ts` with `getInstances` and `getNetworkLog` endpoints
-2. Register in `apps/api/src/routers/index.ts`
-3. Add one-instance-per-exchange check in `handleStart()` (before exchange connection)
-4. Add `force-start` command variant that overrides stale instance check
-
-**Verification:** Query `trpc.network.getInstances` via curl/Postman. Verify response includes running instance. Try to start second instance for same exchange, verify rejection.
-
-### Phase 4: Admin UI Network View
-
-**Dependencies:** Phase 3 (network router endpoints)
-**Creates:** Visual Network page in Admin UI
-
-1. Create `Network.tsx` page with instance cards and activity feed
-2. Create `InstanceCard.tsx` component (shows identity, state, heartbeat freshness)
-3. Create `ActivityFeed.tsx` component (reverse-chronological event log)
-4. Add "Network" link to nav bar in `App.tsx`
-5. Implement 5s polling for instances, 10s polling for activity log
-6. Handle dead instances (key expired) -- show as "Offline" with last known info
-
-**Verification:** Open Admin UI Network page. See own instance as active. Kill instance, wait 60s, see it disappear or show as Offline.
-
-### Phase 5: Bug Fixes and Cleanup
-
-**Dependencies:** All previous phases
-**Creates:** Clean state, removes prototype code
-
-1. Delete `ExchangeConnectionStatus` and related methods from `adapter-factory.ts`
-2. Clean up old `exchange:status:*` keys from Redis (one-time script)
-3. Ensure `control.getStatus` still works (backward compat with existing ControlPanel)
-4. Update `ControlPanel.tsx` to optionally show instance identity info
-5. Update health check endpoint to include instance state
-
-**Verification:** Existing ControlPanel page still works. Network page shows accurate data. No orphaned Redis keys.
-
-## Public IP Detection
-
-The instance status includes `ipAddress` for identifying where instances run. Options:
-
-**Recommendation: Simple HTTP fetch to `https://api.ipify.org` at startup.**
-
+**Example:**
 ```typescript
-async function getPublicIp(): Promise<string> {
-  try {
-    const response = await fetch('https://api.ipify.org?format=text');
-    return response.text();
-  } catch {
-    return 'unknown';
+// packages/utils/src/runtime-mode.ts
+export type RuntimeMode = 'exchange' | 'pw-host';
+
+export function getRuntimeMode(): RuntimeMode {
+  const mode = process.env.RUNTIME_MODE?.toLowerCase();
+
+  if (mode === 'pw-host') return 'pw-host';
+  if (mode === 'exchange') return 'exchange';
+
+  // Default to exchange for backward compatibility
+  return 'exchange';
+}
+
+export function validateRuntimeMode(mode: RuntimeMode, config: EnvConfig): void {
+  if (mode === 'exchange') {
+    // Exchange mode requires API credentials
+    if (!config.Coinbase_ApiKeyId || !config.Coinbase_EcPrivateKeyPem) {
+      throw new Error('RUNTIME_MODE=exchange requires Coinbase API credentials');
+    }
   }
+
+  if (mode === 'pw-host') {
+    // PW-Host mode requires Redis but NOT exchange credentials
+    if (!config.LIVERMORE_REDIS_URL) {
+      throw new Error('RUNTIME_MODE=pw-host requires Redis connection');
+    }
+  }
+}
+
+// apps/api/src/server.ts
+import { getRuntimeMode, validateRuntimeMode } from '@livermore/utils';
+
+async function start() {
+  const config = validateEnv();
+  const runtimeMode = getRuntimeMode();
+
+  validateRuntimeMode(runtimeMode, config);
+
+  logger.info({ runtimeMode }, 'Starting Livermore API server');
+
+  // ... Fastify setup, Redis connection, database connection ...
+
+  // ============================================
+  // RUNTIME MODE SWITCH
+  // ============================================
+
+  if (runtimeMode === 'exchange') {
+    // Start exchange adapters, indicator service, alert service
+    logger.info('Starting EXCHANGE mode: ingesting live data');
+
+    const exchangeAdapter = await adapterFactory.create(1); // Coinbase
+    await exchangeAdapter.connect();
+    exchangeAdapter.subscribe(monitoredSymbols, '5m');
+
+    await indicatorService.start(indicatorConfigs);
+    await alertService.start(monitoredSymbols, SUPPORTED_TIMEFRAMES);
+
+  } else if (runtimeMode === 'pw-host') {
+    // Skip exchange adapters, read-only cached data
+    logger.info('Starting PW-HOST mode: serving cached data only');
+
+    // Exchange adapters NOT started
+    // Indicator service NOT started (no new calculations)
+    // Alert service NOT started
+
+    // Services still available:
+    // - Public API routes (read from Redis cache)
+    // - WebSocket bridge (relay existing pub/sub)
+    // - Database queries (symbols, positions)
+  }
+
+  // Public API routes registered regardless of mode
+  await registerPublicRoutes(fastify, { redis, db, mode: runtimeMode });
+
+  // Start server
+  await fastify.listen({ port, host });
 }
 ```
 
-**Why not a library:**
-- `public-ip` npm package adds a dependency for a single HTTP call
-- Node.js 20+ has native `fetch`
-- Fallback to `'unknown'` if offline or behind firewall
+### Pattern 5: Data Transformation Layer (DTO Pattern)
 
-**When:** Once at startup, cached for the process lifetime. IP doesn't change during a single server run.
+**What:** Transform internal database/cache schemas to public API schemas, stripping proprietary fields.
 
-## Compatibility with Existing ControlPanel
+**When to use:** When internal data model contains sensitive information that shouldn't be exposed publicly.
 
-The existing `ControlPanel.tsx` polls `control.getStatus` which reads from `getRuntimeState()` (in-memory). This must continue to work during and after v6.0.
+**Trade-offs:**
+- **Pro:** Prevents accidental leakage of internal IDs, formulas, user data
+- **Pro:** Decouples public API from internal schema changes
+- **Con:** Extra mapping code to maintain
+- **Con:** Performance overhead from copying/transforming objects (mitigate with Object.assign for simple cases)
 
-**Strategy:**
-1. `StateMachineService` updates both the Redis instance key AND the in-memory `RuntimeState`
-2. `control.getStatus` continues to return in-memory state (fast, no Redis round-trip)
-3. `network.getInstances` reads from Redis (cross-instance visibility)
-4. Over time, `control.getStatus` can delegate to Redis if needed, but no urgency
+**Example:**
+```typescript
+// packages/schemas/src/indicators/macdv.schema.ts (INTERNAL)
+export const MacdVAnalysisSchema = z.object({
+  symbol: z.string(),
+  timestamp: z.number(),
+  macdV: z.number(),
+  signal: z.number(),
+  histogram: z.number(),
+  stage: MacdVStageSchema,
+  zone: MacdVZoneSchema,
 
-This means the ControlPanel page works exactly as before. The Network page is additive.
+  // PROPRIETARY FIELDS (internal only)
+  fastEMA: z.number(),        // Don't expose formula internals
+  slowEMA: z.number(),        // Don't expose formula internals
+  atr: z.number(),            // Don't expose normalization factor
+  fastPeriod: z.number(),     // Don't expose config
+  slowPeriod: z.number(),     // Don't expose config
+  signalPeriod: z.number(),   // Don't expose config
+  userId: z.number(),         // Don't expose internal user ID
+});
+
+// packages/schemas/src/public/indicator.schema.ts (PUBLIC)
+export const PublicMacdVSchema = z.object({
+  symbol: z.string().openapi({ example: 'BTC-USD' }),
+  timestamp: z.number().int().openapi({ example: 1708291200000 }),
+  macdV: z.number().openapi({ example: 45.2 }),
+  signal: z.number().openapi({ example: 42.1 }),
+  histogram: z.number().openapi({ example: 3.1 }),
+  stage: z.enum(['oversold', 'rebounding', 'rallying', 'overbought', 'retracing', 'reversing', 'ranging']).openapi({
+    description: 'Momentum phase classification'
+  }),
+  zone: z.enum(['deep_negative', 'negative', 'neutral', 'positive', 'elevated', 'overbought']).openapi({
+    description: 'Value zone for context'
+  }),
+  // Proprietary fields OMITTED
+}).openapi('MacdVIndicator');
+
+// packages/public-api/src/transformers/indicator.transformer.ts
+import type { MacdVAnalysis } from '@livermore/schemas';
+import type { PublicMacdV } from '@livermore/schemas/public';
+
+export function transformMacdVToPublic(internal: MacdVAnalysis): PublicMacdV {
+  // Explicitly pick only public fields (whitelist approach)
+  return {
+    symbol: internal.symbol,
+    timestamp: internal.timestamp,
+    macdV: internal.macdV,
+    signal: internal.signal,
+    histogram: internal.histogram,
+    stage: internal.stage,
+    zone: internal.zone,
+    // fastEMA, slowEMA, atr, userId, etc. NOT included
+  };
+}
+
+// Validation: ensure no internal fields leak
+const result = transformMacdVToPublic(internalData);
+PublicMacdVSchema.parse(result); // Throws if internal fields present
+```
+
+## Data Flow
+
+### Public API Request Flow (pw-host mode)
+
+```
+HTTP GET /public/v1/candles/BTC-USD?timeframe=1h&limit=100
+    ↓
+Fastify Route Handler
+    ↓
+Zod Schema Validation (query params)
+    ↓
+Redis Cache Read (exchangeCandleKey)
+    ↓
+Data Transformation Layer (Internal Candle → Public Candle)
+    ↓
+Response (200 OK, JSON array of candles)
+```
+
+### WebSocket Bridge Data Flow
+
+```
+Exchange Adapter (EXCHANGE mode only)
+    ↓ (publishes)
+Redis Pub/Sub: channel:candle:close:BTC-USD:1h
+    ↓ (psubscribe)
+MarketDataBridge.fanOutMessage()
+    ↓ (filters by subscription)
+Transform to Public Format (strip internal fields)
+    ↓ (check backpressure)
+WebSocket.send() to N clients
+    ↓
+External WebSocket Clients
+```
+
+### Runtime Mode Decision Flow
+
+```
+Server Startup
+    ↓
+Read RUNTIME_MODE env var
+    ↓
+┌─────────────────────────────────┐
+│ RUNTIME_MODE=exchange?          │
+├─────────────────────────────────┤
+│ YES → Start Exchange Adapters   │
+│       Start Indicator Service   │
+│       Start Alert Service       │
+│       Connect to Exchange WS    │
+├─────────────────────────────────┤
+│ NO (pw-host) → Skip all above   │
+│                Read from cache  │
+└─────────────────────────────────┘
+    ↓
+Register Public API Routes (both modes)
+    ↓
+Register tRPC Routes (both modes)
+    ↓
+Start Fastify Server
+```
+
+## Integration Points
+
+### New Components in Existing Architecture
+
+| Component | Type | Where | Integration Point |
+|-----------|------|-------|------------------|
+| **Public API Routes** | New package | `packages/public-api/` | Registered in `apps/api/src/server.ts` after tRPC |
+| **OpenAPI Spec Generator** | Library | `fastify-zod-openapi` | Fastify plugin, generates `/public/v1/openapi.json` |
+| **WebSocket Bridge** | New service | `packages/public-api/src/websocket/` | Registered as Fastify WebSocket route |
+| **Public Schemas** | New directory | `packages/schemas/src/public/` | Imported by public-api package |
+| **Runtime Mode Utilities** | New file | `packages/utils/src/runtime-mode.ts` | Called in `server.ts` startup |
+| **DTO Transformers** | New directory | `packages/public-api/src/transformers/` | Called in route handlers before response |
+
+### Modified Components
+
+| Component | File | Change |
+|-----------|------|--------|
+| **Server Startup** | `apps/api/src/server.ts` | Add runtime mode switch, conditionally start services |
+| **Schema Package** | `packages/schemas/src/index.ts` | Export public schemas from `src/public/` |
+| **Environment Config** | `packages/schemas/src/env/config.schema.ts` | Add `RUNTIME_MODE` validation |
+| **Package Dependencies** | `apps/api/package.json` | Add `fastify-zod-openapi`, `zod-openapi`, `@fastify/rate-limit` |
+
+### External Service Integration
+
+| Service | Integration Pattern | Notes |
+|---------|---------------------|-------|
+| **Redis (Cache)** | Read-only in pw-host mode, read-write in exchange mode | Existing ioredis Cluster connection, no changes |
+| **Redis (Pub/Sub)** | WebSocket bridge subscribes via `psubscribe` | Requires dedicated subscriber connection (existing pattern) |
+| **PostgreSQL** | Read-only queries for symbols, exchange metadata | Existing Drizzle ORM connection, no changes |
+| **External HTTP Clients** | REST API consumers | Load balancer routes to multiple pw-host instances |
+| **External WebSocket Clients** | WebSocket bridge subscribers | Sticky sessions recommended (same instance per client) |
+
+### Internal Module Boundaries
+
+| Boundary | Communication | Notes |
+|----------|---------------|-------|
+| **Public API ↔ Internal Schemas** | Via DTO transformers (one-way) | Public API NEVER imports internal schemas directly |
+| **Public API ↔ Redis Cache** | Via `@livermore/cache` package | Uses existing `CandleCacheStrategy`, `IndicatorCacheStrategy` |
+| **Public API ↔ Database** | Via `@livermore/database` package | Read-only queries, uses existing Drizzle schemas |
+| **WebSocket Bridge ↔ Redis Pub/Sub** | Via dedicated subscriber connection | Reuses existing pub/sub patterns from `IndicatorCalculationService` |
+| **tRPC Routes ↔ Public API Routes** | No direct communication | Coexist on same Fastify instance, separate path prefixes |
+
+## Scaling Considerations
+
+| Scale | Architecture Adjustments |
+|-------|--------------------------|
+| **0-1K users** | Single instance in exchange mode handles both ingest and public API. WebSocket bridge supports ~100 concurrent connections per instance. No load balancer needed. |
+| **1K-10K users** | Add 2-3 pw-host instances behind load balancer for public API. Exchange instance focuses on data ingestion. WebSocket bridge needs sticky sessions (client stays on same instance). Redis pub/sub broadcasts to all instances. |
+| **10K-100K users** | Horizontally scale pw-host instances (10-20 instances). Consider Redis Cluster sharding for cache distribution. WebSocket connections limited to ~1K per instance (monitor `ulimit -n`). Rate limiting becomes critical. |
+| **100K+ users** | Separate WebSocket bridge into dedicated service (not same process as HTTP API). Consider Redis Streams instead of pub/sub for better replay/fan-out. CDN for OpenAPI spec. Consider GraphQL over REST for complex queries. |
+
+### Scaling Priorities
+
+1. **First bottleneck: WebSocket connections per instance**
+   - Each WebSocket holds a file descriptor and memory for buffers
+   - Fix: Horizontal scaling with load balancer (round-robin for HTTP, sticky sessions for WS)
+   - Monitor: `netstat -an | grep ESTABLISHED | wc -l`, memory usage per client
+
+2. **Second bottleneck: Redis pub/sub fan-out**
+   - Each pw-host instance subscribes to same channels, Redis broadcasts to all
+   - Fix: Redis Cluster replication, consider Redis Streams for better multi-consumer patterns
+   - Monitor: Redis `CLIENT LIST`, pub/sub message rate
+
+3. **Third bottleneck: Rate limiting enforcement**
+   - Public API needs per-IP or per-API-key rate limits
+   - Fix: Distributed rate limiting via Redis (shared counters across instances)
+   - Monitor: 429 response rate, Redis rate-limit key TTL
+
+## Anti-Patterns
+
+### Anti-Pattern 1: Importing Internal Schemas in Public Routes
+
+**What people do:** Import `MacdVAnalysisSchema` directly from `@livermore/schemas` in public API route, accidentally expose all fields.
+
+**Why it's wrong:** Internal schemas contain proprietary fields (formulas, config, internal IDs). Zod's `.pick()` or `.omit()` can miss fields if schema changes. Easy to leak sensitive data.
+
+**Do this instead:**
+- Define separate public schemas in `packages/schemas/src/public/` with explicit field whitelisting
+- Use DTO transformer functions that ONLY copy allowed fields
+- Add unit test: `PublicSchema.parse(transformed)` must pass (validates no extra fields)
+
+### Anti-Pattern 2: Starting Exchange Services in PW-Host Mode
+
+**What people do:** Forget to check `RUNTIME_MODE` before calling `exchangeAdapter.connect()`, start exchange WebSocket in pw-host instance.
+
+**Why it's wrong:** PW-host instances should be stateless read-only servers. Connecting to exchanges wastes connections, risks duplicate data processing, creates split-brain if two instances process same feed.
+
+**Do this instead:**
+- Wrap ALL exchange-related service starts in `if (runtimeMode === 'exchange')` guard
+- Add startup validation: throw error if exchange credentials present in pw-host mode
+- Log clear startup message: "PW-HOST mode: exchange adapters disabled"
+
+### Anti-Pattern 3: No Backpressure Handling in WebSocket Bridge
+
+**What people do:** Call `socket.send(message)` in tight loop without checking return value or `drain` event. Buffer grows unbounded.
+
+**Why it's wrong:** Slow clients (mobile on bad network) can't consume messages fast enough. TCP buffer fills, `socket.send()` returns `false`, but code ignores it. Process memory grows until OOM crash.
+
+**Do this instead:**
+- Check `socket.send()` return value (false = buffer full)
+- Track per-client buffer size, pause client when limit reached
+- Listen for `drain` event to resume sending
+- Optionally disconnect clients that stay slow too long
+
+### Anti-Pattern 4: Shared Rate Limit Across All Endpoints
+
+**What people do:** Apply same rate limit (e.g., 100 req/min) to both lightweight `/symbols` endpoint and heavy `/candles` endpoint.
+
+**Why it's wrong:** Different endpoints have different costs. Fetching 500 candles is 100x heavier than listing symbols. Attackers can exhaust server by spamming heavy endpoints within rate limit.
+
+**Do this instead:**
+- Apply tiered rate limits: strict for expensive endpoints, relaxed for cheap ones
+- Use different rate limit keys: per-endpoint or per-cost
+- Consider token bucket pattern: deduct more tokens for heavy operations
+
+### Anti-Pattern 5: Exposing AsyncAPI Without Rate Limits
+
+**What people do:** Document WebSocket endpoints in AsyncAPI spec, deploy without connection limits or message rate limits.
+
+**Why it's wrong:** WebSocket connections are cheap to open but expensive to maintain (file descriptors, memory). Attackers can open 10K connections, exhaust `ulimit -n`, crash server.
+
+**Do this instead:**
+- Limit total WebSocket connections per IP (e.g., 10 max)
+- Limit subscription count per connection (e.g., 50 channels max)
+- Disconnect clients that send invalid messages or exceed rate limits
+- Monitor active connections, alert on spikes
+
+## Build Order Recommendations
+
+Given dependencies between components, recommended build order:
+
+### Phase 1: Public Schemas & DTO Layer
+**Why first:** Foundation for all public-facing code. No dependencies on routes or WebSocket.
+
+- Create `packages/schemas/src/public/` directory
+- Define `PublicCandleSchema`, `PublicMacdVSchema`, `PublicSymbolSchema` with `.openapi()` metadata
+- Create `packages/public-api/src/transformers/` with DTO functions
+- Write unit tests: internal → public transformation, validate no extra fields
+
+**Deliverable:** Schemas + transformers tested in isolation
+
+### Phase 2: Runtime Mode Infrastructure
+**Why second:** Needed before modifying server startup. No dependencies on public API routes.
+
+- Add `RUNTIME_MODE` to `EnvConfigSchema`
+- Create `packages/utils/src/runtime-mode.ts` with `getRuntimeMode()`, `validateRuntimeMode()`
+- Modify `apps/api/src/server.ts` to read mode, log startup message
+- Add conditional guards around exchange adapter startup
+- Test: start in both modes, verify correct services start
+
+**Deliverable:** Server starts in exchange/pw-host mode, exchange services only run in exchange mode
+
+### Phase 3: Public REST API Routes
+**Why third:** Depends on Phase 1 (schemas). Can be built/tested independently of WebSocket.
+
+- Create `packages/public-api/` package
+- Install `fastify-zod-openapi`, `zod-openapi`
+- Implement routes: `GET /public/v1/candles/:symbol`, `GET /public/v1/symbols`
+- Register routes in `server.ts` (both modes)
+- Add rate limiting middleware
+- Test: HTTP requests return public schemas, OpenAPI spec generated
+
+**Deliverable:** Public REST endpoints working, OpenAPI spec at `/public/v1/openapi.json`
+
+### Phase 4: WebSocket Bridge
+**Why fourth:** Depends on Phase 1 (schemas for messages). Most complex component, build last.
+
+- Create `packages/public-api/src/websocket/market-data-bridge.ts`
+- Implement `psubscribe` to Redis pub/sub
+- Implement fan-out logic with backpressure handling
+- Register WebSocket route at `/public/ws/market-data`
+- Add connection limits, subscription limits
+- Test: multiple clients, slow client handling, reconnection
+
+**Deliverable:** WebSocket bridge relays candle close events to external clients
+
+### Phase 5: AsyncAPI Specification
+**Why fifth:** Documents WebSocket API from Phase 4. Optional, can defer.
+
+- Create AsyncAPI spec file describing WebSocket messages
+- Document subscription protocol, event schemas
+- Serve spec at `/public/v1/asyncapi.json`
+
+**Deliverable:** AsyncAPI documentation for WebSocket API
 
 ## Sources
 
-**Codebase files analyzed (HIGH confidence):**
-- `apps/api/src/server.ts` -- Startup lifecycle, shutdown handler
-- `apps/api/src/services/control-channel.service.ts` -- Command handling, state transitions
-- `apps/api/src/services/runtime-state.ts` -- In-memory state types
-- `apps/api/src/services/exchange/adapter-factory.ts` -- Existing (broken) status tracking
-- `apps/api/src/services/types/service-registry.ts` -- Service dependency injection
-- `apps/api/src/routers/control.router.ts` -- tRPC polling pattern
-- `apps/admin/src/pages/ControlPanel.tsx` -- Admin polling pattern
-- `apps/admin/src/components/control/RuntimeStatus.tsx` -- Status display pattern
-- `apps/admin/src/App.tsx` -- Hash routing pattern
-- `apps/admin/src/lib/trpc.ts` -- tRPC client setup
-- `packages/cache/src/client.ts` -- ioredis Cluster configuration
-- `packages/cache/src/keys.ts` -- Key builder patterns
-- `packages/schemas/src/adapter/exchange-adapter.schema.ts` -- Adapter event types
-- `packages/schemas/src/control/command.schema.ts` -- Command schema patterns
-- `packages/exchange-core/src/adapter/coinbase-adapter.ts` -- Adapter implementation
-- `packages/exchange-core/src/adapter/base-adapter.ts` -- Base adapter
-- `packages/database/src/schema/exchanges.ts` -- Exchange table schema
-- `.planning/PROJECT.md` -- v6.0 requirements
-- `.planning/MILESTONES.md` -- Historical context
-- `.planning/codebase/ARCHITECTURE.md` -- System architecture
+### Primary (HIGH confidence)
+- [Fastify Documentation](https://fastify.dev/docs/latest/)
+- [tRPC Fastify Adapter](https://trpc.io/docs/server/adapters/fastify)
+- [GitHub: fastify-zod-openapi](https://github.com/samchungy/fastify-zod-openapi)
+- [GitHub: zod-openapi](https://github.com/samchungy/zod-openapi)
+- [GitHub: trpc-openapi](https://github.com/trpc/trpc-openapi)
+- [AsyncAPI WebSocket Tutorial](https://www.asyncapi.com/docs/tutorials/websocket)
+- [Node.js Process Documentation](https://nodejs.org/api/process.html)
+- [Redis Pub/Sub Documentation](https://redis.io/docs/latest/develop/pubsub/)
 
-**Redis documentation (HIGH confidence):**
-- [SET command](https://redis.io/docs/latest/commands/set/) -- SET ... EX for atomic write+TTL
-- [XADD command](https://redis.io/docs/latest/commands/xadd/) -- MAXLEN ~ for approximate trimming
-- [Redis Streams](https://redis.io/docs/latest/develop/data-types/streams/) -- Stream data type
-- [Azure Managed Redis Architecture](https://learn.microsoft.com/en-us/azure/redis/architecture) -- OSS Cluster compatibility
+### Secondary (MEDIUM confidence)
+- [Scaling Pub/Sub with WebSockets and Redis](https://ably.com/blog/scaling-pub-sub-with-websockets-and-redis)
+- [How to Use Redis with WebSockets for Pub/Sub](https://oneuptime.com/blog/post/2026-02-02-redis-websockets-pubsub/view)
+- [Backpressure in WebSocket Streams](https://skylinecodes.substack.com/p/backpressure-in-websocket-streams)
+- [DTO Pattern in TypeScript](https://codewithstyle.info/typescript-dto/)
+- [API Security Best Practices](https://www.securitycompass.com/blog/best-api-security-practices/)
+- [Monorepo Internal Packages](https://konradreiche.com/blog/use-internal-packages-for-monorepos/)
 
-**Community patterns (MEDIUM confidence):**
-- [Heartbeat TTL pattern](https://medium.com/tilt-engineering/redis-powered-user-session-tracking-with-heartbeat-based-expiration-c7308420489f) -- Dead man's switch via TTL
-- [CROSSSLOT resolution](https://hackernoon.com/resolving-the-crossslot-keys-error-with-redis-cluster-mode-enabled) -- Hash tags for multi-key ops
-- [tRPC Subscriptions](https://trpc.io/docs/server/subscriptions) -- SSE as future option
+### Codebase Analysis (HIGH confidence)
+- `apps/api/src/server.ts` - Existing Fastify + tRPC setup, runtime state
+- `packages/cache/src/client.ts` - Redis Cluster connection pattern
+- `packages/schemas/src/indicators/macdv.schema.ts` - Internal schema example
+- `apps/api/src/services/indicator-calculation.service.ts` - Redis pub/sub subscriber pattern
+- `apps/api/src/services/runtime-state.ts` - Existing runtime state management
 
 ---
-
-*Architecture research: 2026-02-10 -- v6.0 Perseus Network instance coordination*
+*Architecture research for: Perseus Web Public API*
+*Researched: 2026-02-18*

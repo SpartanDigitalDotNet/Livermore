@@ -1,225 +1,207 @@
 # Project Research Summary
 
-**Project:** Livermore Trading Platform -- v6.0 "Perseus Network"
-**Domain:** Distributed instance coordination, service registry, health monitoring
-**Researched:** 2026-02-10
+**Project:** v8.0 Perseus Web Public API
+**Domain:** Public REST/WebSocket API for cryptocurrency trading platform
+**Researched:** 2026-02-18
 **Confidence:** HIGH
 
 ## Executive Summary
 
-v6.0 Perseus Network transforms Livermore from isolated API instances with no mutual awareness into a coordinated distributed system with identity, health monitoring, and audit logging. The existing prototype writes an `exchange:status:{exchangeId}` key in Redis but has three documented bugs: heartbeat never updates, error never populates, and connectionState sticks on `idle` when an instance dies. Perseus replaces this broken prototype with a proper `InstanceRegistryService` backed by TTL-based heartbeat, a typed state machine, Redis Streams for activity logging, and an Admin UI "Network" page for operational visibility.
+Livermore v8.0 adds a public API layer to expose trading signals and market data to external clients while protecting proprietary MACD-V indicator algorithms. The research reveals this is a **lightweight integration** (5 official Fastify plugins) rather than a framework migration - the existing stack (Fastify 5.2.2, Zod 3.25.76, ioredis 5.4.2) supports all required functionality with minimal additions.
 
-The recommended approach builds entirely on the existing stack with zero new dependencies. ioredis 5.4.2 (already installed) has full support for Redis Streams (XADD, XRANGE, XTRIM with MINID), TTL-based heartbeat (SET EX), and atomic registration (SET NX EX). The state machine is 5-6 states with 7 transitions -- trivially implementable in ~80 lines of typed code without a library. Public IP detection uses a 10-line utility function calling ipify.org via Node.js built-in `https`, avoiding ESM-only npm packages that break the CJS build. A dedicated `packages/perseus` package (or service files under `apps/api/src/services/`) provides clean bounded context for all network coordination logic.
+The recommended approach is **dual-mode architecture**: exchange instances ingest live data and calculate indicators while pw-host instances serve public API requests from Redis cache. This separation prevents public API load from degrading internal operations. Public endpoints use generic signal labeling (momentum_signal, trend_signal) with NO indicator names or calculation parameters exposed. OpenAPI 3.1 and AsyncAPI 3.1 specs are generated from Zod schemas to maintain spec-code sync and enable AI-agent-ready documentation.
 
-The critical risks are: (1) heartbeat TTL timing -- too short causes false death during GC pauses or backfill, too long delays detection; mitigated by a 10-15s heartbeat interval with 45s TTL (3-4.5x ratio). (2) One-instance-per-exchange TOCTOU race -- GET-then-SET allows two instances to claim the same exchange; mitigated by atomic `SET NX EX`. (3) Redis Streams unbounded growth -- XADD without trimming consumes all Redis memory; mitigated by inline `MAXLEN ~` or `MINID ~` trimming on every write. (4) Azure Redis Cluster compatibility -- existing `redis.keys()` calls scan only one node; v6.0 must use SCAN per node or known-ID lookups from the database.
+The critical risk is **intellectual property leakage** through field names, error messages, or documentation. One exposed parameter (EMA period, ATR multiplier) destroys competitive advantage. Mitigation requires a DTO transformation layer that whitelists public fields and strips all proprietary internals before responses leave the server. Secondary risks include WebSocket memory leaks (unbounded client buffering), CORS misconfiguration exposing internal tRPC routes, and OpenAPI spec drift breaking client integrations.
 
 ## Key Findings
 
 ### Recommended Stack
 
-Zero new npm dependencies required. Every capability builds on ioredis 5.4.2 (already pinned), Zod 3.25.x (already installed), and Node.js built-ins. The state machine is hand-rolled (~80 lines). Public IP detection uses `node:https` to query ipify.org with a 3-5 second timeout and fallback chain (icanhazip.com, ifconfig.me, or `null`). No ESM-only packages, no external service discovery (Consul/etcd), no job queue libraries (Bull/BullMQ).
+The stack addition is minimal and focused. All new packages are official Fastify ecosystem plugins with verified version compatibility. No custom protocols, no heavy frameworks - everything integrates with existing infrastructure.
 
-**Core technologies (all existing):**
-- **ioredis 5.4.2**: Redis Streams (XADD/XRANGE/XTRIM), TTL heartbeat (SET EX/NX), atomic registration -- verified against installed type definitions
-- **Redis (Azure Managed, OSS Cluster)**: Coordination bus for status keys, heartbeat TTL, activity streams -- all single-key operations, cluster-safe
-- **TypeScript 5.9.3 + Zod**: Typed state machine, schema validation for stream entries and registration payloads
-- **Node.js built-ins**: `node:https` for public IP, `node:os` for hostname, `setInterval` for heartbeat timer
+**Core technologies:**
+- **@fastify/swagger@^9.7.0** + **fastify-type-provider-zod@^4.0.2**: Generate OpenAPI 3.1 spec from existing Zod schemas - zero schema duplication, single source of truth for validation and documentation
+- **@fastify/bearer-auth@^10.1.1**: API key authentication via Bearer tokens - constant-time comparison prevents timing attacks, async validator allows database lookup
+- **@fastify/rate-limit@^10.3.0**: Distributed rate limiting backed by existing ioredis cluster - enforces per-key limits across multiple API instances
+- **@fastify/websocket@^11.0.1**: Already installed - existing bridge pattern for /ws/alerts extends to public WebSocket endpoints with authentication
+- **@asyncapi/cli@^2.21.0**: Dev-only tool to generate WebSocket event documentation - AsyncAPI 3.1 spec with concrete examples
 
-**Explicitly rejected:**
-- `public-ip` npm (ESM-only, breaks CJS builds)
-- XState (47KB for 5 states -- overkill)
-- Redis Keyspace Notifications (unreliable in Cluster mode)
-- External service discovery (overkill for 2-10 instances)
-
-See [STACK.md](./STACK.md) for full evaluation matrix and API reference.
+**Critical constraint:** MACD-V details are proprietary IP and MUST NEVER appear in public responses. Field names like "macdV", "signal", "histogram", "fastEMA", "slowEMA", "atr" expose the algorithm. Public API returns generic "trade_signal" with direction/strength only.
 
 ### Expected Features
 
-**Must have (table stakes) -- 26 features across 6 groups:**
+Public API must deliver real-time trading signals (the differentiator) and standard market data (table stakes). AI-agent-ready documentation positions the API spec as the product, with Perseus Web as the reference implementation.
 
-- Instance registration with full identity (hostname, IP, admin, exchange, symbol count) via exchange-scoped status keys with TTL
-- Connection state machine: `idle -> starting -> warming -> active -> stopping -> stopped` with validated transitions at each lifecycle phase
-- Heartbeat with TTL (15s interval, 45s TTL) for automatic dead instance detection
-- One-instance-per-exchange enforcement via atomic `SET NX EX` with clear conflict error messages
-- Network activity logging via Redis Streams with 90-day retention (MINID trimming)
-- Admin UI Network page with instance cards, activity feed, dead instance detection, and 5s polling
-- Three tRPC endpoints: `getInstances`, `getActivityLog`, `getExchangeStatus`
-- Three bug fixes: heartbeat not updating, error not populating, connectionState stuck on idle
+**Must have (table stakes):**
+- REST endpoints for OHLCV candles, generic trade signals, alert history, exchange/symbol metadata
+- Cursor-based pagination with ISO8601 time filtering (prevents duplicate/missing data during concurrent writes)
+- OpenAPI 3.1 spec with AI-optimized descriptions, concrete examples, comprehensive error schemas
+- WebSocket bridge for real-time candle closes and trade signals with subscription management
+- API key authentication with tiered rate limiting (60/300/1000 req/min for Free/Basic/Pro)
+- Runtime mode flag (exchange vs pw-host) enabling distributed architecture
 
-**Should have (differentiators) -- low-hanging fruit for v6.0:**
-- Instance uptime display ("Running for 4h 23m") -- trivial, high user value
-- Heartbeat latency indicator with color degradation (green/yellow/red)
-- Discord notifications for state changes (leverages existing Discord service)
+**Should have (competitive):**
+- Interactive API explorer (Swagger UI at /docs) for in-browser testing
+- Rate limit headers (X-RateLimit-Remaining, X-RateLimit-Reset) enabling client backoff logic
+- Verbose error messages with hints ("Use ISO8601: 2026-02-18T12:00:00Z")
+- Usage dashboard showing per-key metrics (requests/day, endpoints called, rate limit hits)
+- Sandbox environment with historical BTC/ETH data only (no live signals)
 
-**Defer to v6.1+:**
-- Standby/passive instance registration
-- Graceful handoff protocol between instances
-- Remote Admin control (cross-instance commands)
-- WebSocket-based real-time network view (polling is sufficient for v6.0)
-- Historical uptime percentage calculations
-- Prometheus/metrics integration
-
-See [FEATURES.md](./FEATURES.md) for complete feature table with IDs and dependency graph.
+**Defer (v2+):**
+- Client SDK npm package (@perseus-web/sdk) - wait for spec stability (no breaking changes for 2+ months)
+- Server-Sent Events fallback for corporate proxies that block WebSocket
+- Webhook delivery for alerts (push vs poll) - requires retry/failure infrastructure
+- Public status page with uptime/incident history
 
 ### Architecture Approach
 
-The architecture introduces three new server-side components (`InstanceRegistryService`, `StateMachineService`, `network.router.ts`) and one new Admin UI page (`Network.tsx`). These integrate with three existing systems: the API server lifecycle in `server.ts` and `ControlChannelService`, the Redis Cluster connection via ioredis, and the Admin UI's tRPC polling pattern. The existing `ExchangeAdapterFactory.setupConnectionTracking()` is removed entirely -- the state machine owns all state.
+The architecture extends existing Fastify server with public routes at separate path prefix. Two authentication systems coexist via route scoping: Clerk JWT for /trpc/* admin routes, Bearer token API keys for /api/v1/* public routes. OpenAPI spec generation uses zod-openapi library to add .openapi() metadata to schemas - same schemas provide runtime validation, TypeScript types, and documentation.
 
 **Major components:**
-1. **InstanceRegistryService** -- Owns registration, heartbeat, deregistration, and stream logging. Writes to `exchange:{id}:instance` (SET EX) and `logs:network:{name}` (XADD). Created after pre-flight checks in `server.ts`.
-2. **StateMachineService** -- Validates state transitions against a typed transition map. Called by `ControlChannelService` and `server.ts` at each lifecycle phase. Replaces scattered `updateConnectionState()` calls.
-3. **network.router.ts** -- tRPC endpoints for Admin UI. Reads instance keys (via known exchange IDs from database, not SCAN) and stream entries (XREVRANGE per exchange).
-4. **Network.tsx + InstanceCard + ActivityFeed** -- Admin UI page with 5s polling for instances and 10s polling for activity log. Color-coded status badges. Dead instance detection via missing keys.
+1. **Public API Routes** (packages/public-api/) - New bounded context with REST handlers, registered via fastify-zod-openapi, isolated from internal tRPC routes
+2. **Data Transformation Layer** (DTO pattern) - Whitelists public fields, strips proprietary internals (indicator formulas, internal IDs, user context) before response
+3. **WebSocket Bridge** (extends existing pattern) - Subscribes to Redis pub/sub via psubscribe, fans out to N external clients with backpressure handling
+4. **Runtime Mode Manager** - Conditional service initialization based on RUNTIME_MODE env var (exchange starts adapters/indicators, pw-host reads cache only)
+5. **OpenAPI Generator** - Fastify plugin that transforms Zod schemas to OpenAPI 3.1, serves spec at /public/v1/openapi.json
 
-**Key architectural decisions:**
-- Single key per instance (`exchange:{id}:instance`) with JSON payload and TTL, not separate heartbeat/status keys (simpler for v6.0; can split later if needed)
-- Per-exchange activity streams (`logs:network:{name}`), read individually and merged in application code (avoids CROSSSLOT in Cluster)
-- `getInstances` reads from known exchange IDs in database, not SCAN (cluster-safe, predictable)
-- Backward compatibility: existing ControlPanel continues working via in-memory `getRuntimeState()`; StateMachineService updates both Redis and in-memory state
-
-See [ARCHITECTURE.md](./ARCHITECTURE.md) for integration points, data flow diagrams, and file change inventory.
+**Data flow (pw-host mode):** HTTP request → Zod validation → Redis cache read → DTO transformation → Response
+**Data flow (WebSocket):** Exchange adapter → Redis pub/sub → Bridge filters by subscription → Transform to public format → WebSocket.send() to clients
 
 ### Critical Pitfalls
 
-**Top 5 pitfalls requiring explicit mitigation:**
+Research identified 8 critical pitfalls specific to adding public-facing features to an existing internal system. These are not generic API mistakes - they exploit the intersection of internal proprietary logic and public exposure.
 
-1. **Heartbeat TTL timing (HIGH)** -- If TTL is too close to heartbeat interval, GC pauses, backfill operations, or Redis reconnections cause false death detection. Split-brain possible if a second instance claims the slot during false death. **Prevent:** TTL >= 3x heartbeat interval (45s TTL with 15s interval). Keep heartbeat callback to a single `SET EX` command, no heavy computation.
+1. **Intellectual Property Leakage Through Error Messages** - Stack traces, field names in validation errors, and debug logs expose "MACD-V", EMA periods, ATR normalization. Fix: Error sanitization layer strips stack traces, generic field names only ("value" not "macdV"), audit OpenAPI spec for proprietary terms. MUST be built into Phase 1 - impossible to retrofit cleanly.
 
-2. **One-instance-per-exchange TOCTOU race (HIGH)** -- GET-then-SET for exchange claim is not atomic. Two instances can both see null and both write. **Prevent:** Use `SET NX EX` for initial registration (atomic set-if-not-exists with TTL). Include instance ID in payload; verify ownership on heartbeat renewal.
+2. **WebSocket Fan-Out Memory Leaks** - Slow clients cause unbounded buffering. Zombie connections (disconnected but not cleaned up) accumulate in Sets. Each leaked connection holds ~8MB per 2000 connects. Fix: Upgrade to Fastify 5.7.3+, per-client buffer limits, ping/pong heartbeat every 30s, disconnect if bufferedAmount > 1MB. Address in Phase 2 before public release.
 
-3. **Redis Streams unbounded memory (HIGH)** -- XADD without trimming grows forever. Error storms can produce millions of entries. **Prevent:** Always trim inline: `XADD key MAXLEN ~ 50000 *` or `XADD key MINID ~ <90-day-ms> *`. Throttle repeated errors to batched entries.
+3. **CORS Allowing Unintended Cross-Origin Access to Internal tRPC Routes** - Single global CORS config (origin: true) exposes /trpc/* admin endpoints to form-based CSRF. Fix: Route-scoped CORS - permissive for /api/v1/*, restrictive for /trpc/* (only admin dashboard origin). MUST architect correctly in Phase 1 - security vulnerability from day one.
 
-4. **State machine crash recovery (HIGH)** -- Instance crashes in `starting` state. Key persists for TTL duration showing phantom "starting" instance. No crash event logged. **Prevent:** Write to activity stream BEFORE entering transient states. Admin UI shows time-in-state with "possibly stuck" warning. On startup, check for orphaned registrations.
+4. **OpenAPI Spec Drift from Actual Implementation** - Hand-written spec diverges from code. Implementation adds fields, spec not updated. Generated clients break. Fix: Use @fastify/swagger to auto-generate spec from Zod schemas (code as source of truth), CI drift detection comparing spec against test responses. Establish sync strategy in Phase 1 before writing first endpoint.
 
-5. **Azure Redis Cluster KEYS command (HIGH)** -- Existing 7 `redis.keys()` calls in `control-channel.service.ts` scan only one node in Cluster. v6.0 must not introduce more. **Prevent:** Use known exchange IDs from database for lookups. Replace existing KEYS with SCAN-per-node or key registry pattern.
-
-See [PITFALLS.md](./PITFALLS.md) for all 14 pitfalls with severity levels, warning signs, and prevention strategies.
+5. **Rate Limiting Affecting Internal Admin Operations** - Global rate limiter throttles /trpc/* admin bulk operations (backfill 50 symbols). Fix: Route-scoped rate limiting ONLY on /api/v1/*, admin role bypasses or has 100x higher limits. Address in Phase 3 when adding rate limiting.
 
 ## Implications for Roadmap
 
-Based on combined research, the milestone decomposes into 4 phases with clear dependency ordering. All four research files converge on this structure independently. The phases map to the feature dependency graph from FEATURES.md, the build order from ARCHITECTURE.md, and the phase warnings from PITFALLS.md.
+Based on research, a **5-phase roadmap** balances risk mitigation (IP protection first) with iterative delivery (REST before WebSocket). Each phase delivers independently testable value.
 
-### Phase 1: Instance Registry and State Machine
+### Phase 1: Public API Foundation & IP Protection
+**Rationale:** Security first - establish field mapping and error sanitization before exposing any data. Can't retrofit IP protection after fields are public.
+**Delivers:**
+- REST endpoints for candles, symbols, exchange metadata (read-only, non-proprietary data)
+- DTO transformation layer with field whitelisting (internal → public schema mapping)
+- OpenAPI 3.1 spec auto-generated from Zod schemas
+- Route-scoped CORS (permissive for /api/v1/*, restrictive for /trpc/*)
+- Error sanitization (no stack traces, generic field names)
+**Addresses:** API-01 through API-05 (core endpoints), FMT-01 through FMT-05 (response standards), IP-01 through IP-05 (protection patterns)
+**Avoids:** Pitfall 1 (IP leakage), Pitfall 3 (CORS misconfiguration), Pitfall 4 (spec drift)
 
-**Rationale:** Everything depends on having a proper instance key with identity, TTL heartbeat, and validated state transitions. This is the foundation that replaces the broken prototype. Must be built first because Phases 2-4 all read from or write to the instance key.
+### Phase 2: Trade Signals with Generic Labeling
+**Rationale:** Proprietary value comes from signals. DTO layer from Phase 1 strips MACD-V internals, returns generic momentum_signal/trend_signal.
+**Delivers:**
+- /api/v1/signals/:symbol/:timeframe endpoint returning generic trade signals
+- /api/v1/alerts endpoint with alert history (transformed to hide indicator names)
+- Signal metadata filtering (direction, strength, timeframe, price ONLY - no histogram/EMA values)
+- Audit tool scanning OpenAPI spec for proprietary terms (macdV, atr, informativeATR)
+**Addresses:** API-02 (trade signals), API-03 (alert history), IP-02 (signal metadata filtering), IP-03 (indicator name scrubbing)
+**Uses:** Signal transformation logic from Phase 1 DTO layer
+**Avoids:** Pitfall 1 (IP leakage through field names)
 
-**Delivers:** InstanceRegistryService (register, heartbeat, deregister), StateMachineService (typed transitions), public IP detection, exchange-scoped status keys with TTL, one-instance-per-exchange enforcement via SET NX EX.
+### Phase 3: Authentication & Rate Limiting
+**Rationale:** Can't launch public API without auth/rate limiting. Defer until REST endpoints work to avoid blocking development.
+**Delivers:**
+- API key authentication via @fastify/bearer-auth (database lookup in users.api_key column)
+- Rate limiting via @fastify/rate-limit with Redis backing (60/300/1000 req/min tiers)
+- Route-scoped rate limiting (ONLY /api/v1/*, admin /trpc/* exempt)
+- API key generation tRPC mutation for admin UI
+- API key display/regenerate UI in admin panel
+**Addresses:** AUTH-01 (API key auth), AUTH-03 (API key scopes), AUTH-04 (tiered rate limiting)
+**Avoids:** Pitfall 5 (rate limiting blocks admin operations), Pitfall 7 (dual auth bypass)
 
-**Features addressed:** REG-01 through REG-06, HB-01 through HB-04, LOCK-01 through LOCK-04, REG-03 (state machine), FIX-01 through FIX-03
+### Phase 4: WebSocket Bridge with Backpressure
+**Rationale:** Most complex component - build last after REST patterns validated. Memory leaks in production are catastrophic.
+**Delivers:**
+- WebSocket endpoint /public/ws/market-data with API key auth via query param
+- Redis pub/sub subscription (psubscribe to candle:close:* and alert:trigger:*)
+- Fan-out logic with per-client subscription filtering
+- Backpressure handling (track bufferedAmount, pause/disconnect slow clients)
+- Ping/pong heartbeat every 30s to detect zombie connections
+- Connection limits per API key (max 5 concurrent WebSocket connections)
+**Addresses:** WS-01 through WS-07 (WebSocket bridge features)
+**Uses:** DTO transformers from Phase 1 to sanitize WebSocket events
+**Avoids:** Pitfall 2 (WebSocket memory leaks), Pitfall 8 (AsyncAPI spec drift)
 
-**Pitfalls to avoid:**
-- Heartbeat TTL timing (Pitfall 1): Use 15s interval with 45s TTL
-- TOCTOU race (Pitfall 2): Use SET NX EX for atomic claim
-- Crash recovery (Pitfall 4): TTL on all states, stream logging before transitions
-- Public IP blocking startup (Pitfall 7): 3s timeout, register with null IP, update async
-- Heartbeat overwrites payload (Pitfall 6): Consider EXPIRE for TTL-only renewal, KEEPTTL for payload updates
-- State machine validation (Pitfall 9): Enforce transition map, log invalid attempts
-
-**Files created:** `instance-registry.service.ts`, `state-machine.service.ts`, Zod schemas in `packages/schemas`, key builders in `packages/cache/src/keys.ts`
-
-**Files modified:** `server.ts` (register after pre-flight, shutdown deregister), `control-channel.service.ts` (replace updateConnectionState with stateMachine.transition), `adapter-factory.ts` (remove setupConnectionTracking)
-
-### Phase 2: Network Activity Logging
-
-**Rationale:** Depends on Phase 1 (needs state transitions to log and heartbeat events to detect). Redis Streams are a new primitive for the codebase. Isolating stream work makes it testable before the UI consumes it.
-
-**Delivers:** Activity stream per exchange (`logs:network:{name}`), structured event logging for state changes and errors, 90-day retention via MINID or MAXLEN trimming, XADD/XRANGE/XTRIM wrappers.
-
-**Features addressed:** LOG-01 through LOG-05
-
-**Pitfalls to avoid:**
-- Unbounded memory growth (Pitfall 3): Inline MAXLEN ~ 50000 on every XADD
-- CROSSSLOT on multi-stream XREAD (Pitfall 10): Read streams individually, merge in application code
-- Error storm flooding (Pitfall 3 addendum): Throttle repeated errors, batch as "error x47 in last 60s"
-
-**Key decision:** MAXLEN ~ 50000 (simpler) vs MINID ~ 90-day (time-precise). Either works; MAXLEN is recommended for v6.0 simplicity (50K entries covers ~35 days at 1 entry/minute, much longer in practice). Can switch to MINID later if exact time-based retention matters.
-
-### Phase 3: tRPC Network Router
-
-**Rationale:** Depends on Phase 1 (instance keys to read) and Phase 2 (stream entries to query). Creates the API surface the Admin UI will consume. Also the enforcement point for one-instance-per-exchange in the start command flow.
-
-**Delivers:** `network.router.ts` with `getInstances`, `getNetworkLog`, `getExchangeStatus` endpoints. One-instance check in `handleStart()`. Optional `force-start` command for overriding stale instances.
-
-**Features addressed:** RPC-01 through RPC-03
-
-**Pitfalls to avoid:**
-- Azure Cluster KEYS command (Pitfall 5): Query exchanges table for known IDs, then GET each instance key. No SCAN or KEYS.
-- Stale data in response (Pitfall 8): Include `lastHeartbeat` in response so UI can calculate freshness client-side.
-
-### Phase 4: Admin UI Network View
-
-**Rationale:** Consumes all three backend phases. Build last so all data sources are available and tested. Follows existing Admin UI patterns (tRPC polling, hash routing, component-per-card).
-
-**Delivers:** Network page in Admin nav, instance cards with color-coded status badges, dead instance detection, scrollable activity feed, 5s/10s polling.
-
-**Features addressed:** UI-01 through UI-05, DIFF-01 (uptime display), DIFF-02 (heartbeat latency indicator)
-
-**Pitfalls to avoid:**
-- Stale status display (Pitfall 8): Display `lastHeartbeat` prominently with color degradation. Client-side freshness check overrides status to "POSSIBLY DEAD" if heartbeat gap exceeds TTL.
-- Set `staleTime: 0` on React Query config for network status queries.
+### Phase 5: Runtime Modes & Distributed Architecture
+**Rationale:** Enables horizontal scaling - exchange instances ingest data, pw-host instances serve API. Required before production load.
+**Delivers:**
+- RUNTIME_MODE env var (exchange | pw-host)
+- Mode validation at startup (exchange requires API credentials, pw-host requires Redis only)
+- Conditional service initialization (exchange starts adapters/indicators, pw-host skips)
+- Redis-only data access in pw-host mode (read from cache, no writes)
+- Health check includes mode status (/health returns { mode: "pw-host", redisConnected: true })
+**Addresses:** MODE-01 through MODE-05 (runtime mode features)
+**Avoids:** Pitfall 6 (runtime mode flag bugs)
 
 ### Phase Ordering Rationale
 
-- **Phase 1 before all others:** The instance key with TTL is the single source of truth. Streams (Phase 2) log transitions from the state machine. The router (Phase 3) reads instance keys. The UI (Phase 4) displays router data. Everything flows from the registry.
-- **Phase 2 before Phase 3:** The network router's `getNetworkLog` endpoint reads from streams. Streams must exist and be populated before the router can serve them. Building streams as a separate phase also allows thorough testing of retention/trimming before the UI adds read pressure.
-- **Phase 3 before Phase 4:** The Admin UI is purely a consumer. Building the tRPC endpoints first means the UI can be developed against a known, tested API contract. This also allows testing endpoints via curl/Postman before building React components.
-- **Pitfall avoidance by ordering:** Phase 1 addresses the 4 highest-severity pitfalls (heartbeat timing, TOCTOU, crash recovery, public IP). By front-loading these, the riskiest engineering is resolved before building dependent features that would amplify any defects.
+- **IP protection first** (Phase 1) because field names can't be changed after public release - breaking API change
+- **REST before WebSocket** (Phases 1-3 before 4) because WebSocket requires working DTO layer and simpler to test/debug REST first
+- **Auth deferred to Phase 3** to avoid blocking REST endpoint development - can test with mock API keys initially
+- **Runtime modes last** (Phase 5) because not required until production deployment - single instance handles both ingest and API for MVP
+- **Trade signals second** (Phase 2) validates IP protection layer works correctly before exposing proprietary data
 
 ### Research Flags
 
-**Phases likely needing deeper research during planning:**
-- **Phase 1 (Instance Registry):** Needs careful design of the heartbeat/status key strategy (single key with KEEPTTL vs. separate heartbeat and status keys). The research surfaced two valid approaches -- the phase plan should make a definitive choice based on testing.
-- **Phase 2 (Streams):** First use of Redis Streams in the codebase. While the API is well-documented, integration testing against Azure Redis Cluster should validate XADD/XRANGE/XTRIM behavior. Verify MINID support on the specific Azure Redis tier.
+Phases likely needing deeper research during planning:
+- **Phase 3 (Authentication):** API key storage patterns (hash vs plaintext), rotation mechanisms, scope enforcement details
+- **Phase 4 (WebSocket):** Backpressure algorithms, connection pool sizing, Redis Streams vs pub/sub for replay
 
-**Phases with standard, well-documented patterns (skip deep research):**
-- **Phase 3 (tRPC Router):** Follows existing `control.router.ts` pattern exactly. Straightforward queries over Redis data. No novel patterns.
-- **Phase 4 (Admin UI):** Follows existing `ControlPanel.tsx` polling pattern. React Query + tRPC + polling interval. Component structure mirrors existing pages.
+Phases with standard patterns (skip research-phase):
+- **Phase 1 (REST API):** Well-documented Fastify + OpenAPI patterns, similar to Stripe/Twilio APIs
+- **Phase 2 (Trade Signals):** DTO transformation is standard pattern, no novel approaches needed
+- **Phase 5 (Runtime Modes):** Environment-based service initialization is common Node.js pattern
 
 ## Confidence Assessment
 
 | Area | Confidence | Notes |
 |------|------------|-------|
-| Stack | HIGH | Zero new dependencies. All APIs verified against installed ioredis 5.4.2 type definitions. Redis Streams commands confirmed in RedisCommander.d.ts. |
-| Features | HIGH | Feature set derived from PROJECT.md requirements and codebase analysis. Existing bugs documented with line references. Dependency graph validated. |
-| Architecture | HIGH | Integration points identified with specific file paths and line numbers. Data flow diagrams account for existing ControlPanel backward compatibility. |
-| Pitfalls | HIGH | 14 pitfalls identified across 3 severity levels. Critical pitfalls (TOCTOU, TTL timing, Streams growth) have concrete prevention strategies verified against Redis documentation. |
+| Stack | HIGH | All packages verified against installed versions (Fastify 5.2.2, Zod 3.25.76, ioredis 5.4.2). Official Fastify ecosystem plugins with active maintenance. Version compatibility confirmed via release notes. |
+| Features | HIGH | Feature landscape validated against industry standards (Binance, Coinbase, Alpaca APIs). OpenAPI/AsyncAPI specs are established standards. AI-agent-ready documentation patterns emerging but clear direction. |
+| Architecture | HIGH | Patterns verified in existing codebase (WebSocket bridge already exists for /ws/alerts, Redis pub/sub pattern in IndicatorCalculationService). Dual auth via route scoping is standard Fastify pattern. |
+| Pitfalls | HIGH | Pitfalls sourced from CVE advisories (Fastify backpressure vulnerability), production bug reports (WebSocket memory leaks in Spring Boot, zombie connections in ws library), and security best practices (CORS/CSRF, error message leakage). |
 
-**Overall confidence: HIGH**
-
-All four research files cross-reference each other and the codebase consistently. The stack research verified API availability against installed type definitions. The architecture research identified specific files and line numbers for integration. The pitfalls research references concrete codebase patterns and Redis documentation. The feature research maps cleanly to the architecture components.
+**Overall confidence:** HIGH
 
 ### Gaps to Address
 
-- **KEEPTTL on Azure Managed Redis:** Pitfalls research recommends KEEPTTL (Redis 6.0+) for separating heartbeat from status updates. Azure Managed Redis should support this (7.2+ default), but this has not been verified against the actual Azure instance. Validate during Phase 1 implementation.
-- **MINID behavior with ioredis Cluster:** Stack research verified XTRIM MINID type signatures exist in ioredis 5.4.2. Actual behavior against Azure Redis Cluster has not been tested. Validate during Phase 2 implementation.
-- **Heartbeat interval tuning:** Research recommends 10-15s interval with 45s TTL. Optimal values depend on real-world event loop latency during backfill and warmup. Start with 15s/45s and tune based on observed heartbeat jitter in production.
-- **MAXLEN vs MINID for stream retention:** Architecture research favors MAXLEN ~ 50000 (simpler). Stack research favors MINID ~ 90-day (time-precise). Both work. Pick one during Phase 2 planning based on whether exact time-based retention matters for audit compliance.
-- **Single unified stream vs per-exchange streams:** Architecture research uses per-exchange streams (`logs:network:coinbase`). Pitfalls research notes that a single unified stream (`logs:network:all`) avoids multi-key read complexity. For 2-3 exchanges, a single stream is simpler. For 6+ exchanges, per-exchange is better. Decide during Phase 2 based on current exchange count trajectory.
+Research was comprehensive but identified areas requiring validation during implementation:
+
+- **API key hashing strategy**: Research recommends bcrypt/argon2 like passwords, but unclear if performance impact (database lookup on every request) is acceptable. May need caching layer or plaintext with encryption at rest. Validate during Phase 3 planning.
+
+- **WebSocket connection limits**: Research suggests 1000 concurrent connections per instance as limit, but actual limit depends on server specs (ulimit -n, available memory). Load testing required during Phase 4 to establish real limits.
+
+- **Rate limiting granularity**: Unclear if per-endpoint rate limits (strict for /signals, relaxed for /candles) are necessary at MVP or single global limit suffices. Defer decision until usage patterns emerge post-launch.
+
+- **Cursor pagination implementation**: Research confirms cursor-based is superior to offset, but Redis ZRANGE cursor patterns need validation. Existing cache keys (candles:userId:exchangeId:symbol:timeframe) may not support efficient cursor queries. Address during Phase 1 planning.
 
 ## Sources
 
 ### Primary (HIGH confidence)
-- ioredis 5.4.2 installed type definitions (`RedisCommander.d.ts`) -- XADD, XRANGE, XTRIM, SET NX EX signatures
-- Livermore codebase analysis -- `server.ts`, `control-channel.service.ts`, `adapter-factory.ts`, `runtime-state.ts`, `client.ts`, `keys.ts`, `ControlPanel.tsx`
-- [Redis Streams Documentation](https://redis.io/docs/latest/develop/data-types/streams/)
-- [Redis SET Command (NX, EX, KEEPTTL)](https://redis.io/docs/latest/commands/set/)
-- [Redis XADD Command](https://redis.io/docs/latest/commands/xadd/)
-- [Redis XTRIM Command](https://redis.io/docs/latest/commands/xtrim/)
-- [Redis Cluster Specification](https://redis.io/docs/latest/operate/oss_and_stack/reference/cluster-spec/)
-- [Redis Distributed Locks](https://redis.io/docs/latest/develop/clients/patterns/distributed-locks/)
+- **STACK.md**: @fastify/swagger@9.7.0, @fastify/bearer-auth@10.1.1, @fastify/rate-limit@10.3.0, fastify-type-provider-zod@4.0.2, @asyncapi/cli@2.21.0 verified against npm registry and GitHub releases
+- **FEATURES.md**: Binance API, Coinbase API, Alpaca Markets API analysis, AsyncAPI 3.1.0 specification, OpenAPI 3.1 specification, financial data API best practices from multiple providers
+- **ARCHITECTURE.md**: Fastify documentation, tRPC Fastify adapter, fastify-zod-openapi GitHub, Redis pub/sub documentation, existing codebase analysis (server.ts, cache/client.ts, indicator-calculation.service.ts)
+- **PITFALLS.md**: Fastify CVE-2026-backpressure advisory, WebSocket memory leak reports (Spring Boot issue #5810, websockets/ws issue #2127), CORS security (tRPC discussions #5180, #5522), OpenAPI spec drift patterns, Clerk dual auth documentation
 
 ### Secondary (MEDIUM confidence)
-- [Redis Heartbeat-Based Session Tracking](https://medium.com/tilt-engineering/redis-powered-user-session-tracking-with-heartbeat-based-expiration-c7308420489f) -- TTL refresh patterns
-- [Distributed Locks with Heartbeats](https://compileandrun.com/redis-distrubuted-locks-with-heartbeats/) -- SET NX EX for atomic claims
-- [Resolving CROSSSLOT Errors](https://hackernoon.com/resolving-the-crossslot-keys-error-with-redis-cluster-mode-enabled) -- Hash tags and multi-key operations
-- [Azure Managed Redis Architecture](https://learn.microsoft.com/en-us/azure/redis/architecture) -- OSS Cluster compatibility
-- [ipify.org](https://www.ipify.org/) -- Public IP detection service
-- [Health Check API Pattern](https://microservices.io/patterns/observability/health-check-api.html) -- Microservices health monitoring
+- API versioning best practices (Redocly, xMatters, GetLate)
+- WebSocket scaling patterns (Ably, Mercure, Pusher)
+- AsyncAPI WebSocket bindings tutorial
+- Rate limiting patterns (Cloudflare, Levo.ai, Hakia)
 
 ### Tertiary (LOW confidence)
-- [Redis Streams XTRIM Approximate Trimming Issue #9469](https://github.com/redis/redis/issues/9469) -- Edge cases in approximate trimming
-- [ioredis XREAD in Cluster Issue #1270](https://github.com/redis/ioredis/issues/1270) -- CROSSSLOT behavior for multi-stream XREAD
+- DTO pattern in TypeScript (CodeWithStyle blog)
+- Monorepo internal packages (Konrad Reiche blog)
 
 ---
-*Research completed: 2026-02-10*
+*Research completed: 2026-02-18*
 *Ready for roadmap: yes*

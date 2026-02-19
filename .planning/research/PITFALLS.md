@@ -1,507 +1,416 @@
-# Pitfalls Research: v6.0 Perseus Network - Instance Registration & Health
+# Pitfalls Research: Perseus Web Public API
 
-**Researched:** 2026-02-10
-**Confidence:** HIGH (codebase analysis + Redis official docs + community patterns)
-**Supersedes:** v5.0 pitfalls (shipped 2026-02-08)
+**Domain:** Public REST API with OpenAPI, WebSocket bridge, dual auth, and runtime modes for trading platform
+**Researched:** 2026-02-18
+**Confidence:** HIGH
 
 ## Executive Summary
 
-The Perseus Network milestone introduces distributed instance coordination on top of an existing Azure Managed Redis OSS Cluster. The current codebase has known bugs: heartbeat not updating, connectionState stuck on `idle` when an instance is dead, and no crash recovery mechanism. Building reliable distributed coordination on Redis requires careful handling of TTL-based liveness detection, atomic lock acquisition for one-instance-per-exchange enforcement, and memory-bounded activity logging via Streams.
+Adding a public API to an existing internal trading platform introduces critical security surface expansion. The primary risk is intellectual property leakage - Livermore uses proprietary MACD-V indicators that must never be exposed through field names, error messages, or API documentation. Secondary risks include WebSocket memory leaks (fan-out to external clients), CORS misconfiguration exposing internal tRPC routes, rate limiting blocking admin operations, and spec drift causing client integration failures.
 
-Key risk areas in priority order:
-1. **Heartbeat TTL timing** - Too short causes false deaths during GC pauses; too long delays dead instance detection
-2. **One-instance-per-exchange TOCTOU** - Check-then-set without atomicity allows two instances on the same exchange
-3. **Redis Streams memory growth** - Unbounded streams in production will consume all Redis memory
-4. **State machine crash recovery** - Instance dies in `starting` state, key stays forever without TTL
-5. **Azure Redis Cluster compatibility** - KEYS command in existing code is banned in Cluster; Streams work per-key but XREAD multi-stream does not
-6. **Public IP detection** - External service failure at startup blocks instance registration entirely
-7. **Admin UI stale data** - Polling shows instance as alive after TTL expiry due to client-side caching
+This research focuses on pitfalls **specific to adding public-facing features to an existing internal system**, not generic API development mistakes.
 
----
+## Critical Pitfalls
 
-## Critical Pitfalls (HIGH severity)
+### Pitfall 1: Intellectual Property Leakage Through Error Messages
 
-### Pitfall 1: Heartbeat TTL Window - Too Short Causes False Deaths
+**What goes wrong:**
+Stack traces, field names, and error messages expose proprietary indicator names ("MACD-V", "informativeATR"), calculation formulas (EMA periods, ATR normalization), and internal architecture details that reveal competitive advantages. The codebase includes detailed documentation comments in `macd-v.ts` describing the Spiroglou formula - these must never appear in public API responses.
 
-**What goes wrong:** Instance sets `exchange:1:status` with `EX 30` (30-second TTL). Heartbeat renews every 10 seconds. During a Node.js garbage collection pause (can exceed 500ms on large heaps), a long backfill REST call (can take 5-10 seconds), or a Redis reconnection (retryDelayMs up to 5000ms in current config), the heartbeat renewal misses its window. The key expires. Admin UI shows the instance as dead. If a second instance is watching and waiting, it may claim the exchange slot.
+**Why it happens:**
+Development-mode error handling gets deployed to production. Default Fastify error handlers return full stack traces. Field names in validation errors expose internal terminology. TypeScript type errors leak schema details. Developers focus on debugging convenience over IP protection.
 
-**Why it happens:** The heartbeat interval and TTL are chosen without accounting for worst-case latency. Node.js is single-threaded; any blocking operation delays the heartbeat timer callback.
-
-**Consequences:**
-- False-positive death detection triggers alerts in Admin UI
-- If one-instance-per-exchange enforcement is TTL-based, a second instance could claim the slot during the false death window, leading to split-brain (two instances on one exchange)
-- Instance recovers from GC pause, finds its registration expired, must re-register (causing a visible flap in the UI)
+**How to avoid:**
+1. **Error sanitization layer:** Strip stack traces, replace internal field names with generic equivalents before returning to public API
+2. **Generic alert schema:** Transform alerts to generic "trade signal" format - never return "macdV", "signal", "histogram" field names
+3. **Separate error handlers:** Production error handler for public routes vs. verbose handler for internal tRPC routes
+4. **Field name mapping:** Public API uses `value`, `timestamp`, `direction` instead of `macdV`, `signal`, `stage`
+5. **No validation error details:** Return "Invalid request" not "macdV must be between -200 and 200"
+6. **Audit tool:** Pre-deployment script that scans OpenAPI spec for proprietary terms
 
 **Warning signs:**
-- Heartbeat flaps visible in Redis Stream logs (registered -> expired -> registered in quick succession)
-- Admin UI shows instances briefly going offline during high-load periods (backfill, warmup)
-- Sequence of `expired -> claimed` events for the same exchange
+- OpenAPI spec contains fields named "macdV", "fastEMA", "slowEMA", "atr", "informativeATR"
+- Error responses include file paths like `packages/indicators/src/indicators/macd-v.ts`
+- 400 errors expose Zod validation details with internal schema structure
+- Debug logs enabled in production (LOG_LEVEL=debug) exposing calculation steps
 
-**Prevention:**
-1. **TTL should be at least 3x the heartbeat interval.** If heartbeat runs every 10 seconds, TTL should be 30-45 seconds minimum. This gives 2-3 missed heartbeats before expiry.
-2. **Use `SET key value XX EX ttl` for renewal** (XX = only set if exists). This prevents accidentally creating a new key if the instance was already evicted.
-3. **Heartbeat must not depend on the event loop being free.** Use `setInterval` with `ref()` and keep the heartbeat callback as lightweight as possible -- just a single `SET ... XX EX` command. No logging, no computation.
-4. **Separate heartbeat from status updates.** Heartbeat is just TTL renewal. Status payload updates (symbolCount, connectionState) happen on a slower cadence or on state change.
-5. **Monitor heartbeat health internally.** Track the delta between expected and actual heartbeat times. If the delta exceeds 50% of the interval, log a warning -- this is an early signal that the event loop is overloaded.
-
-**Phase to address:** Phase 1 (Instance Registration & Heartbeat)
-
-**Codebase references:**
-- `packages/schemas/src/env/config.schema.ts:67-70` - `HARDCODED_CONFIG.redis` shows 5000ms command timeout, 1000ms retry delay
-- `apps/api/src/services/control-channel.service.ts:508-521` - Backfill during start can take many seconds
-- `packages/exchange-core/src/adapter/coinbase-adapter.ts:224` - 30-second watchdog timeout shows network pauses are expected
-
-**Recommended values:**
-```
-Heartbeat interval: 10 seconds
-TTL: 45 seconds (4.5x interval)
-Rationale: Tolerates 3 missed beats + network jitter. 45 seconds is still
-fast enough to detect actual dead instances within ~1 minute.
-```
+**Phase to address:**
+Phase 1 (Public API Foundation) - must be built into initial public route structure, impossible to retrofit cleanly later
 
 ---
 
-### Pitfall 2: One-Instance-Per-Exchange TOCTOU Race
+### Pitfall 2: WebSocket Fan-Out Memory Leaks
 
-**What goes wrong:** Instance A checks if `exchange:1:status` exists (GET returns null), decides it can claim the exchange, then writes `SET exchange:1:status <payload> EX 45`. Between the GET and SET, Instance B performs the same check and also sees null. Both instances write. Last writer wins; first writer's registration is silently overwritten. Two instances now serve Coinbase, causing duplicate candle writes, duplicate pub/sub publishes, and duplicate alert triggers.
+**What goes wrong:**
+WebSocket relay pattern broadcasts candle pulses and alerts to external clients. Without proper backpressure handling, slow clients cause unbounded memory buffering. Zombie connections (disconnected but not cleaned up) accumulate in `alertClients` and `candlePulseClients` Sets, growing indefinitely. Each leaked connection holds ~8MB per 2000 connects (based on Stomp Relay research).
 
-**Why it happens:** GET-then-SET is a classic TOCTOU (time-of-check-time-of-use) race. Even though Redis is single-threaded, the two commands from different clients are not atomic.
+Current code in `server.ts` lines 49-70 manages Sets but lacks:
+- Backpressure detection (send() doesn't check if client is reading)
+- Connection timeout (slow clients never removed)
+- Buffer size limits per client
+- Heartbeat/ping to detect zombies
 
-**Consequences:**
-- Duplicate candle data in cache (same candle written twice with slight timing differences)
-- Duplicate alerts fired to Discord
-- Doubled WebSocket connections to exchange, potentially hitting connection limits
-- Doubled REST API calls for backfill, potentially hitting rate limits
+**Why it happens:**
+Fastify 5.7.2 and earlier ignore backpressure signals in Web Streams. The `ws` library doesn't auto-cleanup zombie connections. Developers assume `socket.readyState === 1` is sufficient (it's not - connection can be half-open). Fan-out pattern (1 Redis event → N WebSocket sends) amplifies memory consumption.
+
+**How to avoid:**
+1. **Upgrade to Fastify 5.7.3+** (fixes CVE backpressure vulnerability)
+2. **Per-client buffer limits:** Track bufferedAmount per WebSocket, disconnect if > 1MB
+3. **Heartbeat/ping every 30s:** Detect zombies, remove from Sets if no pong response
+4. **Connection age timeout:** Auto-disconnect clients connected > 24h (forces reconnect/cleanup)
+5. **Rate limit broadcasts:** Skip clients if bufferedAmount > threshold (they're already behind)
+6. **Connection metadata:** Track client ID, connect time, messages sent for debugging leaks
+7. **Metrics:** Expose `/metrics` endpoint showing `alertClients.size`, `candlePulseClients.size`, avg bufferedAmount
 
 **Warning signs:**
-- Two instances show the same exchangeId in Redis Stream logs
-- Duplicate alert notifications
-- Exchange rate limit errors despite single instance expectation
+- Memory usage grows proportionally to connected client count and never drops
+- `alertClients.size` or `candlePulseClients.size` grows but never shrinks during normal operation
+- Process crashes with "JavaScript heap out of memory" under load
+- WebSocket broadcast latency increases over time (backpressure accumulation)
+- Redis contains "candle:close" events but WebSocket clients stop receiving updates
 
-**Prevention:**
-1. **Use `SET exchange:<id>:status <payload> NX EX 45` for initial registration.** NX = only set if not exists. This is atomic. If it returns null/nil, another instance already claimed the slot.
-2. **Include a unique instance ID in the value.** On heartbeat renewal, use a Lua script that checks the instance ID before renewing:
-   ```lua
-   -- Atomic heartbeat renewal: only renew if we own the key
-   if redis.call('GET', KEYS[1]) then
-     local current = cjson.decode(redis.call('GET', KEYS[1]))
-     if current.instanceId == ARGV[1] then
-       redis.call('SET', KEYS[1], ARGV[2], 'EX', ARGV[3])
-       return 1
-     end
-   end
-   return 0
-   ```
-3. **On failed NX, read the existing owner and decide:** Log who owns it, report to Admin UI, and enter standby or fail gracefully. Do NOT retry in a loop.
-4. **Handle the "zombie instance" scenario:** If Instance A dies without clean shutdown, its key expires after TTL. Instance B can then claim with NX. The TTL is the protection against permanent lock-out.
-
-**Phase to address:** Phase 1 (Instance Registration & Heartbeat)
-
-**Critical note for Azure Redis Cluster:** The status key `exchange:1:status` is a single key, so NX works fine in Cluster mode. No cross-slot concern here.
+**Phase to address:**
+Phase 2 (WebSocket Bridge) - must implement cleanup BEFORE public release, memory leaks in production are catastrophic
 
 ---
 
-### Pitfall 3: Redis Streams Unbounded Memory Growth
+### Pitfall 3: CORS Allowing Unintended Cross-Origin Access to Internal tRPC Routes
 
-**What goes wrong:** Network activity logs use Redis Streams (`logs:network:coinbase`). Each state transition and error adds an entry via XADD. Over 90 days (the stated retention target), a busy instance producing one entry per minute accumulates ~130,000 entries. During error storms (Redis reconnection loops, exchange API outages), entries could be produced every second, reaching millions of entries. Redis Streams store entries in a radix tree with listpack nodes, and without trimming, this consumes significant memory on the Azure Redis instance.
+**What goes wrong:**
+Public API requires permissive CORS (`origin: true` or specific domains). But current `server.ts` line 241 sets `origin: true` globally, applying to ALL routes including internal tRPC admin routes at `/trpc/*`. External sites can make authenticated requests to admin endpoints if user has valid Clerk session cookies.
 
-**Why it happens:** XADD without MAXLEN or MINID creates entries forever. Unlike keys with TTL, individual stream entries do not auto-expire. The only way to remove old entries is explicit trimming.
+Form-based CSRF attacks succeed because tRPC Fastify adapter doesn't check `Content-Type: application/json` header. Attacker site submits form to `/trpc/control.stop`, browser sends Clerk session cookie, command executes.
 
-**Consequences:**
-- Azure Redis memory usage grows linearly until hitting the instance limit
-- Redis starts evicting other keys (candles, indicators) if maxmemory-policy is noeviction=error, or silently drops data if allkeys-lru
-- Performance degrades as streams grow large (XRANGE scans become slower)
+**Why it happens:**
+Single CORS configuration applies to all routes. Developers add CORS for public API, unknowingly expose internal routes. tRPC Fastify adapter lacks Content-Type validation (unlike Express adapter). `origin: true` seems "safe" during development, becomes vulnerability in production.
+
+**How to avoid:**
+1. **Route-scoped CORS:** Register `@fastify/cors` twice - permissive for `/api/v1/*`, restrictive for `/trpc/*`
+2. **Internal routes CORS:** `/trpc/*` only allows `origin: process.env.ADMIN_ORIGIN` (single admin dashboard domain)
+3. **Content-Type validation middleware:** Reject tRPC requests without `Content-Type: application/json`
+4. **CSRF tokens:** Add token validation for state-changing tRPC procedures
+5. **SameSite cookies:** Clerk session cookies use `SameSite=Strict` or `SameSite=Lax`
+6. **Separate ports:** Consider running public API on :3000, internal tRPC on :3001 (network-level isolation)
 
 **Warning signs:**
-- Redis `INFO memory` shows steadily increasing used_memory with no plateau
-- `XLEN logs:network:coinbase` returns unexpectedly large numbers
-- XRANGE queries for recent entries become slow
+- Single `fastify.register(cors, ...)` call applies to all routes
+- OpenAPI spec includes `/trpc/*` endpoints (they shouldn't be documented publicly)
+- CORS `origin` header in responses matches attacker domain for internal routes
+- Browser DevTools shows `/trpc/*` requests succeed from external domains
+- Fastify startup logs show CORS registered once, not per-route
 
-**Prevention:**
-1. **Always use XADD with MAXLEN or MINID trimming.** Recommended: `XADD logs:network:coinbase MAXLEN ~ 50000 * ...` (approximate trim to 50K entries, which covers ~35 days at 1 entry/minute).
-2. **Prefer MINID for time-based retention.** Calculate MINID as `(Date.now() - 90 * 24 * 60 * 60 * 1000)` and pass it: `XADD key MINID ~ <minid> * field value`. This naturally trims entries older than 90 days.
-3. **Use approximate (~) trimming, not exact.** Exact trimming examines every entry; approximate trimming is O(1) amortized because it only trims at radix tree node boundaries.
-4. **Add a LIMIT clause for safety.** `XADD key MAXLEN ~ 50000 LIMIT 100 * ...` ensures each XADD trims at most 100 old entries, preventing a single XADD from blocking if the stream is severely overgrown.
-5. **Monitor XLEN periodically.** Add a simple check: if XLEN exceeds 2x the expected max, log a warning and force a manual XTRIM.
-6. **During error storms, throttle XADD.** If the same error repeats, batch it: "Connection error (x47 in last 60s)" instead of 47 individual entries.
-
-**Phase to address:** Phase 2 (Network Activity Logging via Streams)
-
-**Codebase reference:**
-- No existing Streams usage in the codebase -- this is net-new code
-- `packages/cache/src/client.ts:178-187` - `deleteKeysClusterSafe` shows the pattern of per-key operations for Cluster compatibility
+**Phase to address:**
+Phase 1 (Public API Foundation) - CORS misconfiguration is security vulnerability from day one, must be architected correctly initially
 
 ---
 
-### Pitfall 4: State Machine Crash Recovery - Stuck in Transient States
+### Pitfall 4: OpenAPI Spec Drift from Actual Implementation
 
-**What goes wrong:** The v6.0 state machine has states: `idle -> starting -> warming -> active -> stopping -> stopped`. Instance begins `starting`, writes `connectionState: "starting"` to Redis. Heartbeat TTL is set. Instance crashes (OOM, power loss, uncaught exception). The key has a 45-second TTL, so it expires -- but during those 45 seconds, Admin UI shows an instance permanently stuck in "starting." After expiry, the key disappears entirely. No record exists that the instance was ever there, and no error is logged.
+**What goes wrong:**
+OpenAPI spec is hand-written separately from route handlers. Over time, implementation adds/removes fields, changes validation rules, adds new endpoints - but spec isn't updated. Clients generate SDKs from stale spec, receive different responses than documented. Runtime validation (Zod schemas) diverges from OpenAPI schemas.
 
-**Why it happens:** Transient states (`starting`, `warming`, `stopping`) are entered before the operation completes. If the operation never completes (crash), the state persists until TTL expiry. There is no external health check -- the system relies entirely on heartbeat TTL.
+Example: Public API adds `exchangeId` field to alert responses (Phase 27), spec still documents old schema without it. Generated TypeScript clients expect wrong type, runtime errors occur.
 
-**Consequences:**
-- Admin UI shows phantom instances in "starting" state for up to 45 seconds after crash
-- No crash event in the activity log (instance died before it could log)
-- If TTL is too long, the phantom persists for minutes, confusing operators
-- After TTL expiry, no forensic evidence remains (key deleted, no stream entry)
+**Why it happens:**
+No single source of truth. Developers update Zod schemas in route handlers, forget to regenerate OpenAPI spec. Manual spec updates are tedious, error-prone. No CI check that spec matches implementation. TypeScript types provide compile-time safety but don't enforce runtime/spec alignment.
+
+**How to avoid:**
+1. **Spec as source of truth:** Use `openapi-typescript-server` to generate route handlers from spec, OR
+2. **Code as source of truth:** Use `@fastify/swagger` with `@fastify/swagger-ui` to auto-generate spec from Zod schemas
+3. **Runtime validation:** Use `openapi-ts-router` to validate requests/responses against spec at runtime in development
+4. **CI drift detection:** Script that compares OpenAPI spec fields against actual API responses from test suite
+5. **Versioned specs:** `/api/v1/openapi.json` versioned alongside code, breaking changes require version bump
+6. **Pre-commit hook:** Regenerate spec from code before each commit (if using code-first approach)
+7. **Contract testing:** Use Pact or similar to verify spec matches actual behavior
 
 **Warning signs:**
-- Instance appears in "starting" for longer than the expected startup time (currently ~30 seconds based on backfill + warmup in `control-channel.service.ts:508-571`)
-- Instance disappears from Admin UI without a "stopped" or "error" state transition
-- Redis Stream has a "starting" entry but no subsequent "active" or "error" entry
+- OpenAPI spec `lastModified` date is weeks/months before last code change
+- Client SDK bug reports about missing/unexpected fields
+- Spec shows fields that don't exist in actual responses (discovered via manual testing)
+- No automated process to regenerate spec (purely manual updates)
+- Zod schema changes in PRs without corresponding spec updates
 
-**Prevention:**
-1. **Transient states should have a shorter TTL than the heartbeat TTL.** The status key written during `starting` should have `EX 60` (startup timeout), while the heartbeat-renewed `active` state uses `EX 45`. If startup takes longer than 60 seconds, the key expires and the instance must re-register.
-2. **Write to the activity Stream BEFORE entering a transient state.** `XADD logs:network:coinbase * event state_change from idle to starting instanceId abc123`. This creates a forensic trail even if the instance crashes during the transition.
-3. **Admin UI should show time-in-state.** If `connectionState: "starting"` and `lastHeartbeat` is more than 60 seconds ago, UI should show "STARTING (possibly stuck)" with a visual warning.
-4. **On startup, check for orphaned registrations.** Before claiming `exchange:1:status`, check if there is an existing key in a transient state with no recent heartbeat. If so, the previous instance likely crashed. Log this finding to the Stream and proceed with claim.
-5. **Add graceful shutdown hooks.** `process.on('SIGTERM')` and `process.on('SIGINT')` should transition state to `stopping -> stopped` and delete the registration key before exit.
-
-**Phase to address:** Phase 1 (State Machine) and Phase 2 (Activity Logging)
-
-**Codebase references:**
-- `apps/api/src/services/runtime-state.ts:14` - Current `ConnectionState` type is `'idle' | 'connecting' | 'connected' | 'disconnected' | 'error'` -- needs expansion to v6.0 states
-- `apps/api/src/services/control-channel.service.ts:648-658` - `updateConnectionState()` only updates in-memory state, does NOT write to Redis
+**Phase to address:**
+Phase 1 (Public API Foundation) - must establish spec sync strategy BEFORE writing first public endpoint, retrofitting is extremely difficult
 
 ---
 
-### Pitfall 5: Azure Redis Cluster - KEYS Command and Multi-Key Operations
+### Pitfall 5: Rate Limiting Affecting Internal Admin Operations
 
-**What goes wrong:** The existing codebase uses `redis.keys(pattern)` in 7 places within `control-channel.service.ts` (lines 840-881). In Azure Managed Redis with OSS Cluster mode, `KEYS` scans only the connected node's slots, not the entire cluster. This means `KEYS candles:1:*` may return an incomplete set of keys. Additionally, any future code that uses multi-key XREAD across streams on different slots will fail with CROSSSLOT errors.
+**What goes wrong:**
+Rate limiter applies globally to all routes, including internal admin tRPC endpoints. Admin performs bulk operation (backfill 50 symbols, import historical data), hits rate limit, operation fails mid-execution leaving inconsistent state. Public API rate limits (100 req/min per API key) accidentally throttle admin dashboard making 200 req/min for portfolio analysis.
 
-**Why it happens:** OSS Cluster mode distributes keys across shards based on hash slots. Single-key commands (GET, SET, XADD) are routed correctly by ioredis Cluster. Multi-key commands and pattern scans require all keys to hash to the same slot.
+**Why it happens:**
+Rate limiting middleware registered globally before route differentiation. No exemption for internal operations. Same Redis rate limit keys used for public API keys and admin sessions. Developers test with small datasets, bulk operations only fail in production.
 
-**Consequences:**
-- `clear-cache` command misses keys on other shards (partial cache clear, corruption)
-- Multi-stream XREAD for reading logs from multiple exchanges fails with CROSSSLOT
-- `SCAN` (the recommended alternative to KEYS) also only scans the connected node in Cluster mode
+**How to avoid:**
+1. **Route-scoped rate limiting:** Apply rate limiter ONLY to `/api/v1/*` public routes, skip `/trpc/*`
+2. **Role-based limits:** Admin role bypasses rate limits or has 100x higher thresholds
+3. **Separate Redis keyspaces:** Public API uses `ratelimit:apikey:{key}`, admin uses `ratelimit:admin:{userId}` with different limits
+4. **Operation-level exemptions:** Bulk operations check `X-Admin-Token` header, bypass rate limiting
+5. **Rate limit headers:** Return `X-RateLimit-Remaining` so admin can detect approaching limit
+6. **Emergency bypass:** Environment variable `DISABLE_RATE_LIMITING=1` for emergency admin access
+7. **Metrics/alerting:** Monitor rate limit rejections by role, alert if admin hits limits
 
 **Warning signs:**
-- `clear-cache` reports fewer deleted keys than expected
-- CROSSSLOT errors in logs when reading multiple streams
-- Cache inconsistency after clear-cache (some symbols still have old data)
+- Admin dashboard shows "Rate limit exceeded" errors during normal use
+- Bulk operations fail with 429 status codes
+- Redis contains `ratelimit:*` keys for admin user IDs (should be exempt)
+- No distinction in rate limit middleware between public/internal routes
+- Rate limit thresholds are same for all user roles
 
-**Prevention:**
-1. **For key scanning, use ioredis Cluster's `scanStream()` method or iterate all nodes.** ioredis Cluster provides `cluster.nodes('master')` to get all master nodes, then scan each one:
-   ```typescript
-   const masters = cluster.nodes('master');
-   for (const node of masters) {
-     // SCAN on each individual node
-   }
-   ```
-2. **For Streams, each exchange gets its own stream key.** `logs:network:coinbase` and `logs:network:binance` are separate keys. Read them individually with separate XREAD/XRANGE calls, NOT multi-key XREAD. This is already the planned design and avoids CROSSSLOT.
-3. **Hash tags are NOT recommended for status keys.** Using `{exchange}:1:status` forces all exchange status keys to the same slot, creating a hot shard. Since we only read one key at a time, hash tags provide no benefit and create imbalance.
-4. **Replace existing KEYS usage.** The 7 `redis.keys()` calls in `control-channel.service.ts` should use SCAN or a key registry pattern. This is existing tech debt that will bite harder as key count grows.
-5. **Test with Azure Redis, not local Redis.** Local Redis (Docker `Hermes` on port 6400) is single-node. All Cluster behaviors are invisible locally. Test critical paths against Azure Sandbox.
-
-**Phase to address:** Phase 1 (any Redis operations) and Phase 2 (Streams)
-
-**Codebase references:**
-- `apps/api/src/services/control-channel.service.ts:840-881` - 7 `redis.keys()` calls
-- `packages/cache/src/client.ts:38-63` - ioredis Cluster configuration with `maxRedirections: 16`
-- `packages/cache/src/client.ts:178-187` - `deleteKeysClusterSafe` already uses per-key DEL pattern
+**Phase to address:**
+Phase 3 (Authentication & Rate Limiting) - must architect role-aware rate limiting from start, global limits break admin workflows
 
 ---
 
-## Moderate Pitfalls (MEDIUM severity)
+### Pitfall 6: Runtime Mode Flag Accidentally Disabling Exchange Connections
 
-### Pitfall 6: Heartbeat Renewal Overwrites Status Payload
+**What goes wrong:**
+Adding `--headless` flag for public API mode (no exchange connections, serve cached data only) accidentally breaks normal exchange mode. Logic like `if (headlessMode) skipExchange()` has bug where `headlessMode` is undefined/null, evaluates truthy, skips exchange connection. Production deployment with typo `--headles` (missing 's') defaults to wrong mode, stops live data ingestion.
 
-**What goes wrong:** Heartbeat runs on a timer: `SET exchange:1:status <full_payload_json> EX 45`. The payload includes `symbolCount`, `connectionState`, `lastError`, etc. But the heartbeat timer captures the payload at creation time or must regenerate it each tick. If the payload is stale (symbolCount changed but heartbeat still sends old value), the status in Redis diverges from reality. Worse, if a status update and heartbeat fire concurrently, they race on the same key -- one overwrites the other.
+Current `server.ts` has `--autostart` flag (line 165-177). Adding `--headless` creates interaction: what if both flags provided? Undefined behavior.
 
-**Why it happens:** Using a single key for both liveness (TTL) and status (payload) creates coupling. Every heartbeat must serialize the full status, and every status change must also reset the TTL.
+**Why it happens:**
+Boolean flag logic with implicit defaults. No validation that flag combinations are valid. ENV var `HEADLESS_MODE` conflicts with CLI `--headless` (which takes precedence?). Runtime mode affects multiple services (exchange adapter, indicator service, boundary service) - easy to miss one. No startup self-test that verifies mode is correct.
 
-**Consequences:**
-- Admin UI shows stale symbolCount, wrong connectionState
-- Error message from 10 minutes ago persists in status because heartbeat keeps re-writing it
-- Status update sets new connectionState but loses the TTL refresh (if using plain SET without EX)
-
-**Prevention:**
-1. **Separate heartbeat from status.** Two approaches:
-   - **Option A (recommended):** Single key, but heartbeat uses `EXPIRE exchange:1:status 45` to refresh TTL without touching the value. Status updates use `SET exchange:1:status <payload> KEEPTTL` (Redis 6.0+) to update payload without changing TTL.
-   - **Option B:** Two keys: `exchange:1:heartbeat` (just instanceId, with TTL) and `exchange:1:status` (full payload, no TTL, deleted on clean shutdown). Admin UI checks both: if heartbeat exists, instance is alive; read status for details.
-2. **If using single key with full payload on each heartbeat,** build the payload fresh each tick from the runtime state module. Never cache the payload.
-3. **Use `KEEPTTL` flag** (available since Redis 6.0) when updating status payload outside the heartbeat cycle. This prevents accidentally dropping the TTL.
-
-**Phase to address:** Phase 1 (Instance Registration & Heartbeat)
-
-**Verification needed:** Confirm Azure Managed Redis supports KEEPTTL (Redis 6.0+ feature). Azure Managed Redis uses Redis 7.2+ by default, so this should be available. [MEDIUM confidence -- verify against Azure docs]
-
----
-
-### Pitfall 7: Public IP Detection Blocks Startup
-
-**What goes wrong:** Instance registration requires the public IP address (stated in v6.0 requirements). At startup, the code calls `https://api.ipify.org` or similar service. If the external service is down, rate-limiting, or the network blocks outbound HTTP, the call hangs or fails. If startup waits for this call, the entire instance registration is blocked.
-
-**Why it happens:** External HTTP dependencies at startup create a hard dependency on third-party availability.
-
-**Consequences:**
-- Instance fails to register, appears offline in Admin UI
-- If the IP fetch has no timeout, the startup hangs indefinitely
-- Startup retry logic may cause repeated calls to a rate-limited IP service
+**How to avoid:**
+1. **Explicit mode enum:** `--mode=exchange|headless|hybrid` (mutually exclusive, no boolean confusion)
+2. **Mode validation:** Startup checks that mode is valid, no conflicting flags, required config for each mode exists
+3. **Self-test per mode:** Exchange mode pings exchange API, headless mode verifies cached data exists
+4. **Mode indicator in logs:** Every log line includes `[mode:exchange]` or `[mode:headless]` prefix
+5. **Startup banner:** ASCII art showing current mode, exchange connections, monitored symbols
+6. **Health check includes mode:** `/health` returns `{ mode: "exchange", exchangeConnected: true }` for monitoring
+7. **Immutable mode:** Mode set at startup, cannot change at runtime (prevents race conditions)
 
 **Warning signs:**
-- Startup takes >10 seconds (normal startup is ~5 seconds before backfill)
-- Timeout errors referencing ipify/ipinfo in logs
-- Instance shows `starting` state but never reaches `active`
+- Boolean mode flags (`--headless`, `--autostart`) instead of enum
+- No validation of flag combinations (can provide both `--autostart coinbase --headless`)
+- Runtime mode checks use `if (config.headless)` without explicit `=== true`
+- Exchange connection logic scattered across multiple files, easy to miss mode check
+- No startup log confirming mode: "Starting in EXCHANGE mode with autostart"
 
-**Prevention:**
-1. **Set a strict timeout (3 seconds) on the IP fetch.** If it fails, use `"unknown"` as the IP address and log a warning. Do NOT block startup.
-2. **Cache the public IP.** IPs change rarely. Cache in memory for the lifetime of the process. Re-fetch only on reconnection or every 6 hours.
-3. **Use multiple fallback services:**
-   ```typescript
-   const IP_SERVICES = [
-     'https://api.ipify.org?format=json',
-     'https://ifconfig.me/ip',
-     'https://icanhazip.com',
-   ];
-   // Try each with 2-second timeout, first success wins
-   ```
-4. **Make IP optional in the registration payload.** The instance should register immediately with `ipAddress: null`, then update the key once IP is resolved. This decouples registration from IP detection.
-5. **Consider privacy implications.** The public IP is visible to all Admin UI users. For Mike and Kaia this is fine (they're partners), but document this as a potential concern for future multi-tenant scenarios.
-
-**Phase to address:** Phase 1 (Instance Registration)
-
-**Codebase note:** v5.0 PITFALLS.md (Pitfall 4) already identified geo-restriction detection via IP. The public IP detection here serves double duty -- both for instance identity and future geo-checking.
+**Phase to address:**
+Phase 4 (Runtime Modes) - must design mode system carefully from start, refactoring mode logic after deployment is risky
 
 ---
 
-### Pitfall 8: Admin UI Polling Shows Stale Instance Status
+### Pitfall 7: API Key Auth Bypass via Clerk Session Cookies
 
-**What goes wrong:** Admin UI polls `control.getNetworkStatus` every 5 seconds. Instance dies at T=0. TTL expires at T=45 seconds. But the Admin UI's last successful poll was at T=-2 seconds, showing the instance as "active." The next poll at T=3 still returns stale data from ioredis's local cache (if connection pooling is involved) or from tRPC's response cache. User sees "active" for up to 50 seconds after death.
+**What goes wrong:**
+Public API endpoints protected by API key auth middleware. But Clerk middleware also runs globally, attaches `auth` context if session cookie present. Developer forgets API key auth on one endpoint, Clerk session from admin login grants access. External user discovers they can access "API-key-only" endpoint using stolen/leaked Clerk session cookie.
 
-**Why it happens:** Multiple caching layers compound staleness: Redis TTL, ioredis connection pooling, tRPC response caching, HTTP caching, React query caching, and the polling interval itself.
+Example: `/api/v1/alerts` requires API key, but accidentally uses `publicProcedure` not `apiKeyProcedure`. User with Clerk session (e.g., from shared admin dashboard access) can call endpoint without API key.
 
-**Consequences:**
-- Operators trust the Admin UI and don't investigate until much later
-- If the UI shows "active" when the instance is dead, manual intervention is delayed
-- During the stale window, the exchange has no active instance but the UI says otherwise
+**Why it happens:**
+Two parallel auth systems with unclear precedence. Clerk plugin registered globally (required for `/trpc/*`), inadvertently applies to `/api/v1/*`. Easy to forget API key middleware on new routes. No clear distinction between "internal user auth" (Clerk) and "external developer auth" (API key).
+
+**How to avoid:**
+1. **Route prefix isolation:** `/trpc/*` uses Clerk ONLY, `/api/v1/*` uses API key ONLY, never both
+2. **Explicit auth middleware:** Public API routes explicitly check `req.headers.authorization` has Bearer token, reject if Clerk session present
+3. **Separate tRPC instances:** Internal tRPC uses `protectedProcedure` (Clerk), public tRPC/REST uses `apiKeyProcedure` (API key)
+4. **Auth test suite:** Every public endpoint has test that verifies API key required, Clerk session rejected
+5. **Route registration order:** Register API key routes BEFORE Clerk plugin (so Clerk doesn't attach auth context)
+6. **Middleware exclusions:** Clerk plugin config: `excludeRoutes: ['/api/v1/*', '/webhooks/*']`
+7. **Security audit script:** Scans routes for missing auth middleware, flags publicProcedure usage in `/api/v1/*`
 
 **Warning signs:**
-- Admin UI shows "active" but Redis key already expired (check with `TTL exchange:1:status`)
-- Discrepancy between Redis state and UI state
-- "Last heartbeat" timestamp in UI is significantly in the past
+- Clerk plugin registered globally without `excludeRoutes` config
+- Public API routes sometimes check `ctx.auth.userId` instead of API key
+- Mix of `publicProcedure` and `apiKeyProcedure` in same router
+- No test that verifies Clerk session CANNOT access public API endpoints
+- API key validation logic in some routes but not others
 
-**Prevention:**
-1. **Display `lastHeartbeat` timestamp prominently.** Even if the status says "active," showing "Last heartbeat: 47 seconds ago" immediately signals something is wrong. Color-code: green (<15s), yellow (15-30s), red (>30s).
-2. **Client-side freshness check.** After fetching status, compare `lastHeartbeat` against `Date.now()`. If the gap exceeds the TTL, override the displayed state with "POSSIBLY DEAD" regardless of what the server returned.
-3. **Use WebSocket/SSE instead of polling for real-time status.** The existing Redis pub/sub infrastructure could publish status changes. Admin UI subscribes via WebSocket (already exists for alerts).
-4. **Disable tRPC response caching for status endpoints.** Set `staleTime: 0` and `cacheTime: 0` on the React Query config for network status queries.
-5. **On key expiry, publish an event.** Redis Keyspace Notifications can notify when `exchange:1:status` expires (`SUBSCRIBE __keyevent@0__:expired`). The API server (or a lightweight watcher) can then publish a "instance died" event to the Admin UI's WebSocket.
-
-**Phase to address:** Phase 3 (Admin UI Network View)
-
-**Codebase references:**
-- `apps/admin/src/` - Admin UI (React + tRPC client)
-- Existing WebSocket alert infrastructure in Admin UI could be extended for status events
+**Phase to address:**
+Phase 3 (Authentication & Rate Limiting) - dual auth is security-critical, must be architecturally sound from the start
 
 ---
 
-### Pitfall 9: State Machine Missing Transition Validation
+### Pitfall 8: AsyncAPI Spec Drift for WebSocket Events
 
-**What goes wrong:** The v6.0 state machine defines valid transitions: `idle -> starting -> warming -> active -> stopping -> stopped`. But nothing prevents invalid transitions like `active -> starting` (instance tries to re-start while already active) or `stopped -> active` (skipping the starting/warming phases). If `updateConnectionState()` accepts any state without validation, bugs in the control flow can put the instance in an impossible state.
+**What goes wrong:**
+WebSocket bridge broadcasts `candle_pulse` and `alert_trigger` events. AsyncAPI spec documents old event schema. Implementation adds `sourceExchangeId` field (Phase 27, line 90 in `server.ts`), spec not updated. Client libraries generated from spec don't expect new field, ignore it or crash on unexpected property.
 
-**Why it happens:** The current `updateConnectionState()` in `runtime-state.ts` does not validate transitions. It simply overwrites the state with whatever is passed.
+Unlike REST API (request-response, easy to test), WebSocket events are fire-and-forget. Spec drift goes unnoticed until client bug reports. No compile-time or runtime validation that events match AsyncAPI schema.
 
-**Consequences:**
-- Instance shows "active" but internal services are not actually running
-- Admin UI displays impossible state transitions in the activity log
-- Debugging becomes harder because the state history doesn't make sense
+**Why it happens:**
+AsyncAPI less mature than OpenAPI, fewer tools for auto-generation from code. WebSocket events defined in `broadcastAlert()` and `broadcastCandlePulse()` functions, not centralized schemas. No validation that outgoing messages match AsyncAPI spec. Manual spec updates forgotten during feature development.
+
+**How to avoid:**
+1. **Event schema validation:** Validate events against Zod schema before `JSON.stringify()`, schemas shared with AsyncAPI spec generation
+2. **AsyncAPI from code:** Use AsyncAPI code-first tools (if available) to generate spec from TypeScript event types
+3. **Contract testing:** Record actual WebSocket events in integration tests, compare against AsyncAPI spec
+4. **Version WebSocket protocols:** Include `{ version: "1.0", type: "alert_trigger", data: {...} }` in every message, bump version on breaking changes
+5. **Deprecation warnings:** When adding new fields, include `{ _deprecated: false }` metadata, set true before removing old fields
+6. **Dual event formats:** Temporarily send both old and new event formats during migration period
+7. **Client SDK updates:** Publish AsyncAPI spec changes in release notes, provide migration guide
 
 **Warning signs:**
-- State transitions in the log that skip intermediate states
-- Instance shows "active" immediately after "idle" without "starting" -> "warming"
-- Multiple "starting" events without a "stopped" event in between
+- AsyncAPI spec manually edited, no automation
+- WebSocket event objects defined inline in `broadcastAlert()`, not imported from schema file
+- No Zod schema for WebSocket events (only REST API has schemas)
+- Integration tests mock WebSocket events instead of using real event generation
+- No version field in WebSocket messages (breaking changes are invisible to clients)
 
-**Prevention:**
-1. **Define a transition map and enforce it:**
-   ```typescript
-   const VALID_TRANSITIONS: Record<ConnectionState, ConnectionState[]> = {
-     idle: ['starting'],
-     starting: ['warming', 'error', 'stopping'],
-     warming: ['active', 'error', 'stopping'],
-     active: ['stopping', 'error'],
-     stopping: ['stopped', 'error'],
-     stopped: ['idle'],
-     error: ['idle', 'starting'], // Can retry from error
-   };
-   ```
-2. **Log invalid transition attempts** as errors, but still allow them with a warning. Do NOT throw -- a crash during an invalid transition makes things worse.
-3. **Include `previousState` in the status payload.** This makes debugging easier: `{ connectionState: "active", previousState: "warming", stateChangedAt: 1234567890 }`.
-4. **Every state transition writes to the Redis Stream** as an audit trail, including `from` and `to` states.
-
-**Phase to address:** Phase 1 (State Machine)
-
-**Codebase reference:**
-- `apps/api/src/services/runtime-state.ts:14` - Current ConnectionState type needs expansion
-- `apps/api/src/services/runtime-state.ts:77-79` - `updateRuntimeState` does no validation
+**Phase to address:**
+Phase 2 (WebSocket Bridge) - establish AsyncAPI sync strategy before first WebSocket event goes public
 
 ---
 
-### Pitfall 10: Redis Stream Key Naming in Cluster Mode
+## Technical Debt Patterns
 
-**What goes wrong:** The planned stream keys use exchange names: `logs:network:coinbase`, `logs:network:binance`. These hash to different slots (expected and correct -- each stream is independent). But if future code tries to read from both streams in a single XREAD call, it fails with CROSSSLOT. More subtly, if the Admin UI's "Network" view endpoint does `XREAD COUNT 50 STREAMS logs:network:coinbase logs:network:binance 0-0 0-0`, this fails in Cluster.
+| Shortcut | Immediate Benefit | Long-term Cost | When Acceptable |
+|----------|-------------------|----------------|-----------------|
+| Hand-written OpenAPI spec instead of code-gen | Full control over API design, no tooling setup | Guaranteed spec drift, manual sync burden, client SDK bugs | Never - always use code-first OR spec-first with tooling |
+| Global CORS `origin: true` | Works immediately, no CORS errors | Exposes internal routes to CSRF, security vulnerability | Development only, NEVER production |
+| Single rate limit for all routes | Simple implementation, one Redis keyspace | Admin operations fail, no role-based limits | MVP only if admin is single user, refactor before multi-user |
+| Generic error responses with no detail | IP protection, hides internal structure | Difficult debugging for API consumers, poor DX | Acceptable for production public API, use detailed errors in sandbox |
+| No WebSocket backpressure handling | Simpler code, works for small client counts | Memory leaks, crashes under load | Never acceptable, implement from day one |
+| Boolean mode flags (`--headless`, `--autostart`) | Quick CLI implementation | Undefined behavior with flag combinations, hard to extend | Prototype only, refactor to enum mode before production |
+| Reusing tRPC routes for public API | Code reuse, faster development | IP leakage via field names, CORS complexity, tight coupling | Never - always create separate public API layer with field mapping |
+| No AsyncAPI spec for WebSockets | Faster initial development | Client integration pain, breaking changes invisible | Early prototype only, spec required before public beta |
 
-**Why it happens:** XREAD with multiple stream keys is a multi-key operation. In Cluster mode, all keys in a multi-key command must hash to the same slot.
+## Integration Gotchas
 
-**Consequences:**
-- CROSSSLOT error when Admin UI tries to fetch activity logs from multiple exchanges
-- If hash tags are naively added (`{logs:network}:coinbase`), all streams land on one shard, creating a hot shard
+| Integration | Common Mistake | Correct Approach |
+|-------------|----------------|------------------|
+| Clerk + API Keys | Clerk middleware applies to all routes, API key endpoints accept Clerk sessions | Use `excludeRoutes` in Clerk config, explicitly reject Clerk auth in API key middleware |
+| Fastify + CORS | Single global CORS applies to internal and public routes | Register CORS twice with different configs, or use route-scoped CORS plugin |
+| tRPC + OpenAPI | Expose internal tRPC routes via trpc-openapi, leak proprietary field names | Create separate public API layer, map internal fields to generic names before exposing |
+| WebSocket + Redis Pub/Sub | Relay all Redis events to all WebSocket clients (N:M fan-out) | Filter events per client subscription, implement per-client backpressure |
+| Zod + OpenAPI | Maintain separate Zod schemas (code) and OpenAPI schemas (spec) | Use @fastify/swagger to generate OpenAPI from Zod, single source of truth |
+| Redis Cluster + Rate Limiting | Each cluster node has independent rate limit counters | Use Redis Lua scripts for atomic distributed rate limiting, or centralized rate limit service |
+| Fastify + WebSocket | Use `@fastify/websocket` with default settings (vulnerable to backpressure CVE) | Upgrade to Fastify 5.7.3+, implement per-client bufferedAmount checks |
 
-**Prevention:**
-1. **Read each stream individually.** The API endpoint for network activity should make separate XRANGE calls per exchange and merge results in application code:
-   ```typescript
-   const coinbaseLogs = await redis.xrange('logs:network:coinbase', '-', '+', 'COUNT', 50);
-   const binanceLogs = await redis.xrange('logs:network:binance', '-', '+', 'COUNT', 50);
-   const merged = [...coinbaseLogs, ...binanceLogs].sort(byTimestamp);
-   ```
-2. **Do NOT use hash tags on stream keys.** The streams are independent and should be distributed across shards for even load.
-3. **Consider a single unified stream** if cross-exchange chronological ordering is important: `logs:network:all`. Each entry includes an `exchange` field. This avoids multi-key reads entirely. Trade-off: single stream means single shard for all logs, but at the expected volume (few entries per minute) this is fine.
-4. **Document the pattern** so future developers don't accidentally introduce multi-stream XREAD.
+## Performance Traps
 
-**Phase to address:** Phase 2 (Network Activity Logging)
+| Trap | Symptoms | Prevention | When It Breaks |
+|------|----------|------------|----------------|
+| WebSocket fan-out without filtering | Memory grows with client count, CPU spikes on each Redis event | Per-client subscriptions (subscribe to specific symbols/timeframes only) | >100 concurrent WebSocket clients |
+| N+1 Redis queries in portfolio analysis | Slow response times, Redis CPU spikes, timeout errors | Use MGET for bulk indicator fetches (already implemented in `getPortfolioAnalysis`) | >20 symbols in portfolio |
+| No rate limit on WebSocket connect | Attacker opens 1000s of connections, exhausts file descriptors | Connection rate limit per IP (max 10 connects/min), max connections per IP (50) | >500 concurrent connections total |
+| Broadcasting to disconnected WebSockets | CPU waste, slows down broadcast loop | Check `readyState === WebSocket.OPEN` before send (already implemented), remove zombies via ping/pong | >50 disconnected clients in Set |
+| No pagination on public API endpoints | Response size grows unbounded, JSON parsing OOM | Max limit of 100 items per response, require cursor-based pagination for more | Returning >1000 candles in single response |
+| Global rate limiter mutex | Single Redis lock blocks all rate limit checks | Per-key rate limiting, Lua script for atomic increment/check | >1000 req/sec across all users |
 
----
+## Security Mistakes
 
-## Minor Pitfalls (LOW severity)
+| Mistake | Risk | Prevention |
+|---------|------|------------|
+| Returning internal field names (macdV, signal, atr) in public API | Exposes proprietary indicator formulas, names, calculation approach | Field name mapping layer: macdV → value, signal → baseline, atr → volatility |
+| Including calculation parameters in responses | Reveals EMA periods (12, 26), ATR period (26), signal period (9) | Never return config/params in public API, only derived values |
+| Verbose error messages in production | Stack traces reveal file structure, library versions, internal logic | Generic errors only: "Invalid request", "Resource not found", log details server-side |
+| No API key rotation mechanism | Leaked keys grant permanent access | Implement key rotation, expiration, and revocation endpoints |
+| Using sequential IDs for API keys | Enumeration attacks, key prediction | Use cryptographically random API keys (32+ bytes, URL-safe base64) |
+| Storing API keys in plain text | Database breach exposes all keys | Hash API keys with bcrypt/argon2, store hash only (like passwords) |
+| No rate limit on auth endpoints | Brute force API key guessing | Aggressive rate limit on `/auth` endpoints (5 attempts/min per IP) |
+| CORS allows all origins in production | CSRF attacks on authenticated endpoints | Whitelist specific origins, never `origin: true` in production |
+| No webhook signature verification | Fake webhook events trigger actions | HMAC signature verification for Clerk webhooks (already implemented at line 248) |
+| Exposing internal routes in OpenAPI spec | Documents admin endpoints publicly, aids reconnaissance | Only include `/api/v1/*` in OpenAPI spec, exclude `/trpc/*`, `/webhooks/*` |
 
-### Pitfall 11: Heartbeat Timer Drift on Long-Running Processes
+## UX Pitfalls
 
-**What goes wrong:** `setInterval(heartbeat, 10000)` in Node.js is not guaranteed to fire at exactly 10-second intervals. Over hours of uptime, timer drift accumulates. More critically, if the event loop is blocked by a synchronous operation (JSON.stringify of a large candle set, for example), the heartbeat callback is delayed until the event loop is free.
+| Pitfall | User Impact | Better Approach |
+|---------|-------------|-----------------|
+| Generic "Invalid request" errors | Developer can't fix their API call, no actionable guidance | Error codes + field-level errors: `{ error: "INVALID_TIMEFRAME", field: "timeframe", allowed: ["1m","5m",...] }` |
+| No OpenAPI spec versioning | Breaking changes break all clients, no migration path | Semantic versioning: `/api/v1/`, `/api/v2/`, deprecation notices in headers |
+| Missing rate limit headers | Developers don't know how many requests remain, sudden 429 errors | Always return `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset` |
+| No API changelog | Developers miss breaking changes, new features undiscovered | Public changelog with dates, examples: "2026-02-18: Added sourceExchangeId field to alerts" |
+| No sandbox environment | Developers test against production, risk bans, corrupt real data | Free tier sandbox with mock data, same API surface as production |
+| No WebSocket reconnection guidance | Clients implement naive reconnect (rapid retries), get rate limited | Docs recommend exponential backoff, max retries, jitter |
+| No pagination metadata | Developers don't know if more data exists, can't request next page | Include `{ hasNext: true, cursor: "..." }` in paginated responses |
+| Inconsistent error response format | Clients need custom error handling per endpoint | Standardize: `{ success: false, error: { code: "...", message: "..." } }` |
+| No WebSocket event filtering | Clients receive all events, must filter client-side (bandwidth waste) | Allow subscription to specific symbols/types: `{ subscribe: ["BTC-USD:alerts"] }` |
+| Missing field documentation in OpenAPI | Developers guess field meaning, misuse API | Every field has description, example, constraints in OpenAPI spec |
 
-**Prevention:**
-- Use `setInterval` (not `setTimeout` chains) to minimize drift
-- Keep heartbeat callback to a single Redis command (no async chains)
-- Monitor the actual interval between heartbeats via a timestamp comparison
-- Accept that 100-200ms of drift is normal and does not matter with a 45-second TTL
+## "Looks Done But Isn't" Checklist
 
-**Phase to address:** Phase 1
+- [ ] **OpenAPI Spec:** Spec exists but not validated against actual responses - verify with contract testing or runtime validation
+- [ ] **Rate Limiting:** Rate limiter added but applies to admin routes too - verify admin can perform bulk operations
+- [ ] **CORS:** CORS configured but allows all origins - verify production uses whitelist only
+- [ ] **Error Handling:** Errors return 400/500 but include stack traces - verify production strips internal details
+- [ ] **WebSocket Cleanup:** Close handler removes client from Set but zombies accumulate - verify ping/pong heartbeat implemented
+- [ ] **API Key Auth:** API key middleware exists but some routes skip it - verify all `/api/v1/*` routes require API key
+- [ ] **Field Name Mapping:** Public API exists but returns internal field names - verify no "macdV", "atr", "informativeATR" in responses
+- [ ] **AsyncAPI Spec:** Spec exists but never updated - verify matches actual WebSocket events via contract tests
+- [ ] **Runtime Mode:** Headless mode flag exists but not tested with exchange mode - verify startup with both flags fails gracefully
+- [ ] **Dual Auth:** Both Clerk and API key work but unclear precedence - verify Clerk cannot access API-key-only endpoints
 
----
+## Recovery Strategies
 
-### Pitfall 12: Registration Payload Serialization Overhead
+| Pitfall | Recovery Cost | Recovery Steps |
+|---------|---------------|----------------|
+| IP Leakage (field names exposed) | HIGH | 1. Immediate API version bump (v1 → v2), 2. Add field mapping layer, 3. Deprecate v1 with 6-month sunset, 4. Audit all endpoints for other leaks |
+| WebSocket Memory Leak | LOW | 1. Deploy fix with ping/pong + backpressure, 2. Restart instances (clears leaked connections), 3. Add metrics/alerting |
+| CORS Misconfiguration | LOW | 1. Update CORS config to whitelist, 2. Deploy immediately (hot fix), 3. Audit access logs for unauthorized origins |
+| OpenAPI Spec Drift | MEDIUM | 1. Freeze API changes, 2. Generate spec from code or validate spec against tests, 3. Publish updated spec, 4. Contact affected developers |
+| Rate Limit Blocks Admin | LOW | 1. Add admin bypass in rate limiter, 2. Deploy fix, 3. Clear rate limit Redis keys for admin user |
+| Runtime Mode Bug | MEDIUM | 1. Add mode validation at startup, 2. Add self-test per mode, 3. Deploy with startup banner showing mode |
+| Dual Auth Bypass | HIGH | 1. Audit all public routes for missing API key check, 2. Add test coverage, 3. Deploy fix, 4. Rotate API keys if breach suspected |
+| AsyncAPI Drift | MEDIUM | 1. Version WebSocket protocol, 2. Send both old/new formats temporarily, 3. Publish updated AsyncAPI spec, 4. Deprecate old format |
 
-**What goes wrong:** Status payload includes hostname, IP, admin info, symbol list, connection state, errors, and timestamps. If serialized as JSON on every heartbeat (every 10 seconds), and the payload is large (20+ symbols with metadata), the serialization cost is non-trivial at high frequency.
+## Pitfall-to-Phase Mapping
 
-**Prevention:**
-- Keep the payload lean. Store symbolCount (number) instead of the full symbol list
-- Separate heartbeat (TTL renewal only) from payload updates (on change only)
-- Use `KEEPTTL` for payload-only updates and `EXPIRE` for heartbeat-only renewals
-
-**Phase to address:** Phase 1
-
----
-
-### Pitfall 13: SIGTERM/SIGKILL Graceful Shutdown Gap
-
-**What goes wrong:** `process.on('SIGTERM')` allows graceful shutdown: transition to `stopping -> stopped`, delete the registration key, log the shutdown to Streams. But `SIGKILL` (or OOM killer on Linux, Task Manager End Process on Windows) gives no opportunity for cleanup. The key remains with its TTL. On Windows (Livermore's platform), `Ctrl+C` sends `SIGINT` which Node.js handles, but closing the terminal window or killing via Task Manager is equivalent to SIGKILL.
-
-**Prevention:**
-- Handle `SIGTERM`, `SIGINT`, and `beforeExit` for graceful cleanup
-- Accept that hard kills will leave orphaned keys until TTL expiry -- this is by design, and TTL is the safety net
-- Do NOT try to make the system bulletproof against SIGKILL. The TTL expiry mechanism IS the crash recovery
-- Log the graceful shutdown to the Stream so operators can distinguish clean shutdowns from crashes (clean shutdown has a "stopped" entry; crash has no final entry)
-
-**Phase to address:** Phase 1
-
----
-
-### Pitfall 14: Redis Connection Loss During Heartbeat
-
-**What goes wrong:** The ioredis Cluster client loses connection to Redis (Azure restart, network blip). During reconnection (up to 5 seconds based on `retryDelayMs: 1000` and `maxRetries: 3`), heartbeat SET commands fail silently or throw. If the heartbeat interval passes during reconnection without successful renewal, the key may expire on the Redis server even though the instance is healthy.
-
-**Prevention:**
-- ioredis buffers commands during reconnection by default (good -- heartbeat will be sent once reconnected)
-- Verify that `enableOfflineQueue: true` (default in ioredis) is active for the Cluster client
-- After reconnection, immediately re-register if the key expired during the outage
-- On reconnection, check `EXISTS exchange:1:status`: if the key is gone, re-register with NX
-
-**Phase to address:** Phase 1
-
-**Codebase reference:**
-- `packages/cache/src/client.ts:50-58` - Cluster retry strategy already handles reconnection
-
----
-
-## Phase-Specific Warnings
-
-| Phase Topic | Likely Pitfall | Severity | Mitigation |
-|---|---|---|---|
-| Instance Registration | TOCTOU race on claim | HIGH | Use SET NX EX atomically |
-| Instance Registration | Public IP blocks startup | MEDIUM | Timeout + fallback, register without IP |
-| Heartbeat | False death during GC/backfill | HIGH | TTL >= 3x interval, lightweight callback |
-| Heartbeat | Overwrites status payload | MEDIUM | Use EXPIRE for TTL, KEEPTTL for payload |
-| State Machine | Stuck in transient state after crash | HIGH | TTL on transient states, Stream audit trail |
-| State Machine | Invalid transitions | MEDIUM | Transition map enforcement |
-| Redis Streams | Unbounded memory growth | HIGH | XADD with MAXLEN ~ or MINID ~ |
-| Redis Streams | CROSSSLOT on multi-stream XREAD | MEDIUM | Read streams individually, merge in app |
-| Redis Streams | Error storm floods stream | MEDIUM | Throttle/batch repeated errors |
-| Admin UI | Stale status display | MEDIUM | Show lastHeartbeat, client-side freshness check |
-| Admin UI | Polling overhead | LOW | Consider WebSocket/SSE for real-time |
-| Azure Redis Cluster | KEYS command incomplete results | HIGH | Use SCAN per node or key registry |
-| Graceful Shutdown | SIGKILL leaves orphaned key | LOW | TTL is the safety net by design |
-
-## Anti-Patterns to Avoid
-
-| Anti-Pattern | Why It Seems Right | Why It Fails |
-|---|---|---|
-| Using `KEYS` for discovery | Simple, one command | Scans only one node in Cluster, blocks Redis |
-| Single key for heartbeat + status | Fewer keys to manage | Coupling causes overwrites and TTL races |
-| Exact MAXLEN trimming on XADD | Predictable stream size | O(N) cost per trim, blocks Redis |
-| Hash tags on all instance keys | Forces same slot, enables multi-key | Creates hot shard, no benefit for single-key ops |
-| Polling at 1-second intervals | "Real-time" feel in UI | Wastes bandwidth, increases Redis load |
-| TTL == heartbeat interval | "Detect death instantly" | One missed beat = false death |
-| Retry loop on failed NX claim | "Keep trying until I get it" | Fights with legitimate owner, wastes resources |
-| `process.exit()` in heartbeat failure | "If I can't heartbeat, I'm broken" | Prevents graceful shutdown, loses in-flight data |
-
-## Redis Command Reference for v6.0
-
-Quick reference for the specific Redis commands needed, all Cluster-safe:
-
-| Operation | Command | Cluster Safe? | Notes |
-|---|---|---|---|
-| Initial registration | `SET key value NX EX 45` | Yes (single key) | Atomic claim |
-| Heartbeat renewal | `EXPIRE key 45` | Yes (single key) | TTL-only, no payload change |
-| Status update | `SET key value KEEPTTL` | Yes (single key) | Payload update, keeps existing TTL |
-| Heartbeat + status | `SET key value XX EX 45` | Yes (single key) | Full overwrite, XX=only if exists |
-| Activity log write | `XADD key MAXLEN ~ 50000 * field value` | Yes (single key) | Auto-trim |
-| Activity log read | `XRANGE key - + COUNT 50` | Yes (single key) | Per-stream |
-| Activity log trim | `XTRIM key MINID ~ <90-day-id>` | Yes (single key) | Time-based retention |
-| Check registration | `GET key` | Yes (single key) | Read status |
-| Clean shutdown | `DEL key` | Yes (single key) | Remove registration |
+| Pitfall | Prevention Phase | Verification |
+|---------|------------------|--------------|
+| IP Leakage | Phase 1 (Public API Foundation) | Audit OpenAPI spec for proprietary terms, test error responses contain no stack traces |
+| WebSocket Memory Leak | Phase 2 (WebSocket Bridge) | Load test with 1000 clients, verify memory stable after disconnects, check `alertClients.size` returns to 0 |
+| CORS Misconfiguration | Phase 1 (Public API Foundation) | Test `/trpc/*` rejects cross-origin requests, `/api/v1/*` allows whitelisted origins only |
+| OpenAPI Spec Drift | Phase 1 (Public API Foundation) | CI fails if spec doesn't match generated types or test responses |
+| Rate Limit Blocks Admin | Phase 3 (Authentication & Rate Limiting) | Admin can backfill 100 symbols without 429 errors, public API key hits limit at 100 req/min |
+| Runtime Mode Bug | Phase 4 (Runtime Modes) | Startup fails if both `--autostart` and `--headless` provided, health check shows correct mode |
+| Dual Auth Bypass | Phase 3 (Authentication & Rate Limiting) | Test suite verifies Clerk session cannot access any `/api/v1/*` endpoint |
+| AsyncAPI Drift | Phase 2 (WebSocket Bridge) | Integration test compares actual WebSocket events against AsyncAPI schemas |
 
 ## Sources
 
-**Redis Official Documentation:**
-- [Redis SET Command (NX, EX, KEEPTTL)](https://redis.io/docs/latest/commands/set/)
-- [Redis Streams](https://redis.io/docs/latest/develop/data-types/streams/)
-- [XADD Command](https://redis.io/docs/latest/commands/xadd/)
-- [XTRIM Command](https://redis.io/docs/latest/commands/xtrim/)
-- [XREAD Command](https://redis.io/docs/latest/commands/xread/)
-- [Distributed Locks with Redis](https://redis.io/docs/latest/develop/clients/patterns/distributed-locks/)
-- [Redis Cluster Specification](https://redis.io/docs/latest/operate/oss_and_stack/reference/cluster-spec/)
-- [Redis Anti-Patterns](https://redis.io/learn/howtos/antipatterns)
+### Fastify & WebSocket
+- [DoS via Unbounded Memory Allocation in sendWebStream - GitHub Advisory](https://github.com/fastify/fastify/security/advisories/GHSA-mrq3-vjjr-p77c)
+- [How to Fix WebSocket Performance Issues - OneUpTime](https://oneuptime.com/blog/post/2026-01-24-websocket-performance/view)
+- [Backpressure in WebSocket Streams - Skyline Codes](https://skylinecodes.substack.com/p/backpressure-in-websocket-streams)
+- [Memory leak in Stomp Relay Broker - Spring Boot Issue #5810](https://github.com/spring-projects/spring-boot/issues/5810)
+- [How to reproduce zombie connections - websockets/ws Issue #2127](https://github.com/websockets/ws/issues/2127)
 
-**Redis Race Conditions & Locking:**
-- [Redis Race Condition Glossary](https://redis.io/glossary/redis-race-condition/)
-- [Distributed Locks with Heartbeats](https://compileandrun.com/redis-distrubuted-locks-with-heartbeats/)
-- [Redis Lock Patterns](https://redis.io/glossary/redis-lock/)
-- [Implementing Distributed Locks (Leapcell)](https://leapcell.io/blog/implementing-distributed-locks-with-redis-delving-into-setnx-redlock-and-their-controversies)
+### OpenAPI & Spec Drift
+- [Zero-Config OpenAPI with Express, TypeScript, and Zod - Medium](https://medium.com/@pvakharia007/zero-config-openapi-swagger-with-express-typescript-and-zod-5e861a7f4f16)
+- [How to Create Type-Safe API Clients in TypeScript - OneUpTime](https://oneuptime.com/blog/post/2026-01-30-typescript-type-safe-api-clients/view)
+- [Typescript with the OpenAPI specification - Simon Reilly](https://blog.simonireilly.com/posts/typescript-openapi/)
+- [openapi-typescript documentation](https://openapi-ts.dev/6.x/introduction)
 
-**Redis Cluster & CROSSSLOT:**
-- [Resolving CROSSSLOT Errors (HackerNoon)](https://hackernoon.com/resolving-the-crossslot-keys-error-with-redis-cluster-mode-enabled)
-- [AWS CROSSSLOT Resolution](https://repost.aws/knowledge-center/elasticache-crossslot-keys-error-redis)
-- [ioredis Cluster CROSSSLOT Issue #101](https://github.com/redis/ioredis/issues/101)
-- [ioredis XREAD in Cluster Issue #1270](https://github.com/redis/ioredis/issues/1270)
+### Dual Authentication
+- [Using API keys - Machine authentication - Clerk Docs](https://clerk.com/docs/guides/development/machine-auth/api-keys)
+- [Add API Key support to your SaaS - Clerk Blog](https://clerk.com/blog/add-api-key-support-to-your-saas-with-clerk)
+- [Making authenticated requests - Clerk Docs](https://clerk.com/docs/guides/development/making-requests)
 
-**Azure Managed Redis:**
-- [Azure Managed Redis Architecture](https://learn.microsoft.com/en-us/azure/redis/architecture)
-- [Azure Managed Redis Overview](https://learn.microsoft.com/en-us/azure/redis/overview)
+### CORS Security
+- [Handling CORS on the Fastify Adapter - tRPC Discussion #5180](https://github.com/trpc/trpc/discussions/5180)
+- [Explicit Content-Type checks - tRPC Issue #5522](https://github.com/trpc/trpc/issues/5522)
+- [fastify-cors - GitHub](https://github.com/fastify/fastify-cors)
 
-**Public IP Detection:**
-- [ipify API](https://www.ipify.org/)
+### Rate Limiting
+- [Bypassing rate limits via race conditions - PortSwigger Lab](https://portswigger.net/web-security/race-conditions/lab-race-conditions-bypassing-rate-limits)
+- [Rate Limiting and Throttling Patterns - Hakia](https://www.hakia.com/engineering/rate-limiting/)
+- [Rate limiting best practices - Cloudflare](https://developers.cloudflare.com/waf/rate-limiting-rules/best-practices/)
+- [API Rate Limiting 2026 Guide - Levo.ai](https://www.levo.ai/resources/blogs/api-rate-limiting-guide-2026)
 
-**Redis Streams Memory Management:**
-- [Redis Streams XTRIM Approximate Trimming Issue #9469](https://github.com/redis/redis/issues/9469)
-- [Redis Streams Consumer Groups Memory Issue #8635](https://github.com/redis/redis/issues/8635)
-- [Managing Redis Streams (Medium)](https://medium.com/@sydcanem/managing-a-redis-stream-b8c912e06fa9)
+### IP Protection
+- [Protecting proprietary algorithms in 2026 - Linklaters](https://techinsights.linklaters.com/post/102lwgp/protecting-proprietary-algorithms-in-2026-a-strategic-imperative)
+- [Information leakage via error messages - CQR](https://cqr.company/web-vulnerabilities/information-leakage-via-error-messages/)
+- [ORM Error Message Information Disclosure - Medium](https://medium.com/@cameronbardin/when-error-messages-leak-more-than-logs-orms-frameworks-and-the-quiet-reconnaissance-problem-cfb336ce1117)
+- [Sensitive Data in Error Messages - InstaTunnel](https://instatunnel.my/blog/sensitive-data-in-error-messages-when-your-stack-traces-give-away-the-database-schema)
+- [Your Stack Trace Is Leaking - Debugg.ai](https://debugg.ai/resources/stack-trace-leaking-ai-debug-pipelines-secrets-mitigations)
+
+### AsyncAPI
+- [Creating AsyncAPI for WebSocket API - AsyncAPI Blog](https://www.asyncapi.com/blog/websocket-part2)
+- [AsyncAPI 3.0.0 Release Notes](https://www.asyncapi.com/blog/release-notes-3.0.0)
+- [AsyncAPI 3.1.0 Specification](https://www.asyncapi.com/docs/reference/specification/v3.1.0)
+- [From API-First to Code Generation - WebSocket Use Case](https://www.asyncapi.com/blog/websocket-part3)
+
+### tRPC Public APIs
+- [Aggregate public tRPC procedures - tRPC Discussion #4964](https://github.com/trpc/trpc/discussions/4964)
+- [Using tRPC for public-facing APIs - tRPC Issue #755](https://github.com/trpc/trpc/issues/755)
+- [Build a Public tRPC API: trpc-openapi vs ts-rest](https://catalins.tech/public-api-trpc/)
+
+---
+*Pitfalls research for: Perseus Public API (Livermore trading platform)*
+*Researched: 2026-02-18*
