@@ -126,10 +126,11 @@ Plans:
   2. External client can fetch alert history with timestamp, symbol, exchange, timeframe, signal type, direction, and price
   3. No indicator names (MACD-V), calculation parameters (EMA periods, ATR multipliers), or internal metric names appear in signal responses
   4. OpenAPI spec documents signal endpoints with generic schema and clear examples
-**Plans**: TBD
+**Plans:** 2 plans
 
 Plans:
-- [ ] 40-01: TBD
+- [ ] 40-01-PLAN.md -- Zod schemas and whitelist transformers for signals and alerts
+- [ ] 40-02-PLAN.md -- Route handlers, plugin wiring, and OpenAPI documentation
 
 #### Phase 41: Authentication & Rate Limiting
 **Goal**: Secure public API with API key authentication and tiered rate limiting
