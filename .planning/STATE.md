@@ -11,10 +11,10 @@ See: .planning/PROJECT.md (updated 2026-02-18)
 
 **Milestone:** v8.0 Perseus Web Public API
 **Phase:** 40 of 43 (Trade Signals with Generic Labeling)
-**Plan:** 1 of 2 complete
-**Status:** Phase 40 Plan 01 complete, Plan 02 ready
+**Plan:** 2 of 2 complete
+**Status:** Phase 40 complete, ready for Phase 41
 
-**Last activity:** 2026-02-19 — Phase 40 Plan 01 complete (schemas + transformers)
+**Last activity:** 2026-02-19 — Phase 40 Plan 02 complete (signal + alert REST endpoints)
 
 Progress: [████░░░░░░] 8 of 13 milestones complete (61%)
 
@@ -51,6 +51,7 @@ See `.planning/MILESTONES.md` for full history.
 | Phase 39 P02 | 364 | 2 tasks | 5 files |
 | Phase 39 P03 | 281 | 1 task | 3 files |
 | Phase 40 P01 | 223 | 2 tasks | 6 files |
+| Phase 40 P02 | 241 | 2 tasks | 4 files |
 
 ## Tech Debt (Carried Forward)
 
@@ -107,6 +108,11 @@ Recent decisions affecting v8.0 work:
 - **Strength thresholds**: >=150 extreme, >=80 strong, >=30 moderate, <30 weak (consistent across signals and alerts)
 - **Conservative alert direction fallback**: Unrecognized trigger labels default to bearish
 
+**Phase 40-02 decisions:**
+- **Signals not paginated**: Fixed set of 4 timeframes per symbol, static meta with has_more: false
+- **Internal alertType in WHERE only**: `alertType='macdv'` filters DB query but never appears in response
+- **Bidirectional exchange cache**: alerts route caches name->id and id->name from same DB query
+
 ### Pending Todos
 
 None.
@@ -120,8 +126,8 @@ None.
 ### Last Session
 
 **Date:** 2026-02-19
-**Activity:** Executing Phase 40 Plan 01
-**Stopped At:** Completed 40-01-PLAN.md (Schemas & Transformers)
+**Activity:** Executing Phase 40 Plan 02
+**Stopped At:** Completed 40-02-PLAN.md (Signal + Alert REST Endpoints)
 
 ### Resume Context
 
@@ -143,8 +149,18 @@ Phase 39 delivered:
 
 **Model profile:** Switched to `quality` (Opus for executors) per user preference
 
-**Next step:** Execute 40-02-PLAN.md -- Signal and Alert REST endpoint routes
+**PHASE 40 COMPLETE**
+
+Phase 40 delivered:
+- Zod schemas with `.describe()` for signal and alert public types (Plan 01)
+- Whitelist transformers mapping internal indicator data to generic direction/strength categories (Plan 01)
+- GET /public/v1/signals/:exchange/:symbol reading multi-timeframe signals from Redis (Plan 02)
+- GET /public/v1/alerts with cursor pagination from PostgreSQL alert_history (Plan 02)
+- OpenAPI spec with Signals and Alerts tags, all 5 route handlers registered
+- Zero proprietary indicator names in any response body or OpenAPI spec
+
+**Next step:** Phase 41 -- API Authentication & Rate Limiting
 
 ---
 *State initialized: 2026-01-18*
-*Last updated: 2026-02-19 — Phase 40 Plan 01 complete (schemas + transformers)*
+*Last updated: 2026-02-19 — Phase 40 complete (trade signals with generic labeling)*
