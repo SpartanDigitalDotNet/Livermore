@@ -110,7 +110,7 @@ No pagination is needed as the list of exchanges is small and relatively static.
         });
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Failed to fetch exchanges';
-        return reply.code(500).send({
+        return (reply as any).code(500).send({
           success: false,
           error: {
             code: 'INTERNAL_ERROR',

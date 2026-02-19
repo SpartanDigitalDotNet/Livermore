@@ -74,7 +74,7 @@ This endpoint provides a comprehensive catalog of cryptocurrency trading pairs, 
           .limit(1);
 
         if (!exchange) {
-          return reply.code(404).send({
+          return (reply as any).code(404).send({
             success: false,
             error: {
               code: 'NOT_FOUND',
@@ -93,7 +93,7 @@ This endpoint provides a comprehensive catalog of cryptocurrency trading pairs, 
           cursorId = decodeCursor(cursor);
         } catch (error) {
           const message = error instanceof Error ? error.message : 'Invalid cursor';
-          return reply.code(400).send({
+          return (reply as any).code(400).send({
             success: false,
             error: {
               code: 'BAD_REQUEST',

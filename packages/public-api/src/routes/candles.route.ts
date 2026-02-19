@@ -83,7 +83,7 @@ This endpoint provides historical and recent price data in standard candlestick 
       // Resolve exchange name to ID
       const exchangeId = await resolveExchangeId(exchangeName);
       if (!exchangeId) {
-        return reply.code(404).send({
+        return (reply as any).code(404).send({
           success: false,
           error: {
             code: 'NOT_FOUND',
@@ -133,7 +133,7 @@ This endpoint provides historical and recent price data in standard candlestick 
       } catch (error) {
         // Redis error or cursor decode error
         const message = error instanceof Error ? error.message : 'Failed to fetch candles';
-        return reply.code(400).send({
+        return (reply as any).code(400).send({
           success: false,
           error: {
             code: 'BAD_REQUEST',

@@ -110,7 +110,7 @@ This endpoint provides real-time generic trade signal classifications derived fr
       // Resolve exchange name to ID
       const exchangeId = await resolveExchangeId(exchangeName);
       if (!exchangeId) {
-        return reply.code(404).send({
+        return (reply as any).code(404).send({
           success: false,
           error: {
             code: 'NOT_FOUND',
