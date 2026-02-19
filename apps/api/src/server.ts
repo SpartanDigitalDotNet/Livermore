@@ -238,8 +238,17 @@ async function start() {
   });
 
   // Register plugins
+  // Route-scoped CORS: permissive for public API, restrictive for admin tRPC
   await fastify.register(cors, {
-    origin: true, // Allow all origins in development
+    delegator: (request: any, callback: any) => {
+      const url = request.url as string;
+      if (url.startsWith('/public/v1')) {
+        callback(null, { origin: true });
+        return;
+      }
+      const adminOrigin = process.env.ADMIN_ORIGIN ?? 'http://localhost:4001';
+      callback(null, { origin: adminOrigin, credentials: true });
+    },
   });
 
   await fastify.register(websocket);
@@ -252,10 +261,6 @@ async function start() {
   // Register Clerk authentication plugin (must be before tRPC so getAuth works in context)
   await fastify.register(clerkPlugin);
   logger.info('Clerk authentication plugin registered');
-
-  // Public REST API (Phase 39) - separate from tRPC admin routes
-  await fastify.register(publicApiPlugin, { prefix: '/public/v1' });
-  logger.info('Public API registered at /public/v1');
 
   // ============================================
   // PRE-FLIGHT CONNECTION CHECKS
@@ -279,6 +284,10 @@ async function start() {
   await testRedisConnection(subscriberRedis);
 
   logger.info('Pre-flight checks passed - all connections verified');
+
+  // Public REST API (Phase 39/41) - registered after Redis init for rate limiting
+  await fastify.register(publicApiPlugin, { prefix: '/public/v1', redis });
+  logger.info('Public API registered at /public/v1 (auth + rate limiting enabled)');
 
   // Phase 30: Create instance registry and state machine
   // Autostart uses Coinbase (exchangeId=1). Idle mode starts with placeholder (exchangeId=0).

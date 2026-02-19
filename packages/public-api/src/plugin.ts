@@ -1,4 +1,4 @@
-import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
+import type { FastifyPluginAsync } from 'fastify';
 import {
   serializerCompiler,
   validatorCompiler,
@@ -10,6 +10,8 @@ import {
 import fastifySwagger from '@fastify/swagger';
 import fastifySwaggerUi from '@fastify/swagger-ui';
 import { candlesRoute, exchangesRoute, symbolsRoute, signalsRoute, alertsRoute } from './routes/index.js';
+import { buildAuthHook } from './middleware/auth.js';
+import { getRateLimitConfig } from './middleware/rate-limit.js';
 
 /**
  * Sanitized error handler for the public API scope.
@@ -92,13 +94,22 @@ function publicErrorHandler(
  *
  * This plugin should be registered under the /public/v1 prefix in server.ts.
  */
-export const publicApiPlugin: FastifyPluginAsyncZod = async (instance) => {
+export const publicApiPlugin: FastifyPluginAsync<{ redis?: any }> = async (instance, opts) => {
   // Register Zod type provider compilers for validation and serialization
   instance.setValidatorCompiler(validatorCompiler);
   instance.setSerializerCompiler(serializerCompiler);
 
   // Set error handler BEFORE registering routes so it covers all child scopes
   instance.setErrorHandler(publicErrorHandler as any);
+
+  // Register API key authentication hook (before rate limiting and routes)
+  instance.addHook('onRequest', buildAuthHook());
+
+  // Register rate limiting with Redis backing (after auth hook so apiKeyId is available)
+  if (opts.redis) {
+    const rateLimit = (await import('@fastify/rate-limit')).default;
+    await instance.register(rateLimit, getRateLimitConfig(opts.redis));
+  }
 
   // Register OpenAPI 3.1 spec generator with Zod-to-JSON-Schema transform
   await instance.register(fastifySwagger, {
@@ -124,11 +135,22 @@ This API is designed for programmatic access by:
 
 **Response format:** All successful responses use a JSON envelope with \`success: true\`, \`data\` array, and \`meta\` pagination object. Error responses use \`success: false\` with standardized error codes.
 
-**Rate limits:** (To be implemented in Phase 41 - API Authentication & Rate Limiting)
+**Rate limits:** All endpoints are rate-limited to 300 requests per minute per API key. Rate limit headers (\`x-ratelimit-limit\`, \`x-ratelimit-remaining\`, \`x-ratelimit-reset\`) are included in every response. When the limit is exceeded, a 429 response is returned with a \`retry-after\` header.
 
-**Authentication:** (To be implemented in Phase 41 - API Key infrastructure)
+**Authentication:** All data endpoints require an API key passed via the \`X-API-Key\` header. Obtain a key from the admin dashboard. The Swagger UI and OpenAPI spec are accessible without authentication.
         `.trim(),
       },
+      components: {
+        securitySchemes: {
+          apiKey: {
+            type: 'apiKey',
+            name: 'X-API-Key',
+            in: 'header',
+            description: 'API key for authentication. Obtain from the admin dashboard.',
+          },
+        },
+      },
+      security: [{ apiKey: [] }],
       servers: [
         {
           url: '/public/v1',

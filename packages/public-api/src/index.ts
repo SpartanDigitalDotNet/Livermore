@@ -19,3 +19,6 @@ export * from './helpers/index.js';
 
 // Export plugin
 export { publicApiPlugin } from './plugin.js';
+
+// Export auth utilities (needed by tRPC router for cache invalidation)
+export { clearKeyCache } from './middleware/auth.js';
