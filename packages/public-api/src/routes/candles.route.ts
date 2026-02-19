@@ -8,7 +8,6 @@ import {
   CandleParamsSchema,
   CandleQuerySchema,
   PublicCandleSchema,
-  ErrorEnvelopeSchema,
   createEnvelopeSchema,
 } from '../schemas/index.js';
 import { transformCandle } from '../transformers/index.js';
@@ -74,8 +73,6 @@ This endpoint provides historical and recent price data in standard candlestick 
         querystring: CandleQuerySchema,
         response: {
           200: createEnvelopeSchema(z.array(PublicCandleSchema)),
-          400: ErrorEnvelopeSchema,
-          404: ErrorEnvelopeSchema,
         },
       },
     },

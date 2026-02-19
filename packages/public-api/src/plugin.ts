@@ -1,9 +1,84 @@
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
-import { serializerCompiler, validatorCompiler, ZodTypeProvider } from 'fastify-type-provider-zod';
+import {
+  serializerCompiler,
+  validatorCompiler,
+  jsonSchemaTransform,
+  ZodTypeProvider,
+  hasZodFastifySchemaValidationErrors,
+  isResponseSerializationError,
+} from 'fastify-type-provider-zod';
 import fastifySwagger from '@fastify/swagger';
 import fastifySwaggerUi from '@fastify/swagger-ui';
-import { ZodError } from 'zod';
 import { candlesRoute, exchangesRoute, symbolsRoute } from './routes/index.js';
+
+/**
+ * Sanitized error handler for the public API scope.
+ * Strips stack traces, internal field names, and implementation details.
+ * Uses reply.serializer(JSON.stringify) to bypass Zod response serialization.
+ */
+function publicErrorHandler(
+  error: Error,
+  request: { log: { error: (e: Error) => void } },
+  reply: any
+) {
+  request.log.error(error);
+
+  // Bypass Zod response serializer for error responses
+  reply.serializer(JSON.stringify);
+  reply.header('content-type', 'application/json; charset=utf-8');
+
+  // Handle Zod/Fastify schema validation errors (invalid params, query, body)
+  if (hasZodFastifySchemaValidationErrors(error)) {
+    return reply.code(400).send({
+      success: false,
+      error: {
+        code: 'BAD_REQUEST',
+        message: 'Invalid request parameters',
+      },
+    });
+  }
+
+  // Handle response serialization errors
+  if (isResponseSerializationError(error)) {
+    return reply.code(500).send({
+      success: false,
+      error: {
+        code: 'INTERNAL_ERROR',
+        message: 'An internal error occurred',
+      },
+    });
+  }
+
+  // Determine status code and error code
+  const statusCode = (error as any).statusCode ?? 500;
+  let errorCode = 'INTERNAL_ERROR';
+  let message = 'An internal error occurred';
+
+  if (statusCode === 404) {
+    errorCode = 'NOT_FOUND';
+    message = error.message || 'Resource not found';
+  } else if (statusCode === 429) {
+    errorCode = 'RATE_LIMITED';
+    message = 'Rate limit exceeded';
+  } else if (statusCode === 401) {
+    errorCode = 'UNAUTHORIZED';
+    message = 'Authentication required';
+  } else if (statusCode === 403) {
+    errorCode = 'FORBIDDEN';
+    message = 'Insufficient permissions';
+  } else if (statusCode >= 400 && statusCode < 500) {
+    errorCode = 'BAD_REQUEST';
+    message = error.message || 'Bad request';
+  }
+
+  return reply.code(statusCode).send({
+    success: false,
+    error: {
+      code: errorCode,
+      message,
+    },
+  });
+}
 
 /**
  * Public API Fastify Plugin
@@ -22,8 +97,12 @@ export const publicApiPlugin: FastifyPluginAsyncZod = async (instance) => {
   instance.setValidatorCompiler(validatorCompiler);
   instance.setSerializerCompiler(serializerCompiler);
 
-  // Register OpenAPI 3.1 spec generator
+  // Set error handler BEFORE registering routes so it covers all child scopes
+  instance.setErrorHandler(publicErrorHandler as any);
+
+  // Register OpenAPI 3.1 spec generator with Zod-to-JSON-Schema transform
   await instance.register(fastifySwagger, {
+    transform: jsonSchemaTransform,
     openapi: {
       openapi: '3.1.0',
       info: {
@@ -94,77 +173,9 @@ This API is designed for programmatic access by:
   // OpenAPI spec endpoint
   typedInstance.get('/openapi.json', {
     schema: {
-      hide: true, // Don't include this endpoint in the OpenAPI spec itself
+      hide: true,
     },
   }, async (_request, reply) => {
     return reply.send(instance.swagger());
-  });
-
-  // Sanitized error handler for this plugin scope
-  // Strips stack traces, internal field names, and implementation details
-  instance.setErrorHandler((error: Error, request, reply) => {
-    // Log full error server-side (includes stack trace)
-    request.log.error(error);
-
-    // Determine status code
-    const statusCode = (error as any).statusCode ?? 500;
-    let errorCode = 'INTERNAL_ERROR';
-    let message = 'An internal error occurred';
-
-    // Handle Zod validation errors
-    if (error instanceof ZodError) {
-      const code = 400;
-      errorCode = 'BAD_REQUEST';
-      message = 'Invalid request parameters';
-
-      // Extract field-level errors (public field names only, no schema internals)
-      const fieldErrors = error.errors.map((err) => ({
-        field: err.path.join('.'),
-        message: err.message,
-      }));
-
-      return reply.code(code).send({
-        success: false,
-        error: {
-          code: errorCode,
-          message,
-          details: fieldErrors,
-        },
-      });
-    }
-
-    // Handle Fastify validation errors
-    if ((error as any).validation) {
-      errorCode = 'BAD_REQUEST';
-      message = 'Invalid request parameters';
-    }
-
-    // Map HTTP status codes to error codes
-    if (statusCode === 404) {
-      errorCode = 'NOT_FOUND';
-      message = error.message || 'Resource not found';
-    } else if (statusCode === 429) {
-      errorCode = 'RATE_LIMITED';
-      message = 'Rate limit exceeded';
-    } else if (statusCode === 401) {
-      errorCode = 'UNAUTHORIZED';
-      message = 'Authentication required';
-    } else if (statusCode === 403) {
-      errorCode = 'FORBIDDEN';
-      message = 'Insufficient permissions';
-    } else if (statusCode >= 400 && statusCode < 500) {
-      errorCode = 'BAD_REQUEST';
-      message = error.message || 'Bad request';
-    }
-
-    // NEVER expose stack traces or internal field names in production
-    // Return sanitized error envelope
-    return reply.code(statusCode).send({
-      success: false,
-      error: {
-        code: errorCode,
-        message,
-      },
-    });
   });
 };

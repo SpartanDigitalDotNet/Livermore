@@ -5,7 +5,6 @@ import { eq, and, gt } from 'drizzle-orm';
 import {
   PublicSymbolSchema,
   SymbolQuerySchema,
-  ErrorEnvelopeSchema,
   createEnvelopeSchema,
 } from '../schemas/index.js';
 import { buildPaginationMeta, decodeCursor } from '../helpers/index.js';
@@ -59,8 +58,6 @@ This endpoint provides a comprehensive catalog of cryptocurrency trading pairs, 
         querystring: SymbolQuerySchema,
         response: {
           200: createEnvelopeSchema(z.array(PublicSymbolSchema)),
-          400: ErrorEnvelopeSchema,
-          404: ErrorEnvelopeSchema,
         },
       },
     },

@@ -6,7 +6,6 @@ import { eq, sql } from 'drizzle-orm';
 import type { InstanceStatus } from '@livermore/schemas';
 import {
   PublicExchangeSchema,
-  ErrorEnvelopeSchema,
   createEnvelopeSchema,
 } from '../schemas/index.js';
 
@@ -37,7 +36,6 @@ No pagination is needed as the list of exchanges is small and relatively static.
         tags: ['Exchanges'],
         response: {
           200: createEnvelopeSchema(z.array(PublicExchangeSchema)),
-          500: ErrorEnvelopeSchema,
         },
       },
     },
