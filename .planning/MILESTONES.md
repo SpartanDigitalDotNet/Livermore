@@ -1,5 +1,39 @@
 # Project Milestones: Livermore
 
+## v8.0 Perseus Web Public API (Shipped: 2026-02-19)
+
+**Status:** Shipped (2026-02-19)
+
+**Delivered:** Public REST API and WebSocket streaming endpoint with OpenAPI/AsyncAPI specs, API key authentication, rate limiting, IP-protective DTO transformation layer, and runtime mode system (exchange vs pw-host) enabling headless public API instances.
+
+**Phases completed:** 39-43 (5 phases, 11 plans)
+
+**Key accomplishments:**
+
+- Public REST API with 5 endpoints (candles, signals, alerts, exchanges, symbols) and OpenAPI 3.1 spec auto-generated from Zod schemas
+- IP protection layer with explicit field whitelisting DTO transformers — MACD-V never exposed through any public surface
+- API key authentication with rate limiting (300 req/min), route-scoped CORS, and Admin UI for key management
+- WebSocket bridge with Redis pub/sub fan-out, ping/pong heartbeat, per-key connection limits, and backpressure handling
+- AsyncAPI 3.1 spec documenting all WebSocket message schemas with concrete examples
+- Runtime mode system (`pw-host` vs `exchange`) enabling headless public API instances separate from exchange data ingest
+
+**Stats:**
+
+- 5 phases, 11 plans, 35 commits
+- 44 source files changed, ~3,900 lines of TypeScript
+- 2 days from start to ship (2026-02-18 to 2026-02-19)
+- 37/37 requirements satisfied, audit passed
+
+**Git range:** `db07cd5` to `e998578`
+
+**Tech debt accepted:**
+- Swagger UI CSP inline style violation (swagger-ui-bundle.js vs style-src directive)
+- Pre-existing publicProcedure debt in tRPC routers (from v3.0)
+
+**What's next:** `/gsd:new-milestone` to define v9.0 scope
+
+---
+
 ## v5.0 Distributed Exchange Architecture (Shipped: 2026-02-08)
 
 **Status:** Shipped (2026-02-08)
@@ -168,3 +202,13 @@
 ---
 
 *Milestones log started: 2026-01-19*
+
+## v8.0 Perseus Web Public API (Shipped: 2026-02-19)
+
+**Phases completed:** 42 phases, 88 plans, 48 tasks
+
+**Key accomplishments:**
+- (none recorded)
+
+---
+

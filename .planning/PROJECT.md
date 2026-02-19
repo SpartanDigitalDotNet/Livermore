@@ -2,48 +2,44 @@
 
 ## What This Is
 
-A real-time cryptocurrency trading analysis platform with multi-exchange support (Coinbase and Binance). Monitors exchange data via WebSocket, calculates technical indicators (MACD-V), and fires alerts when signal conditions are met. Features exchange-scoped distributed data architecture enabling cross-exchange visibility, idle startup with runtime control via Redis pub/sub, and Admin UI for settings, symbols, and exchange management.
+A real-time cryptocurrency trading analysis platform with multi-exchange support (Coinbase and Binance). Monitors exchange data via WebSocket, calculates technical indicators (MACD-V), and fires alerts when signal conditions are met. Features exchange-scoped distributed data architecture, idle startup with runtime control, Admin UI, and a public REST/WebSocket API with OpenAPI spec for external clients and AI agents.
 
 ## Core Value
 
 Data accuracy and timely alerts — indicators must calculate on complete, accurate candle data, and signals must fire reliably without missing conditions or producing false positives from stale data.
 
-## Current Milestone: v8.0 Perseus Web Public API
-
-**Goal:** Expose Livermore's data through a public REST API and WebSocket endpoint with OpenAPI spec so the open-source Perseus Web client (and any AI agent) can connect without direct Redis/DB access.
-
-**Target features:**
-- Public REST API at `/public/v1/*` — candles, alerts, alert history, exchange metadata
-- OpenAPI spec via `zod-to-openapi` with AI-agent-ready documentation (rich descriptions, examples, error schemas)
-- WebSocket bridge relaying Redis pub/sub (candle closes, alerts) to external clients
-- AsyncAPI spec for WebSocket message schemas
-- Runtime mode flag (`LIVERMORE_MODE=exchange` vs `pw-host`) for headless instances
-- Auth & security — API keys or Clerk tokens, rate limiting, CORS on public routes
-- Client contract generation support via `openapi-typescript` + `openapi-fetch`
-- Subscription Test Harness (BTC 1d warmup + 2s WebSocket test)
-- Binance.us end-to-end warmup testing and Kaia handoff
-
 ## Current State
 
-**Status:** v8.0 in progress
-**Current focus:** Perseus Web Public API
+**Status:** v8.0 shipped (2026-02-19)
+**Current focus:** Planning next milestone
 
-**Architecture (v6.0):**
+**Architecture (v8.0):**
 ```
-Mike's API (Coinbase) ──registers──► exchange:1:status  ◄──reads── Admin UI (Network View)
-                      ──heartbeat──► (TTL-based)
-                      ──logs──────► logs:network:coinbase (Redis Stream, 90d TTL)
-                                         │
-Kaia's API (Binance)  ──registers──► exchange:2:status  ◄──reads── Admin UI (Network View)
-                      ──heartbeat──► (TTL-based)
-                      ──logs──────► logs:network:binance (Redis Stream, 90d TTL)
+Exchange Mode:
+  API (Coinbase/Binance) ──WebSocket──► candles/indicators ──► alerts
+                         ──registers──► exchange:N:status (Redis, TTL heartbeat)
+                         ──serves────► /public/v1/* (REST + WebSocket)
+                         ──serves────► /trpc/* (Admin UI)
+
+pw-host Mode:
+  API (headless) ────reads────► Redis cache (candles, indicators, tickers)
+                 ────serves───► /public/v1/* (REST + WebSocket)
+                 ────serves───► /health (mode: pw-host)
 ```
 
-Each Livermore API instance registers itself in Redis with full identity (hostname, IP, admin, exchange, symbol count). Heartbeat TTL ensures stale instances are detected automatically. Network activity logged to Redis Streams for 90-day audit trail.
+**Public API surface (v8.0):**
+- REST: `/public/v1/candles`, `/signals`, `/alerts`, `/exchanges`, `/symbols`
+- WebSocket: `/public/v1/stream` (candle close + trade signal events)
+- Auth: API key via `X-API-Key` header, 300 req/min rate limit
+- Specs: OpenAPI 3.1 at `/public/v1/openapi.json`, AsyncAPI 3.1 for WebSocket
+- IP protection: DTO transformers with explicit field whitelisting — MACD-V never exposed
 
 ## Requirements
 
 ### Validated
+
+<details>
+<summary>v1.0-v5.0 validated requirements (41 items)</summary>
 
 - ✓ Coinbase REST client with JWT authentication — v1.0
 - ✓ Transaction summary endpoint (current fee tier, 30-day volume) — v1.0
@@ -89,18 +85,33 @@ Each Livermore API instance registers itself in Redis with full identity (hostna
 - ✓ IRestClient interface with pluggable REST clients — v5.0
 - ✓ BinanceRestClient and BinanceAdapter — v5.0
 
+</details>
+
+**v8.0 Perseus Web Public API (37 requirements):**
+- ✓ Public REST endpoints for candles, signals, alerts, exchanges, symbols — v8.0
+- ✓ OpenAPI 3.1 spec auto-generated from Zod schemas at /public/v1/openapi.json — v8.0
+- ✓ AI-optimized descriptions with concrete JSON examples for all endpoints — v8.0
+- ✓ Consistent JSON envelope with cursor pagination and ISO8601 timestamps — v8.0
+- ✓ WebSocket bridge at /public/v1/stream with subscribe/unsubscribe protocol — v8.0
+- ✓ Redis pub/sub fan-out for candle close and trade signal events — v8.0
+- ✓ Ping/pong heartbeat (30s), per-key connection limit (5), backpressure handling — v8.0
+- ✓ AsyncAPI 3.1 spec for WebSocket message schemas — v8.0
+- ✓ API key authentication via X-API-Key header with UUID keys in api_keys table — v8.0
+- ✓ Rate limiting (300 req/min) via Redis-backed @fastify/rate-limit — v8.0
+- ✓ Route-scoped CORS (permissive public, restrictive admin) — v8.0
+- ✓ Error sanitization stripping stack traces and internal details — v8.0
+- ✓ Admin UI page for API key generation, display, and regeneration — v8.0
+- ✓ DTO transformation layer with explicit field whitelisting for IP protection — v8.0
+- ✓ Zero proprietary indicator names in any public response or spec — v8.0
+- ✓ Separate @livermore/public-api package isolated from internal indicator packages — v8.0
+- ✓ Runtime mode system (LIVERMORE_MODE=exchange|pw-host) — v8.0
+- ✓ pw-host mode skips exchange adapter, warmup, indicators — serves API from Redis cache — v8.0
+- ✓ Health endpoint reports runtime mode and mode-appropriate service status — v8.0
+
 ### Active
 
-**v7.0 Smart Warmup & Binance Adapter**
+**v7.0 Smart Warmup & Binance Adapter (remaining)**
 
-- [ ] Exchange Candle Status Scan (check cached data before backfilling, largest to smallest timeframe)
-- [ ] Warmup schedule persisted in Redis with real-time progress stats (ETA, percent, failures)
-- [ ] Admin UI warmup progress subscription during warmup lifetime
-- [ ] Ticker key migration from user-scoped to exchange-scoped
-- [ ] Binance WebSocket Adapter (binance.com and binance.us, URL from exchanges table)
-- [ ] Symbol normalization between Binance format (BTCUSDT) and project format (BTC-USD)
-- [ ] Admin Network "Connect" button with lock-check warning modal
-- [ ] Exchange Setup Modal for user_exchanges management with is_active/is_default orchestration
 - [ ] Subscription Test Harness (BTC 1d warmup + 2s WebSocket test)
 - [ ] Binance.us end-to-end warmup test and Kaia handoff
 
@@ -114,9 +125,13 @@ Each Livermore API instance registers itself in Redis with full identity (hostna
 - 1m candle support — Coinbase WebSocket only provides native 5m
 - Real-time arbitrage execution — soft-arbitrage (signals only) is safer
 - Standby/passive instance registration — foundation first, failover in v6.1+
-- Graceful handoff protocol (notify → takeover → confirm → shutdown) — requires standby, deferred
-- Remote Admin control (ngrok tunnels, cross-instance management) — requires handoff, deferred
-- Authorization/permission schema for remote control — requires remote admin, deferred
+- Graceful handoff protocol — requires standby, deferred
+- Remote Admin control — requires handoff, deferred
+- GraphQL API — REST + OpenAPI spec is simpler and AI-agent-friendly
+- OAuth 2.0 for public endpoints — API keys simpler for read-only data
+- Client SDK npm package — wait for spec stability (2+ months)
+- Webhook delivery for alerts — defer to v9+
+- Historical data dumps (>90 days) — Livermore's value is real-time signals
 
 ## Constraints
 
@@ -128,6 +143,7 @@ Each Livermore API instance registers itself in Redis with full identity (hostna
 - **No silent defaults**: If exchange or configuration is unknown, surface the error — never silently fall back to Coinbase.
 - **One instance per exchange**: Only one Livermore API may actively serve a given exchange at any time. Enforced via Redis status keys.
 - **Heartbeat TTL**: If an instance stops heartbeating, it is considered dead. No separate health-check service.
+- **MACD-V IP protection**: Internal indicator names, formulas, and calculation details NEVER exposed through public endpoints. Generic labels only.
 
 ## Key Decisions
 
@@ -149,11 +165,15 @@ Each Livermore API instance registers itself in Redis with full identity (hostna
 | User overflow with TTL | Tier 2 symbols have TTL-based auto-cleanup | ✓ Shipped v5.0 |
 | Idle startup mode | API doesn't connect until `start` command | ✓ Shipped v5.0 |
 | Adapter factory pattern | Factory instantiates correct adapter by exchange type | ✓ Shipped v5.0 |
-| Dual-read for migration | Check exchange-scoped first, fall back to user-scoped | ✓ Shipped v5.0 |
-| IRestClient interface | Decouple REST clients from exchange-specific implementations | ✓ Shipped v5.0 |
-| Package rename (exchange-core) | coinbase-client contained exchange-agnostic services | ✓ Shipped v5.0 |
-| 3 separate Redis env vars | Never store full connection URL; construct at runtime | ✓ Shipped v5.0 |
 | No silent exchange defaults | If exchange unknown, surface error — never default to Coinbase | ✓ Shipped v5.0 |
+| Explicit field whitelisting | DTO transformers use explicit field selection, not spreading and omitting — new internal fields never leak | ✓ Shipped v8.0 |
+| String decimals for prices | API uses string format to prevent precision loss | ✓ Shipped v8.0 |
+| Opaque Base64 cursors | Pagination cursors hide internal implementation details | ✓ Shipped v8.0 |
+| Zero indicators dependency | @livermore/public-api does NOT depend on @livermore/indicators — hard IP isolation | ✓ Shipped v8.0 |
+| In-memory API key cache | 60s TTL avoids DB hit per request; negative entries prevent abuse | ✓ Shipped v8.0 |
+| CORS delegator pattern | Single registration with route-scoped origin logic | ✓ Shipped v8.0 |
+| Early-return mode isolation | pw-host block returns early, keeping exchange code at original indentation | ✓ Shipped v8.0 |
+| Auto-detect mode in validateEnv | resolveMode() called internally when no mode arg passed — fixes module-level callers | ✓ Shipped v8.0 |
 
 ## Partnership Context
 
@@ -169,11 +189,10 @@ Each Livermore API instance registers itself in Redis with full identity (hostna
 **Integration points:**
 - Sandbox PostgreSQL: Shared database for IAM and user settings
 - Redis pub/sub: Cross-exchange visibility — Kaia subscribes to Coinbase alerts, Mike subscribes to Binance alerts
+- Public API: Perseus Web clients connect via /public/v1/* REST + WebSocket (v8.0)
 - Binance support: Kaia runs Binance exchange, data flows through same architecture
 
-**v5.0 enabled:** Kaia's Binance instance publishes to Redis, Mike's Coinbase instance subscribes. Cross-exchange soft-arbitrage signals operational.
-
-**v6.0 goal:** Each Livermore API instance becomes a visible, identifiable node in the Perseus Network. Admins can see who's running what, where, and whether it's healthy — the foundation for future active/passive failover and remote administration.
+**v8.0 enabled:** External clients and AI agents can connect to Livermore's public API with API keys, receiving real-time candle and signal data without direct Redis/DB access. pw-host mode enables dedicated API instances separate from exchange data ingest.
 
 ---
-*Last updated: 2026-02-18 — start v8.0 Perseus Web Public API milestone*
+*Last updated: 2026-02-19 after v8.0 milestone*
