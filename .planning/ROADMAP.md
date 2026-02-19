@@ -161,10 +161,11 @@ Plans:
   5. Slow or disconnected clients are detected via ping/pong heartbeat and removed automatically
   6. Per-API-key connection limit enforced (max 5 concurrent connections)
   7. AsyncAPI 3.1 spec documents all WebSocket message schemas with concrete examples
-**Plans**: TBD
+**Plans:** 2 plans
 
 Plans:
-- [ ] 42-01: TBD
+- [ ] 42-01-PLAN.md -- WebSocket bridge engine (types, schemas, ClientConnection, WebSocketBridge, handlers)
+- [ ] 42-02-PLAN.md -- Route wiring, server integration, and AsyncAPI 3.1 specification
 
 #### Phase 43: Runtime Modes & Distributed Architecture
 **Goal**: Enable headless pw-host mode for dedicated public API instances separate from exchange data ingest
@@ -195,9 +196,9 @@ Phases execute in numeric order: 34 → 35 → 36 → 37 → 38 → 39 → 40 �
 | 39. Public API Foundation & IP Protection | v8.0 | 3/3 | Complete | 2026-02-18 |
 | 40. Trade Signals with Generic Labeling | v8.0 | 2/2 | Complete | 2026-02-19 |
 | 41. Authentication & Rate Limiting | v8.0 | 2/2 | Complete | 2026-02-19 |
-| 42. WebSocket Bridge with Backpressure | v8.0 | 0/? | Not started | - |
+| 42. WebSocket Bridge with Backpressure | v8.0 | 0/2 | Not started | - |
 | 43. Runtime Modes & Distributed Architecture | v8.0 | 0/? | Not started | - |
 
 ---
 *Roadmap created: 2026-02-13*
-*Last updated: 2026-02-19 -- Phase 41 complete (2/2 plans, auth + rate limiting + admin UI)*
+*Last updated: 2026-02-19 -- Phase 42 planned (2 plans, WebSocket bridge + AsyncAPI)*
