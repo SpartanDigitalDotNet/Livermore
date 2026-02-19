@@ -1,6 +1,26 @@
 import { z } from 'zod';
 
 /**
+ * Runtime mode determines which services and validation schemas are active.
+ * - 'exchange': Full trading instance (Coinbase, Clerk, Discord, etc.)
+ * - 'pw-host': Headless price-watcher host (DB + Redis + API only)
+ */
+export type RuntimeMode = 'exchange' | 'pw-host';
+
+/**
+ * Read LIVERMORE_MODE from process.env and return a validated RuntimeMode.
+ * Defaults to 'exchange' when unset. Throws on invalid values.
+ * Must be called BEFORE validateEnv() so the correct schema is selected.
+ */
+export function resolveMode(): RuntimeMode {
+  const raw = process.env.LIVERMORE_MODE?.toLowerCase() ?? 'exchange';
+  if (raw !== 'exchange' && raw !== 'pw-host') {
+    throw new Error(`Invalid LIVERMORE_MODE: '${raw}'. Must be 'exchange' or 'pw-host'.`);
+  }
+  return raw;
+}
+
+/**
  * Environment configuration schema
  * Validates all required environment variables on application startup
  *
@@ -46,6 +66,25 @@ export const EnvConfigSchema = z.object({
  * Validated environment configuration type
  */
 export type EnvConfig = z.infer<typeof EnvConfigSchema>;
+
+/**
+ * pw-host mode environment schema.
+ * Keeps shared fields (API, DB, Redis) but omits exchange-specific credentials
+ * (Coinbase, Clerk, Discord) that pw-host instances don't need.
+ */
+export const PwHostEnvConfigSchema = EnvConfigSchema.omit({
+  Coinbase_ApiKeyId: true,
+  Coinbase_EcPrivateKeyPem: true,
+  CLERK_PUBLISHABLE_KEY: true,
+  CLERK_SECRET_KEY: true,
+  CLERK_WEBHOOK_SIGNING_SECRET: true,
+  DISCORD_LIVERMORE_BOT: true,
+});
+
+/**
+ * Validated pw-host environment configuration type
+ */
+export type PwHostEnvConfig = z.infer<typeof PwHostEnvConfigSchema>;
 
 /**
  * Hardcoded configuration values (not from environment variables)
