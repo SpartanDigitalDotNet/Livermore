@@ -1,111 +1,107 @@
-# Requirements: Livermore v7.0 Smart Warmup & Binance Adapter
+# Requirements: Livermore v8.0 Perseus Web Public API
 
-**Defined:** 2026-02-13
+**Defined:** 2026-02-18
 **Core Value:** Data accuracy and timely alerts
+**Critical Constraint:** MACD-V is proprietary IP — NEVER expose indicator names, formulas, or calculation details through public endpoints.
 
-## v1 Requirements
+## v8.0 Requirements
 
-Requirements for v7.0 release. Each maps to roadmap phases.
+Requirements for v8.0 release. Each maps to roadmap phases.
 
-### Smart Warmup
+### Public REST API
 
-- [ ] **WARM-01**: Before backfilling, an Exchange Candle Status Scan checks each symbol from largest to smallest timeframe (1d, 4h, 1h, 15m, 5m, 1m) to identify which symbol/timeframe pairs already have sufficient cached data
-- [ ] **WARM-02**: Scan results are compiled into an Exchange Warmup Schedule listing which symbols need which timeframes fetched (skipping pairs with enough cached candles)
-- [ ] **WARM-03**: Warmup schedule is persisted to Redis at `exchange:<exchange_id>:warm-up-schedule:symbols` so other services can read it
-- [ ] **WARM-04**: Warmup execution follows the schedule, only fetching missing symbol/timeframe pairs instead of brute-force backfilling everything
-- [ ] **WARM-05**: Warmup progress stats (ETA, percent complete, symbols remaining, failures) are written to `exchange:<exchange_id>:warm-up-schedule:stats` in Redis and updated as warmup progresses
-- [ ] **WARM-06**: Admin UI subscribes to warmup stats for the lifetime of the warmup process, displaying real-time progress (percent, ETA, current symbol, failures)
+- [ ] **API-01**: Public REST endpoint `GET /public/v1/candles/:exchange/:symbol/:timeframe` returns OHLCV candle data from Redis cache with `timestamp`, `open`, `high`, `low`, `close`, `volume` fields
+- [ ] **API-02**: Public REST endpoint `GET /public/v1/signals/:exchange/:symbol` returns trade signals with generic labels (`momentum_signal`, `trend_signal`) — NO internal indicator names (MACD-V, histogram, EMA) exposed
+- [ ] **API-03**: Public REST endpoint `GET /public/v1/alerts` returns alert history with `timestamp`, `symbol`, `exchange`, `timeframe`, `signal_type`, `direction`, `strength`, `price` — internal indicator details stripped
+- [ ] **API-04**: Public REST endpoint `GET /public/v1/exchanges` returns exchange metadata with `id`, `name`, `status`, `symbol_count`
+- [ ] **API-05**: Public REST endpoint `GET /public/v1/symbols` returns symbol list with `symbol`, `base`, `quote`, `exchange`, `liquidity_grade`
+- [ ] **API-06**: All public endpoints support cursor-based pagination via `cursor` and `limit` params, returning `next_cursor` and `has_more` in response metadata
+- [ ] **API-07**: All public endpoints support time range filtering via `start_time` and `end_time` query params in ISO8601 format (where applicable)
+- [ ] **API-08**: All responses use consistent JSON envelope: `{ success: boolean, data: T, meta: { count, next_cursor, has_more } }` with ISO8601 timestamps and string decimals for prices/volumes
 
-### Ticker Key Migration
+### OpenAPI Specification
 
-- [x] **TICK-01**: Impact assessment documents all services that read/write ticker keys and pub/sub channels affected by removing user_id
-- [x] **TICK-02**: Ticker key pattern changed from `ticker:{userId}:{exchangeId}:{symbol}` to `ticker:{exchangeId}:{symbol}` (exchange-scoped, consistent with candle/indicator keys)
-- [x] **TICK-03**: Ticker pub/sub channel updated to match new exchange-scoped key pattern
+- [ ] **OAS-01**: OpenAPI 3.1 spec auto-generated from Zod schemas via `@fastify/swagger` + `fastify-type-provider-zod` — code is single source of truth
+- [ ] **OAS-02**: Every endpoint has AI-optimized descriptions with concrete use-case examples (e.g., "Retrieve 1h candles for BTC-USD on Coinbase from the last 7 days")
+- [ ] **OAS-03**: Every endpoint includes concrete JSON examples for both successful responses and error cases
+- [ ] **OAS-04**: All error codes documented: 400 (invalid params), 401 (unauthorized), 403 (forbidden), 404 (not found), 429 (rate limited), 500 (server error)
+- [ ] **OAS-05**: Spec serves at `/public/v1/openapi.json` and is compatible with `openapi-typescript` + `openapi-fetch` for typed client generation
+- [ ] **OAS-06**: Common schemas (Candle, Signal, Alert, Exchange, Symbol, Error) extracted into `components/schemas` for reuse
 
-### Binance Adapter
+### WebSocket Bridge
 
-- [ ] **BIN-01**: BinanceAdapter implements IExchangeAdapter interface with WebSocket streaming for real-time candle data
-- [ ] **BIN-02**: BinanceAdapter supports both binance.com and binance.us using wsUrl/restUrl from the exchanges table (only URL difference)
-- [ ] **BIN-04**: ExchangeAdapterFactory creates BinanceAdapter when exchange name is 'binance' or 'binance_us' (no longer commented out)
-- [ ] **BIN-05**: BinanceAdapter handles Binance WebSocket message format, heartbeat/ping-pong, and automatic reconnection
+- [ ] **WS-01**: WebSocket endpoint at `/public/v1/stream` accepts connections with API key auth via query parameter
+- [ ] **WS-02**: Client sends `{ action: "subscribe", channels: ["candles:BTC-USD:1h", "signals:ETH-USD:15m"] }` to manage subscriptions
+- [ ] **WS-03**: Candle close events from Redis pub/sub relayed to subscribed WebSocket clients with generic envelope (no internal field names)
+- [ ] **WS-04**: Alert/signal events relayed to subscribed clients as generic trade signals (direction, strength, price only — NO indicator details)
+- [ ] **WS-05**: Protocol-level ping/pong heartbeat every 30s detects dead connections and closes stale sockets
+- [ ] **WS-06**: Per-API-key connection limit (max 5 concurrent WebSocket connections) enforced at connection time
+- [ ] **WS-07**: Backpressure handling: track per-client `bufferedAmount`, pause relay if buffer exceeds threshold, disconnect slow clients
 
-### Admin Connect & Exchange Setup
+### AsyncAPI Specification
 
-- [ ] **ADM-01**: Admin Network page shows a "Connect" button for exchanges that are offline or idle
-- [ ] **ADM-02**: Connect button checks if exchange is already running on another machine and shows a warning modal with lock holder info (hostname, IP, connected since) before proceeding
-- [ ] **ADM-03**: Exchange Setup Modal allows creating and updating user_exchanges records (API key env var names, display name)
-- [ ] **ADM-04**: Exchange Setup Modal correctly handles is_active/is_default orchestration (only one default exchange per user, toggling default updates previous default)
+- [ ] **AAS-01**: AsyncAPI 3.1 spec documents all WebSocket message schemas, channels, and operations
+- [ ] **AAS-02**: Message schemas defined for `candle_close`, `trade_signal`, `error`, `ping`, `pong` message types with concrete JSON examples
+- [ ] **AAS-03**: Channel documentation covers subscription patterns (`candles:{symbol}:{timeframe}`, `signals:{symbol}:{timeframe}`)
+- [ ] **AAS-04**: WebSocket bindings document connection URL, authentication params, and protocol details
 
-### Test Harness
+### Authentication & Security
 
-- [ ] **TST-01**: Subscription Test Harness performs BTC 1d warmup to validate REST candle fetching works for an exchange
-- [ ] **TST-02**: Subscription Test Harness runs a 2-second WebSocket subscription test to validate live streaming data is received
-- [ ] **TST-03**: Binance.us warmup tested end-to-end with real exchange data confirming candles cache correctly
-- [ ] **TST-04**: Handoff documentation prepared for Kaia to configure and run the Binance exchange on her machine
+- [ ] **AUTH-01**: API key authentication via `X-API-Key` header with UUID keys stored in `api_keys` database table
+- [ ] **AUTH-02**: Single rate limit for all API keys (300 req/min) enforced via `@fastify/rate-limit` backed by Redis — admin tRPC routes exempt
+- [ ] **AUTH-03**: Route-scoped CORS: permissive for `/public/v1/*` (public API), restrictive for `/trpc/*` (admin dashboard origin only)
+- [ ] **AUTH-04**: Error sanitization layer strips stack traces and internal field names from all public API responses — generic error messages only
+- [ ] **AUTH-05**: Admin UI page for API key generation, display, and regeneration (tRPC mutation behind Clerk auth)
 
-## v2 Requirements (Deferred)
+### IP Protection
 
-### Standby and Failover
+- [ ] **IP-01**: Data transformation layer (DTO) maps internal indicator data to generic public labels at the API boundary — explicit field whitelisting, not field omission
+- [ ] **IP-02**: Internal field names (`macdV`, `signal`, `histogram`, `fastEMA`, `slowEMA`, `atr`, `informativeATR`) NEVER appear in any public response, error message, or OpenAPI spec
+- [ ] **IP-03**: Public API code lives in separate package (`packages/public-api`) isolated from internal indicator packages
 
-- **STBY-01**: Passive/standby instance registration (subscribe as backup for an exchange)
-- **STBY-02**: Graceful handoff protocol (notify, takeover, confirm, shutdown)
-- **STBY-03**: Automatic standby promotion when primary heartbeat expires
+### Runtime Modes
 
-### Remote Administration
+- [ ] **MODE-01**: `LIVERMORE_MODE` env var controls runtime mode: `exchange` (default, current behavior) or `pw-host` (headless, public API only)
+- [ ] **MODE-02**: In `pw-host` mode, skip exchange adapter initialization, warmup, and indicator calculation — only serve public API from Redis cache
+- [ ] **MODE-03**: In `pw-host` mode, Redis-only data access — read candles, indicators, tickers from cache without owning the write path
+- [ ] **MODE-04**: `/health` endpoint reports runtime mode and mode-appropriate status (exchange: WebSocket connected; pw-host: Redis connected)
 
-- **RMOT-01**: Remote Admin control -- send commands to another instance's API via Redis
-- **RMOT-02**: Ngrok tunnel for remote Admin UI access, URL published to Redis
-- **RMOT-03**: Authorization schema for remote operations
+## Future Requirements (v8.1+)
 
-### Enhanced Monitoring
+Deferred until v8.0 is live and user feedback validates need.
 
-- **MON-01**: WebSocket-based real-time network view (replace polling)
-- **MON-02**: Historical uptime percentage (24h/7d/30d)
-- **MON-03**: Connection state timeline visualization
+- [ ] Interactive API explorer (Swagger UI at `/public/docs`)
+- [ ] Rate limit headers (`X-RateLimit-Remaining`, `X-RateLimit-Reset`) in responses
+- [ ] Verbose error messages with `hint` field for common mistakes
+- [ ] Clerk JWT token support for authenticated user context
+- [ ] Usage dashboard showing per-API-key metrics
+- [ ] Sandbox environment with historical-only data
+- [ ] Tiered rate limiting (Free/Basic/Pro) with billing integration
 
 ## Out of Scope
 
 | Feature | Reason |
 |---------|--------|
-| Multi-exchange simultaneous warmup | Warmup runs for one exchange at a time on one instance |
-| Binance futures/margin API | Spot trading only, consistent with Coinbase scope |
-| CCXT library | Performance overhead unnecessary, direct API integration preferred |
-| Aggregated candle building from trades | Binance provides native kline WebSocket streams |
-| Automatic exchange failover | Foundation first, failover deferred to standby/failover milestone |
-| REST-only Binance mode | WebSocket streaming is required for real-time data |
-| Symbol normalization (BTCUSDT to BTC-USD) | exchange_symbols table stores native format per exchange; normalization only needed for future user custom symbol lists |
+| GraphQL API | Adds complexity, breaks OpenAPI spec generation, financial APIs use REST |
+| OAuth 2.0 for public endpoints | Overkill for read-only data — API keys are simpler |
+| Client SDK npm package | Wait for spec stability (2+ months without breaking changes) |
+| Server-Sent Events fallback | No evidence of WebSocket blocking in target audience |
+| Webhook delivery for alerts | Requires retry/failure infrastructure — defer to v9+ |
+| Historical data dumps (>90 days) | Livermore's value is real-time signals, not data warehousing |
+| Custom indicator endpoints | Security risk (arbitrary code execution), breaks spec-as-product model |
+| Admin API in public spec | Leaks internal capabilities, confuses AI agents |
+| NATS migration | Deferred to future milestone — Redis pub/sub sufficient for v8.0 |
 
 ## Traceability
 
-| Requirement | Phase | Status |
-|-------------|-------|--------|
-| WARM-01 | Phase 35 | Pending |
-| WARM-02 | Phase 35 | Pending |
-| WARM-03 | Phase 35 | Pending |
-| WARM-04 | Phase 35 | Pending |
-| WARM-05 | Phase 35 | Pending |
-| WARM-06 | Phase 37 | Pending |
-| TICK-01 | Phase 34 | Done |
-| TICK-02 | Phase 34 | Done |
-| TICK-03 | Phase 34 | Done |
-| BIN-01 | Phase 36 | Done |
-| BIN-02 | Phase 36 | Done |
-| BIN-04 | Phase 36 | Done |
-| BIN-05 | Phase 36 | Done |
-| ADM-01 | Phase 37 | Pending |
-| ADM-02 | Phase 37 | Pending |
-| ADM-03 | Phase 37 | Pending |
-| ADM-04 | Phase 37 | Pending |
-| TST-01 | Phase 38 | Pending |
-| TST-02 | Phase 38 | Pending |
-| TST-03 | Phase 38 | Pending |
-| TST-04 | Phase 38 | Pending |
+_Filled by roadmap — maps REQ-IDs to phases._
 
-**Coverage:**
-- v1 requirements: 21 total
-- Mapped to phases: 21
-- Unmapped: 0
-
----
-*Requirements defined: 2026-02-13*
-*Last updated: 2026-02-13 -- traceability updated with phase assignments*
+| Requirement | Phase |
+|-------------|-------|
+| API-01..API-08 | TBD |
+| OAS-01..OAS-06 | TBD |
+| WS-01..WS-07 | TBD |
+| AAS-01..AAS-04 | TBD |
+| AUTH-01..AUTH-05 | TBD |
+| IP-01..IP-03 | TBD |
+| MODE-01..MODE-04 | TBD |
