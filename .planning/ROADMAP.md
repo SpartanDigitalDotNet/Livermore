@@ -94,11 +94,11 @@ Plans:
 
 </details>
 
-### 📋 v8.0 Perseus Web Public API (Planned)
+### v8.0 Perseus Web Public API (Planned)
 
 **Milestone Goal:** Expose Livermore's data through a public REST API and WebSocket endpoint with OpenAPI spec so the open-source Perseus Web client (and any AI agent) can connect without direct Redis/DB access.
 
-**Critical constraint:** MACD-V is proprietary IP — internal indicator names, formulas, and calculation details NEVER exposed through public endpoints.
+**Critical constraint:** MACD-V is proprietary IP -- internal indicator names, formulas, and calculation details NEVER exposed through public endpoints.
 
 #### Phase 39: Public API Foundation & IP Protection
 **Goal**: Establish REST endpoints for non-proprietary data with field transformation layer and OpenAPI spec
@@ -110,10 +110,12 @@ Plans:
   3. All responses use consistent JSON envelope with cursor pagination and ISO8601 timestamps
   4. OpenAPI 3.1 spec serves at /public/v1/openapi.json with AI-optimized descriptions and concrete examples
   5. No internal field names (macdV, signal, histogram, fastEMA, slowEMA, atr, informativeATR) appear in any public response or spec
-**Plans**: TBD
+**Plans:** 3 plans
 
 Plans:
-- [ ] 39-01: TBD
+- [ ] 39-01-PLAN.md -- Scaffold packages/public-api, public Zod schemas, DTO transformers, pagination helpers
+- [ ] 39-02-PLAN.md -- Candle, exchange, and symbol route handlers with Fastify OpenAPI plugin
+- [ ] 39-03-PLAN.md -- Wire plugin into server.ts, end-to-end verification of IP protection
 
 #### Phase 40: Trade Signals with Generic Labeling
 **Goal**: Expose trade signals and alert history with proprietary indicator details stripped
@@ -188,7 +190,7 @@ Phases execute in numeric order: 34 → 35 → 36 → 37 → 38 → 39 → 40 �
 | 36. Binance WebSocket Adapter | v7.0 | 2/2 | Complete | 2026-02-13 |
 | 37. Admin UI -- Connect, Exchange Setup & Warmup Progress | v7.0 | 3/3 | Complete | 2026-02-13 |
 | 38. Binance Test Harness & Handoff | v7.0 | 0/2 | Not started | - |
-| 39. Public API Foundation & IP Protection | v8.0 | 0/? | Not started | - |
+| 39. Public API Foundation & IP Protection | v8.0 | 0/3 | Not started | - |
 | 40. Trade Signals with Generic Labeling | v8.0 | 0/? | Not started | - |
 | 41. Authentication & Rate Limiting | v8.0 | 0/? | Not started | - |
 | 42. WebSocket Bridge with Backpressure | v8.0 | 0/? | Not started | - |
@@ -196,4 +198,4 @@ Phases execute in numeric order: 34 → 35 → 36 → 37 → 38 → 39 → 40 �
 
 ---
 *Roadmap created: 2026-02-13*
-*Last updated: 2026-02-18 -- v8.0 Perseus Web Public API phases added (39-43)*
+*Last updated: 2026-02-18 -- Phase 39 planned (3 plans in 3 waves)*
