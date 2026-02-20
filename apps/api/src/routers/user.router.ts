@@ -154,7 +154,7 @@ export const userRouter = router({
         .limit(1);
 
       if (existing.length > 0) {
-        // UPDATE existing user
+        // UPDATE existing user (matched by Clerk identity)
         const [updated] = await db
           .update(users)
           .set({
@@ -178,6 +178,40 @@ export const userRouter = router({
         });
 
         return updated;
+      }
+
+      // Check if a user exists with this email but no Clerk identity
+      // (e.g., seeded or manually created). Adopt the row by linking Clerk identity.
+      const [byEmail] = await db
+        .select()
+        .from(users)
+        .where(eq(users.email, email))
+        .limit(1);
+
+      if (byEmail) {
+        const [adopted] = await db
+          .update(users)
+          .set({
+            identityProvider: 'clerk',
+            identitySub: clerkId,
+            displayName: displayName || byEmail.displayName,
+            identityPictureUrl: pictureUrl ?? byEmail.identityPictureUrl,
+            lastLoginAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          })
+          .where(eq(users.id, byEmail.id))
+          .returning();
+
+        ctx.logger.info(
+          { userId: adopted.id, clerkId, email },
+          'Adopted existing user with Clerk identity'
+        );
+
+        initControlChannelService(clerkId).catch((err) => {
+          ctx.logger.error({ err }, 'Failed to initialize control channel service');
+        });
+
+        return adopted;
       }
 
       // INSERT new user
