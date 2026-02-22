@@ -1,5 +1,5 @@
 import { getDbClient, exchangeSymbols } from '@livermore/database';
-import { eq, and, lte, gte, isNotNull } from 'drizzle-orm';
+import { eq, and, or, lte, gte, isNotNull } from 'drizzle-orm';
 import { logger } from '@livermore/utils';
 
 /**
@@ -33,6 +33,9 @@ export class SymbolSourceService {
   /** Minimum liquidity score to include (Grade B boundary) */
   private readonly MIN_LIQUIDITY_SCORE = 0.4;
 
+  /** Top-ranked symbols always included regardless of liquidity score */
+  private readonly TOP_RANK_EXEMPT = 15;
+
   constructor(private exchangeId: number) {}
 
   /**
@@ -54,7 +57,11 @@ export class SymbolSourceService {
           eq(exchangeSymbols.isActive, true),
           isNotNull(exchangeSymbols.globalRank),
           lte(exchangeSymbols.globalRank, this.TIER_1_LIMIT),
-          gte(exchangeSymbols.liquidityScore, this.MIN_LIQUIDITY_SCORE.toString())
+          // Top-ranked symbols (e.g. BTC) always included regardless of liquidity score
+          or(
+            gte(exchangeSymbols.liquidityScore, this.MIN_LIQUIDITY_SCORE.toString()),
+            lte(exchangeSymbols.globalRank, this.TOP_RANK_EXEMPT)
+          )
         )
       )
       .orderBy(exchangeSymbols.globalRank);
@@ -261,7 +268,10 @@ export class SymbolSourceService {
           eq(exchangeSymbols.isActive, true),
           isNotNull(exchangeSymbols.globalRank),
           lte(exchangeSymbols.globalRank, this.TIER_1_LIMIT),
-          gte(exchangeSymbols.liquidityScore, this.MIN_LIQUIDITY_SCORE.toString())
+          or(
+            gte(exchangeSymbols.liquidityScore, this.MIN_LIQUIDITY_SCORE.toString()),
+            lte(exchangeSymbols.globalRank, this.TOP_RANK_EXEMPT)
+          )
         )
       )
       .limit(1);

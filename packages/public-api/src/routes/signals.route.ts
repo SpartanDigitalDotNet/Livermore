@@ -1,11 +1,12 @@
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { z } from 'zod';
-import { getRedisClient, exchangeIndicatorKey } from '@livermore/cache';
-import { getDbClient, exchanges } from '@livermore/database';
+import { getRedisClient, exchangeIndicatorKey, tickerKey } from '@livermore/cache';
+import { getDbClient, exchanges, exchangeSymbols } from '@livermore/database';
 import { eq, and } from 'drizzle-orm';
 import type { Timeframe } from '@livermore/schemas';
 import {
   SignalParamsSchema,
+  BatchSignalParamsSchema,
   SignalQuerySchema,
   PublicSignalSchema,
   createEnvelopeSchema,
@@ -76,6 +77,108 @@ export const signalsRoute: FastifyPluginAsyncZod = async (fastify) => {
     return exchange.id;
   }
 
+  // ── Batch signals: GET /:exchange ──
+  fastify.get(
+    '/:exchange',
+    {
+      schema: {
+        description: `Retrieve current trade signals for ALL monitored symbols on an exchange in a single request.
+
+This batch endpoint returns the same signal data as the per-symbol endpoint, but across every active trading pair on the specified exchange. Ideal for building market scanners and dashboards without making per-symbol requests.
+
+**Use cases:**
+- **Market scanners** checking momentum across all symbols in one call
+- **AI agents** building multi-asset consensus views
+- **Dashboards** rendering a full exchange signal overview
+
+**Timeframes:** Optionally filter to a single timeframe with the \`timeframe\` query parameter, or omit to get all available timeframes (15m, 1h, 4h, 1d).
+
+**Response:** Returns a flat array of signal objects across all symbols and timeframes. Symbols with insufficient data are omitted.`,
+        tags: ['Signals'],
+        params: BatchSignalParamsSchema,
+        querystring: SignalQuerySchema,
+        response: {
+          200: createEnvelopeSchema(z.array(PublicSignalSchema)),
+        },
+      },
+    },
+    async (request, reply) => {
+      const { exchange: exchangeName } = request.params;
+      const { timeframe } = request.query;
+
+      // Resolve exchange name to ID
+      const exchangeId = await resolveExchangeId(exchangeName);
+      if (!exchangeId) {
+        return (reply as any).code(404).send({
+          success: false,
+          error: {
+            code: 'NOT_FOUND',
+            message: `Exchange "${exchangeName}" not found or inactive`,
+          },
+        });
+      }
+
+      // Get all active symbols on this exchange
+      const rows = await db
+        .select({ symbol: exchangeSymbols.symbol })
+        .from(exchangeSymbols)
+        .where(
+          and(
+            eq(exchangeSymbols.exchangeId, exchangeId),
+            eq(exchangeSymbols.isActive, true)
+          )
+        );
+
+      // Determine which timeframes to query
+      const timeframesToQuery: Timeframe[] = timeframe
+        ? [timeframe as Timeframe]
+        : SIGNAL_TIMEFRAMES;
+
+      const signals = [];
+
+      for (const row of rows) {
+        // Fetch ticker price once per symbol
+        let price: string | null = null;
+        try {
+          const tickerRaw = await redis.get(tickerKey(exchangeId, row.symbol));
+          if (tickerRaw) {
+            const ticker = JSON.parse(tickerRaw);
+            price = ticker.price?.toString() ?? null;
+          }
+        } catch {
+          // Price unavailable
+        }
+
+        const signalContext = { symbol: row.symbol, exchange: exchangeName, price };
+
+        for (const tf of timeframesToQuery) {
+          const key = exchangeIndicatorKey(exchangeId, row.symbol, tf, 'macd-v');
+          const raw = await redis.get(key);
+          if (!raw) continue;
+
+          try {
+            const indicator = JSON.parse(raw) as CachedIndicator;
+            if (!indicator.params?.seeded) continue;
+            signals.push(transformIndicatorToSignal(indicator, signalContext));
+          } catch {
+            continue;
+          }
+        }
+      }
+
+      return reply.code(200).send({
+        success: true,
+        data: signals,
+        meta: {
+          count: signals.length,
+          next_cursor: null,
+          has_more: false,
+        },
+      });
+    }
+  );
+
+  // ── Per-symbol signals: GET /:exchange/:symbol ──
   fastify.get(
     '/:exchange/:symbol',
     {
@@ -124,6 +227,20 @@ This endpoint provides real-time generic trade signal classifications derived fr
         ? [timeframe as Timeframe]
         : SIGNAL_TIMEFRAMES;
 
+      // Fetch current price from ticker cache
+      let price: string | null = null;
+      try {
+        const tickerRaw = await redis.get(tickerKey(exchangeId, symbol));
+        if (tickerRaw) {
+          const ticker = JSON.parse(tickerRaw);
+          price = ticker.price?.toString() ?? null;
+        }
+      } catch {
+        // Price unavailable — continue without it
+      }
+
+      const signalContext = { symbol, exchange: exchangeName, price };
+
       // Fetch indicator data from Redis for each timeframe
       // Internal indicator type 'macd-v' used ONLY for key construction -- never in response
       const signals = [];
@@ -140,7 +257,7 @@ This endpoint provides real-time generic trade signal classifications derived fr
           // Only include signals where indicator data is seeded (complete)
           if (!indicator.params?.seeded) continue;
 
-          signals.push(transformIndicatorToSignal(indicator));
+          signals.push(transformIndicatorToSignal(indicator, signalContext));
         } catch {
           // Skip malformed cache entries
           continue;

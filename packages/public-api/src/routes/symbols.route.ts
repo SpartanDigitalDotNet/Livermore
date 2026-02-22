@@ -1,5 +1,6 @@
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { z } from 'zod';
+import { getRedisClient, tickerKey } from '@livermore/cache';
 import { getDbClient, exchanges, exchangeSymbols } from '@livermore/database';
 import { eq, and, gt } from 'drizzle-orm';
 import {
@@ -21,23 +22,25 @@ import type { PublicSymbol } from '../schemas/symbol.schema.js';
  */
 export const symbolsRoute: FastifyPluginAsyncZod = async (fastify) => {
   const db = getDbClient();
+  const redis = getRedisClient();
 
   /**
    * Map internal liquidity_score (0.0-1.0) to public liquidity_grade enum.
    *
-   * Thresholds:
-   * - >= 0.8: 'high'
-   * - >= 0.5: 'medium'
-   * - < 0.5 or null: 'low'
+   * Aligned with internal grade boundaries (A/B/C):
+   * - >= 0.6: 'high'   (matches internal A grade)
+   * - >= 0.3: 'medium' (between B and C)
+   * - < 0.3 or null: 'low'
    *
-   * Note: liquidityScore from database is a string (numeric type)
+   * Note: liquidityScore from database is a string (numeric type).
+   * The scoring service uses relative log-scaling where even BTC scores ~0.4-0.6.
    */
   function mapLiquidityGrade(score: string | null): 'high' | 'medium' | 'low' {
     if (score === null) return 'low';
     const numericScore = parseFloat(score);
     if (isNaN(numericScore)) return 'low';
-    if (numericScore >= 0.8) return 'high';
-    if (numericScore >= 0.5) return 'medium';
+    if (numericScore >= 0.6) return 'high';
+    if (numericScore >= 0.3) return 'medium';
     return 'low';
   }
 
@@ -120,6 +123,7 @@ This endpoint provides a comprehensive catalog of cryptocurrency trading pairs, 
           baseCurrency: exchangeSymbols.baseCurrency,
           quoteCurrency: exchangeSymbols.quoteCurrency,
           liquidityScore: exchangeSymbols.liquidityScore,
+          exchangeId: exchangeSymbols.exchangeId,
           exchangeName: exchanges.name,
         })
         .from(exchangeSymbols)
@@ -132,14 +136,39 @@ This endpoint provides a comprehensive catalog of cryptocurrency trading pairs, 
       const hasMore = rows.length > limit;
       const results = hasMore ? rows.slice(0, limit) : rows;
 
+      // Batch-fetch ticker data from Redis for price/volume enrichment
+      const tickerDataMap = new Map<string, { price: string | null; volume: string | null }>();
+      await Promise.all(
+        results.map(async (row) => {
+          const mapKey = `${row.exchangeId}:${row.symbol}`;
+          try {
+            const raw = await redis.get(tickerKey(row.exchangeId, row.symbol));
+            if (raw) {
+              const ticker = JSON.parse(raw);
+              tickerDataMap.set(mapKey, {
+                price: ticker.price?.toString() ?? null,
+                volume: ticker.volume_24h?.toString() ?? ticker.volume?.toString() ?? null,
+              });
+            }
+          } catch {
+            // Ticker unavailable — leave as null
+          }
+        })
+      );
+
       // Map to public schema
-      const publicSymbols: PublicSymbol[] = results.map((row) => ({
-        symbol: row.symbol,
-        base: row.baseCurrency,
-        quote: row.quoteCurrency,
-        exchange: row.exchangeName,
-        liquidity_grade: mapLiquidityGrade(row.liquidityScore),
-      }));
+      const publicSymbols: PublicSymbol[] = results.map((row) => {
+        const ticker = tickerDataMap.get(`${row.exchangeId}:${row.symbol}`);
+        return {
+          symbol: row.symbol,
+          base: row.baseCurrency,
+          quote: row.quoteCurrency,
+          exchange: row.exchangeName,
+          liquidity_grade: mapLiquidityGrade(row.liquidityScore),
+          last_price: ticker?.price ?? null,
+          volume_24h: ticker?.volume ?? null,
+        };
+      });
 
       // Build pagination metadata
       const lastRow = results[results.length - 1];

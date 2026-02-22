@@ -1,6 +1,7 @@
 import { useMemo, useState, useEffect, useCallback, useRef } from 'react';
 import { useCandlePulse } from '@/contexts/CandlePulseContext';
 import { useAlertContext } from '@/contexts/AlertContext';
+import { CandleMeterLegend } from './CandleMeterLegend';
 
 const TIMEFRAMES = ['1m', '5m', '15m', '1h', '4h', '1d'] as const;
 
@@ -15,6 +16,38 @@ const INTERVAL_MS: Record<string, number> = {
 };
 
 const FLASH_DURATION_MS = 4000;
+
+/** Tier cutoffs by globalRank */
+const LARGE_CAP_MAX_RANK = 10;
+const MID_CAP_MAX_RANK = 30;
+
+interface TierGroup {
+  label: string;
+  symbols: string[];
+}
+
+function classifyTiers(symbols: string[], ranks: Record<string, number | null>): TierGroup[] {
+  const large: string[] = [];
+  const mid: string[] = [];
+  const small: string[] = [];
+
+  for (const symbol of symbols) {
+    const rank = ranks[symbol];
+    if (rank != null && rank <= LARGE_CAP_MAX_RANK) {
+      large.push(symbol);
+    } else if (rank != null && rank <= MID_CAP_MAX_RANK) {
+      mid.push(symbol);
+    } else {
+      small.push(symbol);
+    }
+  }
+
+  const groups: TierGroup[] = [];
+  if (large.length > 0) groups.push({ label: `Large-cap (${large.length})`, symbols: large });
+  if (mid.length > 0) groups.push({ label: `Mid-cap (${mid.length})`, symbols: mid });
+  if (small.length > 0) groups.push({ label: `Small-cap (${small.length})`, symbols: small });
+  return groups;
+}
 
 function getColor(timestamp: number | null, nowMs: number, timeframe: string): string {
   if (timestamp === null) return 'bg-gray-700';
@@ -42,17 +75,21 @@ function formatAge(timestamp: number | null, nowMs: number): string {
 interface CandleMeterProps {
   exchangeId: number;
   symbols: string[];
+  ranks?: Record<string, number | null>;
 }
 
-export function CandleMeter({ exchangeId, symbols }: CandleMeterProps) {
+export function CandleMeter({ exchangeId, symbols, ranks = {} }: CandleMeterProps) {
   const { getTimestamp, displayTick } = useCandlePulse();
   const { lastAlert } = useAlertContext();
   const [hoveredSymbol, setHoveredSymbol] = useState<string | null>(null);
   const [tooltipPos, setTooltipPos] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [flashingSymbols, setFlashingSymbols] = useState<Set<string>>(new Set());
+  const [showLegend, setShowLegend] = useState(false);
   const timersRef = useRef<Map<string, number>>(new Map());
 
   const nowMs = useMemo(() => Date.now(), [displayTick]);
+
+  const tiers = useMemo(() => classifyTiers(symbols, ranks), [symbols, ranks]);
 
   // Flash a symbol column when an alert fires for it
   useEffect(() => {
@@ -100,24 +137,20 @@ export function CandleMeter({ exchangeId, symbols }: CandleMeterProps) {
 
   if (symbols.length === 0) return null;
 
-  return (
-    <div>
-      <style>{`
-        @keyframes candleMeterFlash {
-          0% { box-shadow: 0 0 8px 4px rgba(250, 204, 21, 1); }
-          15% { box-shadow: 0 0 4px 2px rgba(250, 204, 21, 0.5); }
-          30% { box-shadow: 0 0 8px 4px rgba(250, 204, 21, 1); }
-          45% { box-shadow: 0 0 4px 2px rgba(250, 204, 21, 0.5); }
-          60% { box-shadow: 0 0 8px 4px rgba(250, 204, 21, 1); }
-          75% { box-shadow: 0 0 4px 2px rgba(250, 204, 21, 0.5); }
-          100% { box-shadow: 0 0 0 0 rgba(250, 204, 21, 0); }
-        }
-      `}</style>
-      <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1.5">
-        Candle Freshness
+  // If no rank data available, fall back to single flat grid (no tier labels)
+  const hasTiers = Object.keys(ranks).length > 0;
+
+  // Split tiers: Large-cap + Mid-cap share a row, Small-cap gets its own row
+  const topRowTiers = tiers.filter((t) => t.label.startsWith('Large') || t.label.startsWith('Mid'));
+  const bottomRowTiers = tiers.filter((t) => !t.label.startsWith('Large') && !t.label.startsWith('Mid'));
+
+  const renderTier = (tier: TierGroup) => (
+    <div key={tier.label}>
+      <p className="text-[10px] text-gray-500 dark:text-gray-500 mb-0.5">
+        {tier.label}
       </p>
       <div className="flex flex-wrap gap-x-px gap-y-1.5">
-        {symbols.map((symbol) => {
+        {tier.symbols.map((symbol) => {
           const isFlashing = flashingSymbols.has(symbol);
           return (
             <div
@@ -141,6 +174,72 @@ export function CandleMeter({ exchangeId, symbols }: CandleMeterProps) {
           );
         })}
       </div>
+    </div>
+  );
+
+  return (
+    <div>
+      <style>{`
+        @keyframes candleMeterFlash {
+          0% { box-shadow: 0 0 8px 4px rgba(250, 204, 21, 1); }
+          15% { box-shadow: 0 0 4px 2px rgba(250, 204, 21, 0.5); }
+          30% { box-shadow: 0 0 8px 4px rgba(250, 204, 21, 1); }
+          45% { box-shadow: 0 0 4px 2px rgba(250, 204, 21, 0.5); }
+          60% { box-shadow: 0 0 8px 4px rgba(250, 204, 21, 1); }
+          75% { box-shadow: 0 0 4px 2px rgba(250, 204, 21, 0.5); }
+          100% { box-shadow: 0 0 0 0 rgba(250, 204, 21, 0); }
+        }
+      `}</style>
+      <div className="flex items-center justify-between mb-1.5">
+        <p className="text-xs font-medium text-gray-500 dark:text-gray-400">
+          Candle Freshness
+        </p>
+        <button
+          onClick={() => setShowLegend(true)}
+          className="text-[11px] text-blue-600 dark:text-blue-400 hover:underline"
+        >
+          View Legend
+        </button>
+      </div>
+
+      {hasTiers ? (
+        <div className="space-y-2">
+          {topRowTiers.length > 0 && (
+            <div className="flex gap-4">
+              {topRowTiers.map(renderTier)}
+            </div>
+          )}
+          {bottomRowTiers.map(renderTier)}
+        </div>
+      ) : (
+        <div className="flex flex-wrap gap-x-px gap-y-1.5">
+          {symbols.map((symbol) => {
+            const isFlashing = flashingSymbols.has(symbol);
+            return (
+              <div
+                key={symbol}
+                className="flex flex-col gap-px cursor-default rounded-sm"
+                style={isFlashing ? { animation: `candleMeterFlash ${FLASH_DURATION_MS}ms ease-out` } : undefined}
+                onMouseEnter={(e) => handleMouseEnter(symbol, e)}
+                onMouseLeave={handleMouseLeave}
+              >
+                {TIMEFRAMES.map((tf) => {
+                  const ts = getTimestamp(exchangeId, symbol, tf);
+                  const color = getColor(ts, nowMs, tf);
+                  return (
+                    <div
+                      key={tf}
+                      className={`w-2 h-[3px] rounded-[0.5px] ${color}`}
+                    />
+                  );
+                })}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      <CandleMeterLegend open={showLegend} onClose={() => setShowLegend(false)} />
 
       {/* Custom tooltip — renders instantly, follows hovered symbol */}
       {hoveredSymbol && (

@@ -447,6 +447,26 @@ export class ControlChannelService {
     let adminDisplayName: string | null = null;
 
     try {
+      // Always resolve admin identity from DB (needed on both fresh start and reconnect)
+      const [adminRow] = await this.services.db
+        .select({
+          email: users.email,
+          displayName: users.displayName,
+        })
+        .from(users)
+        .where(
+          and(
+            eq(users.identityProvider, 'clerk'),
+            eq(users.identitySub, this.identitySub)
+          )
+        )
+        .limit(1);
+
+      if (adminRow) {
+        adminEmail = adminRow.email;
+        adminDisplayName = adminRow.displayName ?? null;
+      }
+
       // If symbols not yet loaded (idle startup), load Tier 1 from user's exchange
       if (this.services.monitoredSymbols.length === 0) {
         setProgress({ phase: 'indicators', phaseLabel: 'Loading Tier 1 symbols', percent: 5 });
@@ -458,8 +478,6 @@ export class ControlChannelService {
             exchangeName: userExchanges.exchangeName,
             apiKeyEnvVar: userExchanges.apiKeyEnvVar,
             apiSecretEnvVar: userExchanges.apiSecretEnvVar,
-            adminEmail: users.email,
-            adminDisplayName: users.displayName,
           })
           .from(userExchanges)
           .innerJoin(users, eq(users.id, userExchanges.userId))
@@ -476,9 +494,6 @@ export class ControlChannelService {
         if (!userExchange?.exchangeId) {
           throw new Error('No exchange configured. Set up your exchange in Admin first.');
         }
-
-        adminEmail = userExchange.adminEmail ?? this.identitySub;
-        adminDisplayName = userExchange.adminDisplayName ?? null;
 
         // Create exchange-specific REST client and store on registry
         const restClient = createRestClient(

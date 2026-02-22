@@ -22,6 +22,39 @@ export function transformCandle(internal: Candle): PublicCandle {
     low: internal.low.toString(),
     close: internal.close.toString(),
     volume: internal.volume.toString(),
+    symbol: '',
+    exchange: '',
+    timeframe: '',
+  };
+}
+
+/**
+ * Context for request echo fields on candle responses
+ */
+interface CandleContext {
+  exchange: string;
+  symbol: string;
+  timeframe: string;
+}
+
+/**
+ * Transform an internal candle to public format with request context echoed.
+ *
+ * @param internal - Internal candle from Redis/database
+ * @param context - Route-level context (exchange, symbol, timeframe)
+ * @returns Public candle with context fields
+ */
+export function transformCandleWithContext(internal: Candle, context: CandleContext): PublicCandle {
+  return {
+    timestamp: new Date(internal.timestamp).toISOString(),
+    open: internal.open.toString(),
+    high: internal.high.toString(),
+    low: internal.low.toString(),
+    close: internal.close.toString(),
+    volume: internal.volume.toString(),
+    symbol: context.symbol,
+    exchange: context.exchange,
+    timeframe: context.timeframe,
   };
 }
 

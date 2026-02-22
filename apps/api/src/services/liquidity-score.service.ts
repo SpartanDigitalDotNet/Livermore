@@ -12,6 +12,7 @@ export interface LiquidityInput {
   askPrice?: number;
   bidQty?: number;
   askQty?: number;
+  globalRank?: number | null;
 }
 
 /**
@@ -109,8 +110,11 @@ export function computeLiquidityScores(products: LiquidityInput[]): number[] {
     let finalScore = Math.min(1, Math.max(0, score));
 
     // Hard floor: if trade count is known and below minimum,
-    // cap the score so spread/depth can't inflate past the monitoring threshold
-    if (p.tradeCount24h != null && p.tradeCount24h < MIN_TRADE_COUNT) {
+    // cap the score so spread/depth can't inflate past the monitoring threshold.
+    // Exempt top-ranked symbols (globalRank <= 15) — majors like BTC should
+    // never be excluded regardless of trade count on a specific exchange.
+    const isTopRanked = p.globalRank != null && p.globalRank <= 15;
+    if (p.tradeCount24h != null && p.tradeCount24h < MIN_TRADE_COUNT && !isTopRanked) {
       finalScore = Math.min(finalScore, LOW_TRADE_SCORE_CAP);
     }
 
@@ -132,7 +136,10 @@ export function liquidityGrade(score: number): 'A' | 'B' | 'C' | 'D' | 'F' {
 /**
  * Convert ExchangeProduct[] to LiquidityInput[] for scoring.
  */
-export function productsToLiquidityInputs(products: ExchangeProduct[]): LiquidityInput[] {
+export function productsToLiquidityInputs(
+  products: ExchangeProduct[],
+  rankByBase?: Map<string, number | null>,
+): LiquidityInput[] {
   return products.map((p) => ({
     tradeCount24h: p.tradeCount24h,
     quoteVolume24h: p.volume24h,
@@ -140,6 +147,7 @@ export function productsToLiquidityInputs(products: ExchangeProduct[]): Liquidit
     askPrice: p.askPrice,
     bidQty: p.bidQty,
     askQty: p.askQty,
+    globalRank: rankByBase?.get(p.baseCurrency.toUpperCase()) ?? null,
   }));
 }
 
@@ -148,9 +156,10 @@ export function productsToLiquidityInputs(products: ExchangeProduct[]): Liquidit
  */
 export function scoreAndSummarize(
   exchangeName: string,
-  products: ExchangeProduct[]
+  products: ExchangeProduct[],
+  rankByBase?: Map<string, number | null>,
 ): { scores: number[]; gradeA: number; gradeB: number; gradeC: number; gradeDOrF: number } {
-  const inputs = productsToLiquidityInputs(products);
+  const inputs = productsToLiquidityInputs(products, rankByBase);
   const scores = computeLiquidityScores(inputs);
 
   let gradeA = 0, gradeB = 0, gradeC = 0, gradeDOrF = 0;

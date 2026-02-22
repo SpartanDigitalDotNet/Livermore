@@ -1,5 +1,5 @@
 // Candle transformers
-export { transformCandle, transformCandles } from './candle.transformer.js';
+export { transformCandle, transformCandles, transformCandleWithContext } from './candle.transformer.js';
 
 // Signal transformers
 export { transformIndicatorToSignal, deriveDirection, deriveStrength } from './signal.transformer.js';

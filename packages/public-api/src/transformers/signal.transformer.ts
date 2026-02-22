@@ -70,19 +70,32 @@ export function deriveStrength(absValue: number): 'weak' | 'moderate' | 'strong'
 }
 
 /**
+ * Context passed from the route handler to include in the signal response.
+ */
+interface SignalContext {
+  symbol: string;
+  exchange: string;
+  price: string | null;
+}
+
+/**
  * Transform a cached indicator to a public signal.
  *
  * CRITICAL: Returns an explicit object literal -- does NOT spread the indicator.
  * Only whitelisted fields appear in the output.
  *
  * @param indicator - Internal cached indicator data
+ * @param context - Route-level context (symbol, exchange, price)
  * @returns Public signal with generic labels only
  */
-export function transformIndicatorToSignal(indicator: CachedIndicator): PublicSignal {
+export function transformIndicatorToSignal(indicator: CachedIndicator, context: SignalContext): PublicSignal {
   const stage = indicator.params?.stage as string | undefined;
   const momentumValue = indicator.value['macdV'] ?? 0;
 
   return {
+    symbol: context.symbol,
+    exchange: context.exchange,
+    price: context.price,
     type: 'momentum_signal',
     direction: deriveDirection(stage),
     strength: deriveStrength(Math.abs(momentumValue)),

@@ -10,7 +10,7 @@ import {
   PublicCandleSchema,
   createEnvelopeSchema,
 } from '../schemas/index.js';
-import { transformCandle } from '../transformers/index.js';
+import { transformCandleWithContext } from '../transformers/index.js';
 import { buildPaginationMeta, decodeCursor } from '../helpers/index.js';
 
 /**
@@ -142,9 +142,10 @@ This endpoint provides historical and recent price data in standard candlestick 
         });
       }
 
-      // Parse and transform candles
+      // Parse and transform candles with request context
       const candles: Candle[] = results.map((json) => JSON.parse(json));
-      const publicCandles = candles.map(transformCandle);
+      const candleContext = { exchange: exchangeName, symbol, timeframe };
+      const publicCandles = candles.map((c) => transformCandleWithContext(c, candleContext));
 
       // Build pagination metadata
       const lastCandle = candles[candles.length - 1];

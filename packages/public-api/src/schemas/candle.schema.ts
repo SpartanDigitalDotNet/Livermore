@@ -14,6 +14,9 @@ export const PublicCandleSchema = z.object({
   low: z.string().describe('Lowest price during period as string decimal. Example: "42300.25"'),
   close: z.string().describe('Closing price as string decimal. Example: "42400.00"'),
   volume: z.string().describe('Trading volume as string decimal. Example: "123.456"'),
+  symbol: z.string().describe('Trading pair symbol. Example: "BTC-USD"'),
+  exchange: z.string().describe('Exchange identifier. Example: "coinbase"'),
+  timeframe: z.string().describe('Candle timeframe interval. Example: "1h"'),
 });
 
 export type PublicCandle = z.infer<typeof PublicCandleSchema>;

@@ -53,3 +53,7 @@ Natural language questions mapped to action scripts. When the user asks a questi
 | Which exchange leads? / Alert timing between exchanges | `NODE_ENV=development npx tsx .claude/actions/queries/arb-signals.ts --since 24h` |
 | Level-only arb signals (no reversals) | `NODE_ENV=development npx tsx .claude/actions/queries/arb-signals.ts --type level --since today` |
 | Arb signals with at least 5 min lead | `NODE_ENV=development npx tsx .claude/actions/queries/arb-signals.ts --min-delta 5 --since today` |
+| Refresh symbols / Update symbol universe | `NODE_ENV=development npx tsx .claude/actions/queries/refresh-symbols.ts` |
+| Refresh Coinbase symbols | `NODE_ENV=development npx tsx .claude/actions/queries/refresh-symbols.ts --exchange 1` |
+| Refresh Binance symbols | `NODE_ENV=development npx tsx .claude/actions/queries/refresh-symbols.ts --exchange 2` |
+| Refresh symbols top 50 | `NODE_ENV=development npx tsx .claude/actions/queries/refresh-symbols.ts --limit 50` |

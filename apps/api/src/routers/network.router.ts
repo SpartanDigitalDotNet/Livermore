@@ -1,8 +1,8 @@
 import { z } from 'zod';
 import { router, protectedProcedure } from '@livermore/trpc-config';
-import { getDbClient, exchanges } from '@livermore/database';
+import { getDbClient, exchanges, exchangeSymbols } from '@livermore/database';
 import { getRedisClient, instanceStatusKey, networkActivityStreamKey, warmupStatsKey, exchangeCandleKey } from '@livermore/cache';
-import { eq, asc } from 'drizzle-orm';
+import { eq, asc, and, inArray } from 'drizzle-orm';
 import { InstanceStatusSchema, type InstanceStatus } from '@livermore/schemas';
 import type { Timeframe } from '@livermore/schemas';
 import type { WarmupStats } from '@livermore/exchange-core';
@@ -274,13 +274,29 @@ export const networkRouter = router({
       const timeframes: Timeframe[] = ['1m', '5m', '15m', '1h', '4h', '1d'];
 
       if (symbols.length === 0) {
-        return { exchangeId, symbols: [], timestamps: {} };
+        return { exchangeId, symbols: [], timestamps: {}, ranks: {} as Record<string, number | null> };
       }
 
       const redis = getRedisClient();
+      const db = getDbClient();
 
       // Build all symbol × timeframe queries in parallel
       const timestamps: Record<string, Record<string, number | null>> = {};
+
+      // Fetch globalRank for each symbol (for tier display in Candle Meter)
+      const rankRows = await db
+        .select({ symbol: exchangeSymbols.symbol, globalRank: exchangeSymbols.globalRank })
+        .from(exchangeSymbols)
+        .where(
+          and(
+            eq(exchangeSymbols.exchangeId, exchangeId),
+            inArray(exchangeSymbols.symbol, symbols)
+          )
+        );
+      const ranks: Record<string, number | null> = {};
+      for (const r of rankRows) {
+        ranks[r.symbol] = r.globalRank;
+      }
 
       await Promise.all(
         symbols.map(async (symbol) => {
@@ -304,7 +320,7 @@ export const networkRouter = router({
         })
       );
 
-      return { exchangeId, symbols, timestamps };
+      return { exchangeId, symbols, timestamps, ranks };
     }),
 });
 

@@ -61,6 +61,9 @@ const CHANNEL_PREFIX_MAP: Record<string, ChannelType> = {
  * Valid formats:
  * - `candles:BTC-USD:1h`
  * - `signals:ETH-USD:15m`
+ * - `signals:*:*` (wildcard — all symbols, all timeframes)
+ * - `candles:BTC-USD:*` (wildcard — specific symbol, all timeframes)
+ * - `signals:*:1h` (wildcard — all symbols, specific timeframe)
  *
  * Returns null for invalid formats, unknown prefixes, bad symbols, or unsupported timeframes.
  */
@@ -73,9 +76,11 @@ export function mapExternalChannel(external: string): ParsedChannel | null {
   const channelType = CHANNEL_PREFIX_MAP[prefix];
   if (!channelType) return null;
 
-  if (!SYMBOL_PATTERN.test(symbol)) return null;
+  // Accept wildcard '*' or valid symbol pattern
+  if (symbol !== '*' && !SYMBOL_PATTERN.test(symbol)) return null;
 
-  if (!(VALID_TIMEFRAMES as readonly string[]).includes(timeframe)) return null;
+  // Accept wildcard '*' or valid timeframe
+  if (timeframe !== '*' && !(VALID_TIMEFRAMES as readonly string[]).includes(timeframe)) return null;
 
   return { type: channelType, symbol, timeframe };
 }

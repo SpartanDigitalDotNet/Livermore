@@ -102,9 +102,26 @@ export class ClientConnection {
     this.subscriptions.delete(channel);
   }
 
-  /** Check if client is subscribed to a channel */
+  /**
+   * Check if client is subscribed to a channel.
+   * Supports wildcard matching: a subscription like `signals:*:*` matches
+   * any `signals:X:Y`, and `candles:BTC-USD:*` matches any `candles:BTC-USD:Y`.
+   */
   hasSubscription(channel: string): boolean {
-    return this.subscriptions.has(channel);
+    if (this.subscriptions.has(channel)) return true;
+
+    // Check wildcard subscriptions
+    const channelParts = channel.split(':');
+    for (const sub of this.subscriptions) {
+      if (!sub.includes('*')) continue;
+      const subParts = sub.split(':');
+      if (subParts.length !== channelParts.length) continue;
+      const matches = subParts.every(
+        (seg, i) => seg === '*' || seg === channelParts[i]
+      );
+      if (matches) return true;
+    }
+    return false;
   }
 
   /** Clean up: stop heartbeat and close socket if open */

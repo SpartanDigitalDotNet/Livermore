@@ -210,8 +210,13 @@ export class SymbolRefreshService {
     }
 
     // Compute liquidity scores for the selected products
+    // Build rank lookup so top-ranked symbols (e.g. BTC) aren't penalized by low trade count cap
+    const rankByBase = new Map<string, number | null>();
+    for (const [base, coin] of coinBySymbol) {
+      rankByBase.set(base, coin.market_cap_rank);
+    }
     const selectedProducts = Array.from(bestProductByBase.values());
-    const { scores } = scoreAndSummarize(exchange.name, selectedProducts);
+    const { scores } = scoreAndSummarize(exchange.name, selectedProducts, rankByBase);
     const scoreBySymbol = new Map<string, number>();
     selectedProducts.forEach((p, i) => scoreBySymbol.set(p.symbol, scores[i]));
 

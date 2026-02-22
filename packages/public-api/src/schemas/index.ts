@@ -41,9 +41,11 @@ export {
 export {
   PublicSignalSchema,
   SignalParamsSchema,
+  BatchSignalParamsSchema,
   SignalQuerySchema,
   type PublicSignal,
   type SignalParams,
+  type BatchSignalParams,
   type SignalQuery,
 } from './signal.schema.js';
 

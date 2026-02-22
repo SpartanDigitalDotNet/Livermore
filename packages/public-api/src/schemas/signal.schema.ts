@@ -11,6 +11,9 @@ import { z } from 'zod';
  * using generic labels only -- no indicator names or raw numeric values.
  */
 export const PublicSignalSchema = z.object({
+  symbol: z.string().describe('Trading pair symbol. Example: "BTC-USD"'),
+  exchange: z.string().describe('Exchange identifier. Example: "coinbase"'),
+  price: z.string().nullable().describe('Current price as string decimal, or null if unavailable. Example: "67255.43"'),
   type: z.enum(['momentum_signal', 'trend_signal']).describe('Generic signal type classification. "momentum_signal" indicates a momentum-based trade signal. "trend_signal" indicates a trend-based trade signal.'),
   direction: z.enum(['bullish', 'bearish', 'neutral']).describe('Current signal direction. "bullish" means upward momentum/trend, "bearish" means downward, "neutral" means indeterminate.'),
   strength: z.enum(['weak', 'moderate', 'strong', 'extreme']).describe('Signal strength category. Ranges from "weak" (low confidence) to "extreme" (very high confidence).'),
@@ -30,6 +33,16 @@ export const SignalParamsSchema = z.object({
 });
 
 export type SignalParams = z.infer<typeof SignalParamsSchema>;
+
+/**
+ * URL path parameters for batch signal endpoint
+ * Example: GET /api/v1/signals/:exchange
+ */
+export const BatchSignalParamsSchema = z.object({
+  exchange: z.string().min(1).describe('Exchange name (e.g. "coinbase")'),
+});
+
+export type BatchSignalParams = z.infer<typeof BatchSignalParamsSchema>;
 
 /**
  * Query parameters for signal endpoints

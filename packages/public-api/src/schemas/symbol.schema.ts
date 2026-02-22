@@ -13,6 +13,8 @@ export const PublicSymbolSchema = z.object({
   quote: z.string().describe('Quote currency code (e.g. "USD")'),
   exchange: z.string().describe('Exchange identifier (e.g. "coinbase")'),
   liquidity_grade: z.enum(['high', 'medium', 'low']).describe('Simplified liquidity classification mapped from internal scoring'),
+  last_price: z.string().nullable().describe('Latest price as string decimal, or null if unavailable. Example: "67255.43"'),
+  volume_24h: z.string().nullable().describe('24-hour trading volume as string decimal, or null if unavailable. Example: "1234567.89"'),
 });
 
 export type PublicSymbol = z.infer<typeof PublicSymbolSchema>;

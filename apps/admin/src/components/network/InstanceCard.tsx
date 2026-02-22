@@ -157,6 +157,7 @@ export function InstanceCard({ instance }: InstanceCardProps) {
   }, [candleData, exchangeId, seedTimestamps]);
 
   const meterSymbols = isActive ? (candleData?.symbols ?? getSymbols(exchangeId)) : [];
+  const meterRanks = candleData?.ranks ?? {};
 
   // Determine if exchange is connectable
   // Show button when: offline, OR (online AND (idle OR stopped))
@@ -247,14 +248,14 @@ export function InstanceCard({ instance }: InstanceCardProps) {
             {/* Candle Freshness Meter (active only) */}
             {isActive && meterSymbols.length > 0 && (
               <div className="mt-3 pt-3 border-t">
-                <CandleMeter exchangeId={exchangeId} symbols={meterSymbols} />
+                <CandleMeter exchangeId={exchangeId} symbols={meterSymbols} ranks={meterRanks} />
               </div>
             )}
 
             {/* Warmup Progress Panel (starting/warming/active — persists after completion for report link) */}
             {(status.connectionState === 'starting' || status.connectionState === 'warming' || status.connectionState === 'active') && (
               <div className="mt-3 pt-3 border-t">
-                <WarmupProgressPanel exchangeId={exchangeId} exchangeLabel={displayName} />
+                <WarmupProgressPanel exchangeId={exchangeId} exchangeLabel={displayName} connectionState={status.connectionState} />
               </div>
             )}
           </>

@@ -10,6 +10,7 @@ import { WarmupReportModal } from './WarmupReportModal';
 interface WarmupProgressPanelProps {
   exchangeId: number;
   exchangeLabel?: string;
+  connectionState?: string;
 }
 
 /**
@@ -64,28 +65,49 @@ function getStatusBadge(
  *
  * Requirements: WARM-06 -- Admin UI displays real-time warmup progress
  */
-export function WarmupProgressPanel({ exchangeId, exchangeLabel }: WarmupProgressPanelProps) {
+export function WarmupProgressPanel({ exchangeId, exchangeLabel, connectionState }: WarmupProgressPanelProps) {
   const [showReport, setShowReport] = useState(false);
   const hasTriggeredReport = useRef(false);
+  const hasSeenActive = useRef(false);
 
   const { data } = useQuery({
     ...trpc.network.getWarmupStats.queryOptions({ exchangeId }),
-    // Fast poll during active states, slow poll when complete/error
+    // Fast poll during active states, slow poll when complete/error.
+    // When stats is null, keep polling — warmup may not have written its first update yet.
     refetchInterval: (query) => {
       const stats = query.state.data?.stats;
-      if (!stats) return false;
+      if (!stats) return 2000;
       const isActive = stats.status === 'assessing' || stats.status === 'dumping' || stats.status === 'scanning' || stats.status === 'fetching';
-      return isActive ? 2000 : 30000;
+      // Keep fast-polling if instance is warming (new warmup may overwrite stale stats soon)
+      if (isActive || connectionState === 'starting' || connectionState === 'warming') return 2000;
+      return 30000;
     },
   });
 
   const stats = data?.stats ?? null;
+  const isInstanceWarming = connectionState === 'starting' || connectionState === 'warming';
 
-  // Fire toast + open modal when warmup completes
+  // Reset report trigger when a new warmup begins (instance re-enters warming state)
+  useEffect(() => {
+    if (isInstanceWarming) {
+      hasTriggeredReport.current = false;
+      hasSeenActive.current = true;
+    }
+  }, [isInstanceWarming]);
+
+  // Track when we see an active warmup state (so we only toast for warmups we witnessed)
+  useEffect(() => {
+    if (!stats) return;
+    const isActive = stats.status === 'assessing' || stats.status === 'dumping' || stats.status === 'scanning' || stats.status === 'fetching';
+    if (isActive) hasSeenActive.current = true;
+  }, [stats?.status]);
+
+  // Fire toast + open modal when warmup completes (only if we witnessed the active warmup)
   useEffect(() => {
     if (!stats) return;
     if (stats.status !== 'complete' && stats.status !== 'error') return;
     if (hasTriggeredReport.current) return;
+    if (!hasSeenActive.current) return;
 
     hasTriggeredReport.current = true;
     const hasFailures = stats.failedPairs > 0;
@@ -117,6 +139,20 @@ export function WarmupProgressPanel({ exchangeId, exchangeLabel }: WarmupProgres
   if (!stats) return null;
 
   const isComplete = stats.status === 'complete' || stats.status === 'error';
+
+  // If instance is warming but stats show complete/error, that's stale data from a previous run.
+  // Show a "preparing" indicator instead of the old report.
+  if (isComplete && isInstanceWarming) {
+    return (
+      <div className="rounded-md border p-3 bg-blue-50/50 dark:bg-blue-950/30 dark:border-gray-700">
+        <div className="flex items-center justify-between">
+          <h4 className="text-sm font-medium">Warmup Progress</h4>
+          <Badge variant="outline">Preparing</Badge>
+        </div>
+        <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">Warming up exchange connection&hellip;</p>
+      </div>
+    );
+  }
 
   // Post-completion: show compact summary with report link
   if (isComplete) {
