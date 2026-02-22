@@ -11,13 +11,16 @@ import { SENTINEL_5M_THRESHOLD_MS, HEARTBEAT_STALE_THRESHOLD_MS } from './types'
  * 1. Instance status key missing → logged but NOT fatal (key has 45s TTL,
  *    a quick bounce loses the key while candle data remains valid)
  * 2. Instance status key present but lastHeartbeat > 3h → full_refresh (zombie)
- * 3. Sentinel symbol's 5m newest candle > 20min old → full_refresh (pipeline was down)
+ * 3. Sentinel symbol's 5m newest candle > 20min old → targeted (per-pair scan
+ *    will determine what actually needs fetching using per-timeframe thresholds)
  *
  * The sentinel candle check (3) is the real source of truth. A missing status
  * key alone does not trigger a full refresh — only stale candle data does.
  *
- * If checks pass → cache is trustworthy, use targeted warmup.
- * If check 2 or 3 fails → dump all candle keys, full refresh.
+ * full_refresh (dump + re-fetch all) is reserved for truly corrupt caches:
+ * - Heartbeat > 3h stale (zombie instance)
+ * - Sentinel 5m cache completely empty (first run / corrupted)
+ * - Status key corrupt (parse error)
  */
 export class CacheTrustAssessor {
   constructor(
@@ -95,15 +98,15 @@ export class CacheTrustAssessor {
 
     if (candleAge > SENTINEL_5M_THRESHOLD_MS) {
       const ageMin = (candleAge / (60 * 1000)).toFixed(1);
-      logger.warn({
+      logger.info({
         event: 'cache_trust_fail',
         exchangeId: this.exchangeId,
         check: 'sentinel_stale',
         sentinelSymbol,
         candleAge,
         ageMinutes: ageMin,
-      }, `Cache trust FAIL: sentinel ${sentinelSymbol} 5m newest candle is ${ageMin}min old (threshold: 20min) — full refresh required`);
-      return { mode: 'full_refresh', reason: `Sentinel ${sentinelSymbol} 5m is ${ageMin}min stale (threshold: 20min)` };
+      }, `Cache trust: sentinel ${sentinelSymbol} 5m is ${ageMin}min old (threshold: 20min) — targeted scan will check each pair`);
+      return { mode: 'targeted', reason: `Sentinel ${sentinelSymbol} 5m is ${ageMin}min stale — per-pair scan will determine what needs fetching` };
     }
 
     // All checks passed

@@ -39,6 +39,8 @@ function getStatusBadge(
       return { variant: 'outline', label: 'Scanning' };
     case 'fetching':
       return { variant: 'warning', label: 'Fetching' };
+    case 'touching_up':
+      return { variant: 'outline', label: 'Touch-up' };
     case 'complete':
       return { variant: 'success', label: 'Complete' };
     case 'error':
@@ -77,7 +79,7 @@ export function WarmupProgressPanel({ exchangeId, exchangeLabel, connectionState
     refetchInterval: (query) => {
       const stats = query.state.data?.stats;
       if (!stats) return 2000;
-      const isActive = stats.status === 'assessing' || stats.status === 'dumping' || stats.status === 'scanning' || stats.status === 'fetching';
+      const isActive = stats.status === 'assessing' || stats.status === 'dumping' || stats.status === 'scanning' || stats.status === 'fetching' || stats.status === 'touching_up';
       // Keep fast-polling if instance is warming (new warmup may overwrite stale stats soon)
       if (isActive || connectionState === 'starting' || connectionState === 'warming') return 2000;
       return 30000;
@@ -98,7 +100,7 @@ export function WarmupProgressPanel({ exchangeId, exchangeLabel, connectionState
   // Track when we see an active warmup state (so we only toast for warmups we witnessed)
   useEffect(() => {
     if (!stats) return;
-    const isActive = stats.status === 'assessing' || stats.status === 'dumping' || stats.status === 'scanning' || stats.status === 'fetching';
+    const isActive = stats.status === 'assessing' || stats.status === 'dumping' || stats.status === 'scanning' || stats.status === 'fetching' || stats.status === 'touching_up';
     if (isActive) hasSeenActive.current = true;
   }, [stats?.status]);
 
@@ -224,7 +226,10 @@ export function WarmupProgressPanel({ exchangeId, exchangeLabel, connectionState
 
         {/* Summary Line */}
         <div className="text-xs text-gray-600 dark:text-gray-400">
-          Loading history for <span className="font-medium">{stats.totalSymbols || '—'}</span> symbols
+          {stats.status === 'touching_up' && stats.touchUpPairs > 0
+            ? <>Refreshing <span className="font-medium">{stats.touchUpPairs}</span> stale pairs</>
+            : <>Loading history for <span className="font-medium">{stats.totalSymbols || '—'}</span> symbols</>
+          }
           {stats.failedPairs > 0 && <>{' • '}<span className="font-medium text-red-600">{stats.failedPairs} failed</span></>}
         </div>
 

@@ -101,7 +101,7 @@ export interface WarmupSchedule {
 /** Real-time warmup progress stats, persisted to Redis */
 export interface WarmupStats {
   exchangeId: number;
-  status: 'assessing' | 'dumping' | 'scanning' | 'fetching' | 'complete' | 'error';
+  status: 'assessing' | 'dumping' | 'scanning' | 'fetching' | 'touching_up' | 'complete' | 'error';
   mode: 'full_refresh' | 'targeted' | null;
   startedAt: number;
   updatedAt: number;
@@ -112,6 +112,7 @@ export interface WarmupStats {
   failedPairs: number;
   percentComplete: number;
   etaMs: number | null;
+  touchUpPairs: number;
   currentSymbol: string | null;
   currentTimeframe: string | null;
   failures: Array<{ symbol: string; timeframe: string; error: string }>;

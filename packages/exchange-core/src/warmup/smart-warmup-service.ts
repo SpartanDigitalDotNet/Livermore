@@ -1,11 +1,11 @@
 import type { Timeframe, IRestClient } from '@livermore/schemas';
-import { warmupStatsKey, CandleCacheStrategy, type RedisClient } from '@livermore/cache';
+import { warmupStatsKey, exchangeCandleKey, CandleCacheStrategy, type RedisClient } from '@livermore/cache';
 import { logger } from '@livermore/utils';
 import { CacheTrustAssessor } from './cache-trust-assessor';
 import { CandleStatusScanner } from './candle-status-scanner';
 import { WarmupScheduleBuilder } from './warmup-schedule-builder';
-import type { WarmupSchedule, WarmupStats } from './types';
-import { WARMUP_TIMEFRAMES } from './types';
+import type { WarmupSchedule, WarmupScheduleEntry, WarmupStats } from './types';
+import { DEFAULT_CANDLE_TARGET, WARMUP_TIMEFRAMES } from './types';
 
 /**
  * SmartWarmupService — orchestrates the full warmup pipeline:
@@ -15,6 +15,7 @@ import { WARMUP_TIMEFRAMES } from './types';
  * 3. SCAN: Tiered sentinel scan (targeted) or full scan (full_refresh)
  * 4. BUILD: Create warmup schedule from scan results
  * 5. EXECUTE: Fetch candles via REST in batches
+ * 6. TOUCH-UP: Re-fetch stale 15m/5m candles (went stale during long warmups)
  */
 export class SmartWarmupService {
   private readonly redis: RedisClient;
@@ -56,6 +57,7 @@ export class SmartWarmupService {
       failedPairs: 0,
       percentComplete: 0,
       etaMs: null,
+      touchUpPairs: 0,
       currentSymbol: null,
       currentTimeframe: null,
       failures: [],
@@ -159,6 +161,9 @@ export class SmartWarmupService {
       }, 'All pairs have sufficient data, zero REST calls needed');
     } else {
       await this.executeSchedule(schedule);
+
+      // Phase 6: TOUCH-UP — re-fetch stale 15m/5m
+      await this.touchUpStaleCandles(symbols);
     }
 
     // Complete
@@ -270,6 +275,128 @@ export class SmartWarmupService {
         await this.sleep(this.batchDelayMs);
       }
     }
+  }
+
+  // ─── TOUCH-UP ──────────────────────────────────────────────────
+
+  /**
+   * Re-scan 15m and 5m candles and re-fetch any that went stale during the main warmup.
+   * Uses tight 1x-interval thresholds so the candle meter shows all-green on activation.
+   */
+  private async touchUpStaleCandles(symbols: string[]): Promise<void> {
+    const TOUCHUP_TIMEFRAMES: Timeframe[] = ['15m', '5m'];
+    const TOUCHUP_THRESHOLDS: Record<string, number> = {
+      '15m': 15 * 60 * 1000,  // 1x interval
+      '5m':  5 * 60 * 1000,   // 1x interval
+    };
+
+    const now = Date.now();
+    const staleEntries: WarmupScheduleEntry[] = [];
+
+    for (const tf of TOUCHUP_TIMEFRAMES) {
+      const threshold = TOUCHUP_THRESHOLDS[tf];
+      for (const symbol of symbols) {
+        const key = exchangeCandleKey(this.exchangeId, symbol, tf);
+        const newestEntries = await this.redis.zrange(key, -1, -1, 'WITHSCORES');
+        if (newestEntries.length < 2) continue; // empty — main warmup failed, don't retry
+        const age = now - parseInt(newestEntries[1], 10);
+        if (age > threshold) {
+          staleEntries.push({
+            symbol,
+            timeframe: tf,
+            cachedCount: 0,
+            targetCount: DEFAULT_CANDLE_TARGET,
+            reason: 'stale',
+          });
+        }
+      }
+    }
+
+    if (staleEntries.length === 0) {
+      logger.info({
+        event: 'warmup_touchup_skip',
+        exchangeId: this.exchangeId,
+      }, 'Touch-up: all 15m/5m candles fresh');
+      return;
+    }
+
+    logger.info({
+      event: 'warmup_touchup_start',
+      exchangeId: this.exchangeId,
+      staleCount: staleEntries.length,
+    }, `Touch-up: ${staleEntries.length} stale 15m/5m pairs to refresh`);
+
+    this.stats.status = 'touching_up';
+    this.stats.touchUpPairs = staleEntries.length;
+    const pairsBeforeTouchUp = this.stats.completedPairs + this.stats.failedPairs;
+    const touchUpStart = Date.now();
+    this.stats.totalPairs += staleEntries.length;
+    await this.publishStats();
+
+    for (let i = 0; i < staleEntries.length; i += this.batchSize) {
+      const batch = staleEntries.slice(i, i + this.batchSize);
+
+      this.stats.currentSymbol = batch[0]?.symbol ?? null;
+      this.stats.currentTimeframe = batch[0]?.timeframe ?? null;
+
+      const results = await Promise.allSettled(
+        batch.map(async (entry) => {
+          const candles = await this.restClient.getCandles(entry.symbol, entry.timeframe);
+          const toCache = candles.slice(0, entry.targetCount);
+          await this.candleCache.addCandles(1, this.exchangeId, toCache);
+          return toCache.length;
+        })
+      );
+
+      for (let j = 0; j < results.length; j++) {
+        const result = results[j];
+        if (result.status === 'fulfilled') {
+          this.stats.completedPairs++;
+        } else {
+          this.stats.failedPairs++;
+          const entry = batch[j];
+          const errorMsg = result.reason instanceof Error
+            ? result.reason.message
+            : String(result.reason);
+          this.stats.failures.push({
+            symbol: entry.symbol,
+            timeframe: entry.timeframe,
+            error: errorMsg,
+          });
+          logger.warn({
+            event: 'warmup_touchup_fetch_error',
+            symbol: entry.symbol,
+            timeframe: entry.timeframe,
+            error: errorMsg,
+          }, `Touch-up fetch failed: ${entry.symbol} ${entry.timeframe}`);
+        }
+      }
+
+      // Progress + ETA (scoped to touch-up phase)
+      const totalProcessed = this.stats.completedPairs + this.stats.failedPairs;
+      this.stats.percentComplete = this.stats.totalPairs > 0
+        ? Math.round((totalProcessed / this.stats.totalPairs) * 100)
+        : 0;
+
+      const touchUpProcessed = totalProcessed - pairsBeforeTouchUp;
+      const touchUpElapsed = Date.now() - touchUpStart;
+      const touchUpRate = touchUpProcessed / (touchUpElapsed / 1000);
+      const touchUpRemaining = staleEntries.length - touchUpProcessed;
+      this.stats.etaMs = touchUpRate > 0 ? Math.round((touchUpRemaining / touchUpRate) * 1000) : null;
+
+      await this.publishStats();
+
+      const nextBatchStart = i + this.batchSize;
+      if (nextBatchStart < staleEntries.length) {
+        await this.sleep(this.batchDelayMs);
+      }
+    }
+
+    logger.info({
+      event: 'warmup_touchup_complete',
+      exchangeId: this.exchangeId,
+      refreshed: staleEntries.length,
+    }, `Touch-up complete: ${staleEntries.length} pairs refreshed`);
   }
 
   // ─── HELPERS ─────────────────────────────────────────────────

@@ -226,12 +226,20 @@ export class InstanceRegistryService {
       );
 
       if (result === null) {
-        // Key expired or was deleted -- re-register
-        logger.warn(
-          { exchangeId: this.exchangeId },
-          'Instance key missing during heartbeat, re-registering'
+        // Key expired or was deleted -- re-create it with current in-memory state.
+        // Do NOT call register() here: it resets currentStatus to idle/0-symbols,
+        // wiping the actual running state (active, symbolCount, admin info, etc.).
+        this.currentStatus.lastHeartbeat = new Date().toISOString();
+        await this.redis.set(
+          key,
+          JSON.stringify(this.currentStatus),
+          'EX',
+          HEARTBEAT_TTL_SECONDS
         );
-        await this.register();
+        logger.warn(
+          { exchangeId: this.exchangeId, connectionState: this.currentStatus.connectionState },
+          'Instance key missing during heartbeat — re-created with current state'
+        );
       }
     } catch (err) {
       // NEVER throw from heartbeat -- throwing kills the setInterval loop

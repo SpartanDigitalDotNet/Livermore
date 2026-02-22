@@ -3,6 +3,7 @@ import { trpc } from '@/lib/trpc';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { InstanceCard, ActivityFeed } from '@/components/network';
 import { CandlePulseProvider } from '@/contexts/CandlePulseContext';
+import { WifiOff } from 'lucide-react';
 
 /**
  * Network Page
@@ -38,6 +39,10 @@ export function Network() {
     refetchInterval: 5000,
   });
 
+  // Distinguish network errors (API offline) from real server errors
+  const isApiOffline = instancesError &&
+    (instancesError.message === 'Failed to fetch' || instancesError.message.includes('ERR_CONNECTION_REFUSED'));
+
   if (instancesError) {
     return (
       <Card>
@@ -45,9 +50,20 @@ export function Network() {
           <CardTitle>Network</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="rounded-md bg-red-50 p-4 text-red-700 dark:bg-red-950/50 dark:text-red-400">
-            Error loading network status: {instancesError.message}
-          </div>
+          {isApiOffline ? (
+            <div className="rounded-md border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 p-6 text-center">
+              <WifiOff className="h-8 w-8 text-gray-400 dark:text-gray-500 mx-auto mb-3" />
+              <p className="text-sm font-medium text-gray-700 dark:text-gray-300">API server is offline</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Waiting for reconnection&hellip;</p>
+              <div className="mt-3 flex justify-center">
+                <div className="h-1.5 w-1.5 rounded-full bg-gray-400 dark:bg-gray-500 animate-pulse" />
+              </div>
+            </div>
+          ) : (
+            <div className="rounded-md bg-red-50 p-4 text-red-700 dark:bg-red-950/50 dark:text-red-400">
+              Error loading network status: {instancesError.message}
+            </div>
+          )}
         </CardContent>
       </Card>
     );

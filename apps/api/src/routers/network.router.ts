@@ -247,7 +247,7 @@ export const networkRouter = router({
           return { stats: null };
         }
 
-        const stats = JSON.parse(data) as WarmupStats;
+        const stats: WarmupStats = JSON.parse(data);
         return { stats };
       } catch {
         // Redis unavailable or parse failure -- return null
